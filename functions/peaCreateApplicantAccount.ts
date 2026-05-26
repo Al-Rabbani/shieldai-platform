@@ -1,9 +1,23 @@
 import nodemailer from "npm:nodemailer@6.9.9";
 import { createClientFromRequest } from "npm:@base44/sdk@0.8.25";
 
-function buildWelcomeEmail(firstName: string, email: string, role: string, referenceCode: string, loginUrl: string, year: number): string {
-  const portalPath = role === "Co-Founder" ? "co-founder-portal" : "founder-portal";
-  const portalUrl = `https://primeendorsement.com/${portalPath}`;
+// ── Correct portal routes (verified from live bundle) ────────────────────────
+const PORTAL_URLS: Record<string, string> = {
+  "Founder":    "https://primeendorsement.com/applicant-portal",
+  "Co-Founder": "https://primeendorsement.com/cofounder-dashboard",
+  "Admin":      "https://primeendorsement.com/pea-admin",
+};
+const LOGIN_URL = "https://primeendorsement.com/applicant-portal";
+
+function buildWelcomeEmail(
+  firstName: string,
+  email: string,
+  role: string,
+  referenceCode: string,
+  loginUrl: string,
+  year: number
+): string {
+  const portalUrl = PORTAL_URLS[role] || PORTAL_URLS["Founder"];
   return `<!DOCTYPE html><html><head><meta charset="UTF-8"/>
 <style>
 body{margin:0;padding:0;background:#0A0E1A;font-family:Arial,sans-serif}
@@ -131,7 +145,6 @@ export default async function handler(req: Request): Promise<Response> {
       console.log("User created:", userId);
     } catch (e: any) {
       console.error("User create error:", e.message);
-      // If already exists, fetch them
       try {
         const existing = await base44.asServiceRole.entities.User.filter({ email });
         if (existing?.length > 0) {
@@ -147,14 +160,12 @@ export default async function handler(req: Request): Promise<Response> {
     let appId = application_id;
     let existingApp: any = null;
 
-    // Try by application_id first
     if (appId) {
       try {
         existingApp = await base44.asServiceRole.entities.Application.get(appId);
-      } catch (_) { /* not found by ID */ }
+      } catch (_) {}
     }
 
-    // Fall back: find by reference_code
     if (!existingApp && reference_code) {
       try {
         const byRef = await base44.asServiceRole.entities.Application.filter({ reference_code });
@@ -162,10 +173,9 @@ export default async function handler(req: Request): Promise<Response> {
           existingApp = byRef[0];
           appId = existingApp.id;
         }
-      } catch (_) { /* ignore */ }
+      } catch (_) {}
     }
 
-    // Fall back: find by email
     if (!existingApp && email) {
       try {
         const byEmail = await base44.asServiceRole.entities.Application.filter({ applicant_email: email });
@@ -173,13 +183,12 @@ export default async function handler(req: Request): Promise<Response> {
           existingApp = byEmail[0];
           appId = existingApp.id;
         }
-      } catch (_) { /* ignore */ }
+      } catch (_) {}
     }
 
     const now = new Date().toISOString();
 
     if (existingApp && appId) {
-      // Update existing application with full data + link to user account
       try {
         await base44.asServiceRole.entities.Application.update(appId, {
           portal_user_id: userId,
@@ -207,7 +216,6 @@ export default async function handler(req: Request): Promise<Response> {
         console.error("Application update error:", e.message);
       }
     } else {
-      // Create new application record
       try {
         const newApp = await base44.asServiceRole.entities.Application.create({
           reference_code,
@@ -277,8 +285,7 @@ export default async function handler(req: Request): Promise<Response> {
           socketTimeout: 15000,
         });
         const firstName = full_name.split(" ")[0];
-        const loginUrl = "https://primeendorsement.com/login";
-        const html = buildWelcomeEmail(firstName, email, role, reference_code, loginUrl, new Date().getFullYear());
+        const html = buildWelcomeEmail(firstName, email, role, reference_code, LOGIN_URL, new Date().getFullYear());
         await transporter.sendMail({
           from: '"Prime Endorsement Authority" <admin@primeendorsement.com>',
           to: email,
@@ -294,7 +301,8 @@ export default async function handler(req: Request): Promise<Response> {
       console.warn("SMTP_PASSWORD not set — skipping welcome email");
     }
 
-    const portalPath = role === "Co-Founder" ? "co-founder-portal" : "founder-portal";
+    // ── 5. Return correct portal URLs ──────────────────────────────────────
+    const portalUrl = PORTAL_URLS[role] || PORTAL_URLS["Founder"];
 
     return new Response(JSON.stringify({
       success: true,
@@ -302,8 +310,8 @@ export default async function handler(req: Request): Promise<Response> {
       user_created: userCreated,
       reference_code,
       application_id: appId,
-      portal_url: `https://primeendorsement.com/${portalPath}`,
-      login_url: "https://primeendorsement.com/login",
+      portal_url: portalUrl,
+      login_url: LOGIN_URL,
       email_sent: emailSent,
       role,
     }), { headers: corsHeaders });
