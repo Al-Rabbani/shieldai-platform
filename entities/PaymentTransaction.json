@@ -1,0 +1,52 @@
+{
+  "type": "object",
+  "properties": {
+    "application_id": {
+      "type": "string"
+    },
+    "reference_code": {
+      "type": "string"
+    },
+    "stripe_session_id": {
+      "type": "string"
+    },
+    "stripe_payment_intent": {
+      "type": "string"
+    },
+    "amount": {
+      "type": "number"
+    },
+    "vat": {
+      "type": "number"
+    },
+    "total": {
+      "type": "number"
+    },
+    "currency": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "completed",
+        "failed",
+        "refunded"
+      ]
+    },
+    "applicant_email": {
+      "type": "string"
+    },
+    "applicant_name": {
+      "type": "string"
+    },
+    "paid_at": {
+      "type": "string"
+    },
+    "receipt_url": {
+      "type": "string"
+    }
+  },
+  "required": [],
+  "name": "PaymentTransaction"
+}

@@ -1,0 +1,124 @@
+{
+  "type": "object",
+  "properties": {
+    "reference_code": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "draft",
+        "submitted",
+        "under_review",
+        "ai_scoring",
+        "payment_pending",
+        "payment_confirmed",
+        "approved",
+        "rejected",
+        "closed"
+      ]
+    },
+    "payment_status": {
+      "type": "string",
+      "enum": [
+        "unpaid",
+        "pending",
+        "paid",
+        "refunded"
+      ]
+    },
+    "applicant_email": {
+      "type": "string"
+    },
+    "applicant_name": {
+      "type": "string"
+    },
+    "applicant_role": {
+      "type": "string",
+      "enum": [
+        "Founder",
+        "Co-Founder"
+      ]
+    },
+    "venture_name": {
+      "type": "string"
+    },
+    "venture_stage": {
+      "type": "string"
+    },
+    "venture_sector": {
+      "type": "string"
+    },
+    "venture_description": {
+      "type": "string"
+    },
+    "nationality": {
+      "type": "string"
+    },
+    "country_of_residence": {
+      "type": "string"
+    },
+    "phone_number": {
+      "type": "string"
+    },
+    "linkedin_url": {
+      "type": "string"
+    },
+    "website_url": {
+      "type": "string"
+    },
+    "documents_submitted": {
+      "type": "boolean"
+    },
+    "kyc_verified": {
+      "type": "boolean"
+    },
+    "ai_score": {
+      "type": "number"
+    },
+    "ai_summary": {
+      "type": "string"
+    },
+    "reviewer_id": {
+      "type": "string"
+    },
+    "stripe_session_id": {
+      "type": "string"
+    },
+    "stripe_payment_intent": {
+      "type": "string"
+    },
+    "payment_amount": {
+      "type": "number"
+    },
+    "payment_date": {
+      "type": "string"
+    },
+    "submitted_at": {
+      "type": "string"
+    },
+    "portal_user_id": {
+      "type": "string"
+    },
+    "invitation_token": {
+      "type": "string"
+    },
+    "token_expires_at": {
+      "type": "string"
+    },
+    "day_90_start": {
+      "type": "string"
+    },
+    "co_founder_email": {
+      "type": "string"
+    },
+    "co_founder_name": {
+      "type": "string"
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": [],
+  "name": "Application"
+}
