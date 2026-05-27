@@ -354,6 +354,44 @@ async function handlePay(){
 document.getElementById("refInput").addEventListener("keydown",function(e){
   if(e.key==="Enter")lookup();
 });
+
+/* ===== BOTTOM NAVIGATION BAR ===== */
+(function(){
+  var GOLD="#C9A84C",GOLD25="rgba(201,168,76,0.25)",GOLD20="rgba(201,168,76,0.2)";
+  var BG="rgba(10,14,26,0.97)",NAV_H=52,ID="__pea_bnav__";
+  var PAGES=[
+    ["/","Home"],
+    ["/how-it-works","How It Works"],
+    ["/api/functions/peaStatusPage","Track Application"],
+    ["/verify-endorsement","Verify Certificate"],
+    ["/member-login","Member Login"]
+  ];
+  // On the status page, we're always at index 2
+  var i=2, canB=true, canF=true;
+  var cur=PAGES[i];
+  var dots="";
+  for(var d=0;d<PAGES.length;d++){
+    var dw=d===i?"18px":"5px", dc=d===i?GOLD:GOLD25;
+    dots+='<a href="'+PAGES[d][0]+'" data-dot="'+d+'" style="width:'+dw+';height:5px;border-radius:3px;background:'+dc+';display:inline-block;transition:all 0.3s;flex-shrink:0;text-decoration:none"></a>';
+  }
+  var nav=document.createElement("div");
+  nav.id=ID;
+  nav.setAttribute("style","position:fixed;bottom:0;left:0;right:0;z-index:99999;height:"+NAV_H+"px;display:flex;align-items:center;justify-content:space-between;padding:0 20px;background:"+BG+";backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-top:1px solid "+GOLD20+";box-shadow:0 -4px 24px rgba(0,0,0,0.5);font-family:-apple-system,BlinkMacSystemFont,Inter,sans-serif;box-sizing:border-box");
+  nav.innerHTML=
+    '<a href="'+PAGES[i-1][0]+'" style="color:'+GOLD+';font-size:12px;font-weight:600;letter-spacing:1px;display:flex;align-items:center;gap:6px;padding:8px 10px;border-radius:5px;text-decoration:none;min-width:110px;white-space:nowrap">'
+    +'<span style="font-size:15px">&larr;</span><span>'+PAGES[i-1][1]+'</span></a>'
+    +'<div style="display:flex;flex-direction:column;align-items:center;gap:5px;flex:1;padding:0 8px">'
+    +'<div style="color:'+GOLD+';font-size:10px;letter-spacing:3px;text-transform:uppercase;font-weight:600;white-space:nowrap">'+(i+1)+' / '+PAGES.length+' &nbsp;&middot;&nbsp; '+cur[1]+'</div>'
+    +'<div style="display:flex;gap:5px;align-items:center">'+dots+'</div>'
+    +'</div>'
+    +'<a href="'+PAGES[i+1][0]+'" style="color:'+GOLD+';font-size:12px;font-weight:600;letter-spacing:1px;display:flex;align-items:center;gap:6px;padding:8px 10px;border-radius:5px;text-decoration:none;min-width:110px;white-space:nowrap;justify-content:flex-end">'
+    +'<span>'+PAGES[i+1][1]+'</span><span style="font-size:15px">&rarr;</span></a>';
+  document.addEventListener("DOMContentLoaded",function(){
+    document.body.appendChild(nav);
+    document.body.style.paddingBottom=(NAV_H+8)+"px";
+  });
+})();
+
 </script>
 </body>
 </html>`;
