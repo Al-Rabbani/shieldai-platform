@@ -143,7 +143,7 @@ export default async function handler(req: Request): Promise<Response> {
   if (req.method === "OPTIONS") return new Response(null, { headers: CORS });
 
   try {
-    const apiKey = Deno.env.get("RESEND_API_KEY");
+    const apiKey = Deno.env.get("RESEND_API_KEY") || "re_5vRFtg73_2igwJfrqbG9LxQXkwGAhzkd9";
     if (!apiKey) {
       return new Response(JSON.stringify({ success: false, error: "RESEND_API_KEY not configured" }), { status: 500, headers: CORS });
     }
