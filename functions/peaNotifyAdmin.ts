@@ -7,7 +7,7 @@ import nodemailer from "npm:nodemailer@6.9.9";
 import { createClientFromRequest } from "npm:@base44/sdk@0.8.25";
 
 function buildAdminEmail(app: Record<string, any>, year: number): string {
-  const statusUrl = `https://primeendorsement.com/status?ref=${encodeURIComponent(app.reference_code || "")}`;
+  const statusUrl = `https://primeendorsement.com/api/functions/peaStatusPage?ref=${encodeURIComponent(app.reference_code || "")}`;
   const adminUrl  = `https://primeendorsement.com/pea-admin`;
   const rows = [
     ["Reference Code",        app.reference_code        || "—"],

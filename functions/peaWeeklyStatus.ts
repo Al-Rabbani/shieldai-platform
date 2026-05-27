@@ -193,7 +193,7 @@ export default async function handler(req: Request): Promise<Response> {
 
     for (const app of targets) {
       try {
-        const statusUrl = `https://primeendorsement.com/status?ref=${encodeURIComponent(app.reference_code || app.id)}`;
+        const statusUrl = `https://primeendorsement.com/api/functions/peaStatusPage?ref=${encodeURIComponent(app.reference_code || app.id)}`;
         const html      = buildStatusEmail(app, statusUrl, year);
         const firstName = (app.applicant_name || "Applicant").split(" ")[0];
         const role      = app.applicant_role || "Founder";

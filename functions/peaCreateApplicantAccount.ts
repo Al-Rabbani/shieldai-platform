@@ -43,7 +43,7 @@ function buildWelcomeEmail(
   portalUrl: string,
   year:      number,
 ): string {
-  const statusUrl = `${DOMAIN}/status?ref=${encodeURIComponent(refCode)}`;
+  const statusUrl = `${DOMAIN}/api/functions/peaStatusPage?ref=${encodeURIComponent(refCode)}`;
   return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"/>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
