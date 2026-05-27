@@ -24,7 +24,7 @@ const PORTAL_URLS: Record<string, string> = {
   "Admin":      `${DOMAIN}/pea-admin`,
 };
 const SMTP_HOST     = "smtp.hostinger.com";
-const SMTP_PORT     = 465;
+const SMTP_PORT     = 587;
 const FROM_EMAIL    = "admin@primeendorsement.com";
 const FROM_NAME     = "Prime Endorsement Authority";
 const CORS_HEADERS  = {
@@ -354,7 +354,8 @@ export default async function handler(req: Request): Promise<Response> {
         const transporter = nodemailer.createTransport({
           host:              SMTP_HOST,
           port:              SMTP_PORT,
-          secure:            true,
+          secure:            false,
+          requireTLS:        true,
           auth:              { user: FROM_EMAIL, pass: smtpPass },
           connectionTimeout: 12000,
           socketTimeout:     18000,

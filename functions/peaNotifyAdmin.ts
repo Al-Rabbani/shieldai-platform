@@ -139,8 +139,9 @@ export default async function handler(req: Request): Promise<Response> {
 
     const transporter = nodemailer.createTransport({
       host: "smtp.hostinger.com",
-      port: 465,
-      secure: true,
+      port: 587,
+      secure: false,
+      requireTLS: true,
       auth: { user: "admin@primeendorsement.com", pass: smtpPass },
       connectionTimeout: 12000,
       socketTimeout: 18000,
