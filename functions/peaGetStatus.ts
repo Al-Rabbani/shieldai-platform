@@ -25,6 +25,7 @@ function extract(app: Record<string, any>) {
 
   // Venture name — try nested first, fall back to flat fields
   const venture_name =
+    venture.company_name ||
     venture.name ||
     venture.venture_name ||
     app.venture_name ||
