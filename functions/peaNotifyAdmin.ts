@@ -137,7 +137,7 @@ export default async function handler(req: Request): Promise<Response> {
       } catch (_) {}
     }
 
-    const apiKey = Deno.env.get("RESEND_API_KEY") || "re_5vRFtg73_2igwJfrqbG9LxQXkwGAhzkd9";
+    const apiKey = Deno.env.get("RESEND_API_KEY");
     if (!apiKey) {
       return new Response(JSON.stringify({ success: false, error: "RESEND_API_KEY not configured" }), { status: 500, headers: CORS });
     }
