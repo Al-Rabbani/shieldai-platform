@@ -8,22 +8,27 @@
       "type": "string",
       "enum": [
         "draft",
+        "invited",
         "submitted",
         "under_review",
-        "ai_scoring",
-        "payment_pending",
-        "payment_confirmed",
+        "ai_screening",
+        "documents_pending",
+        "kyc_in_progress",
+        "panel_review",
         "approved",
+        "endorsed",
         "rejected",
-        "closed"
+        "withdrawn",
+        "closed",
+        "expired"
       ]
     },
     "payment_status": {
       "type": "string",
       "enum": [
-        "unpaid",
         "pending",
         "paid",
+        "failed",
         "refunded"
       ]
     },
@@ -34,11 +39,25 @@
       "type": "string"
     },
     "applicant_role": {
-      "type": "string",
-      "enum": [
-        "Founder",
-        "Co-Founder"
-      ]
+      "type": "string"
+    },
+    "date_of_birth": {
+      "type": "string"
+    },
+    "phone_number": {
+      "type": "string"
+    },
+    "nationality": {
+      "type": "string"
+    },
+    "country_of_residence": {
+      "type": "string"
+    },
+    "linkedin_url": {
+      "type": "string"
+    },
+    "website_url": {
+      "type": "string"
     },
     "venture_name": {
       "type": "string"
@@ -52,22 +71,37 @@
     "venture_description": {
       "type": "string"
     },
-    "nationality": {
+    "co_founder_name": {
       "type": "string"
     },
-    "country_of_residence": {
+    "co_founder_email": {
       "type": "string"
     },
-    "phone_number": {
+    "doc_passport_url": {
       "type": "string"
     },
-    "linkedin_url": {
+    "doc_proof_address_url": {
       "type": "string"
     },
-    "website_url": {
+    "doc_business_registration_url": {
+      "type": "string"
+    },
+    "doc_business_plan_url": {
+      "type": "string"
+    },
+    "doc_financial_projections_url": {
+      "type": "string"
+    },
+    "doc_pitch_deck_url": {
+      "type": "string"
+    },
+    "doc_additional_url": {
       "type": "string"
     },
     "documents_submitted": {
+      "type": "boolean"
+    },
+    "declaration_agreed": {
       "type": "boolean"
     },
     "kyc_verified": {
@@ -107,12 +141,6 @@
       "type": "string"
     },
     "day_90_start": {
-      "type": "string"
-    },
-    "co_founder_email": {
-      "type": "string"
-    },
-    "co_founder_name": {
       "type": "string"
     },
     "notes": {
