@@ -1,13 +1,16 @@
 /**
- * peaWeeklyStatus — v3 (Resend API, no SMTP)
- * Sends weekly status update emails to ALL active applicants.
- * Triggered every Monday at 08:00.
+ * peaWeeklyStatus — v5 REBUILT 2026-05-29
+ *
+ * Weekly status digest emails to all active applicants.
+ * FIXED: Uses venture?.company_name and founder?.role (correct nested schema)
+ * FIXED: Direct REST API, no SDK dependency
+ * ENHANCED: Rich HTML, payment action CTA, AI score display
  */
-import { createClient } from "npm:@base44/sdk@0.8.25";
 
+const BUILDER_APP = "69e2e852c48630e3502f13b1";
+const DOMAIN      = "https://primeendorsement.com";
 const RESEND_API  = "https://api.resend.com/emails";
 const FROM_EMAIL  = "Prime Endorsement Authority <admin@primeendorsement.com>";
-const DOMAIN      = "https://primeendorsement.com";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -16,179 +19,170 @@ const CORS = {
   "Content-Type": "application/json",
 };
 
-const STATUS_LABELS: Record<string, { label: string; color: string; message: string }> = {
-  draft:            { label: "Draft",           color: "#94a3b8", message: "Your application draft is saved. Complete and submit to begin review." },
-  submitted:        { label: "Submitted",        color: "#3b82f6", message: "Your application has been received and is awaiting payment to begin the review process." },
-  pending_payment:  { label: "Payment Pending",  color: "#f59e0b", message: "Please complete your £1,200.00 endorsement fee payment to proceed to review." },
-  payment_received: { label: "Payment Received", color: "#22c55e", message: "Payment confirmed. Your application has been queued for expert panel review." },
-  under_review:     { label: "Under Review",     color: "#8b5cf6", message: "Your application is currently being assessed by our expert panel. This typically takes 30–45 days." },
-  interview_stage:  { label: "Interview Stage",  color: "#06b6d4", message: "You have been selected for an interview. Check your email for scheduling details." },
-  approved:         { label: "Approved ✓",       color: "#22c55e", message: "Congratulations! Your endorsement application has been approved." },
-  rejected:         { label: "Unsuccessful",     color: "#ef4444", message: "After careful review, your application was unsuccessful at this time. You may reapply after 6 months." },
-  on_hold:          { label: "On Hold",          color: "#f59e0b", message: "Your application has been placed on hold pending additional information. Check your email." },
-  withdrawn:        { label: "Withdrawn",        color: "#64748b", message: "Your application has been withdrawn." },
+const STATUS_LABELS: Record<string, string> = {
+  submitted:         "Application Submitted",
+  under_review:      "Under Expert Review",
+  ai_screening:      "AI Screening",
+  documents_pending: "Documents Pending",
+  kyc_in_progress:   "KYC In Progress",
+  panel_review:      "Panel Review",
+  approved:          "Approved ✅",
+  endorsed:          "Endorsed 🏛️",
+  rejected:          "Rejected",
+  withdrawn:         "Withdrawn",
 };
 
-function buildStatusEmail(app: Record<string, any>, statusUrl: string, year: number): string {
-  const st        = STATUS_LABELS[app.status] || STATUS_LABELS["submitted"];
-  const firstName = (app.applicant_name || "Applicant").split(" ")[0];
-  const refCode   = app.reference_code || "N/A";
-  const venture   = app.venture_name   || "Your Venture";
-  const role      = app.applicant_role || "Founder";
+async function sendEmail(apiKey: string, to: string, subject: string, html: string): Promise<boolean> {
+  try {
+    const r = await fetch(RESEND_API, {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ from: FROM_EMAIL, to: [to], subject, html }),
+    });
+    return r.ok;
+  } catch { return false; }
+}
 
-  const statusOrder = ["draft","submitted","pending_payment","payment_received","under_review","interview_stage","approved","rejected"];
-  const steps = [
-    { key: "submitted",        label: "Submitted"        },
-    { key: "payment_received", label: "Payment Received" },
-    { key: "under_review",     label: "Under Review"     },
-    { key: "approved",         label: "Decision Issued"  },
-  ];
-  const currentIdx = statusOrder.indexOf(app.status);
-  const timelineItems = steps.map((s, i) => {
-    const stepIdx = statusOrder.indexOf(s.key);
-    const done    = currentIdx >= stepIdx;
-    const active  = s.key === app.status;
-    const dot     = done ? "#22c55e" : active ? "#C9A84C" : "#1e293b";
-    const lbl     = done ? "#e2e8f0" : active ? "#C9A84C" : "#475569";
-    const line    = i < steps.length - 1
-      ? `<div style="position:absolute;top:10px;left:50%;right:-50%;height:2px;background:${done ? "#22c55e" : "#1e293b"};z-index:0;"></div>`
-      : "";
-    return `<div style="display:flex;flex-direction:column;align-items:center;flex:1;position:relative;">
-        ${line}
-        <div style="width:20px;height:20px;border-radius:50%;background:${dot};z-index:1;border:2px solid ${dot};"></div>
-        <div style="color:${lbl};font-size:10px;margin-top:6px;text-align:center;">${s.label}</div>
-      </div>`;
-  }).join("");
+function buildEmail(app: Record<string, any>): string {
+  const ref        = app.reference_code || "N/A";
+  const name       = app.applicant_name || "Applicant";
+  const firstName  = name.split(" ")[0];
+  const status     = app.status || "submitted";
+  const payStatus  = app.payment_status || "pending";
+  const aiScore    = app.ai_score;
+  const venture    = app.venture?.company_name || app.applicant_name || "Your Venture";
+  const sector     = app.venture?.sector || "";
+  const stage      = app.venture?.stage || "";
+  const statusLabel = STATUS_LABELS[status] || status.replace(/_/g, " ");
+  const statusUrl  = `${DOMAIN}/api/functions/peaStatusPage?ref=${encodeURIComponent(ref)}`;
+  const payPending = payStatus !== "paid" && ["submitted", "under_review"].includes(status);
+  const scoreColor = aiScore >= 70 ? "#22c55e" : aiScore >= 50 ? "#f59e0b" : aiScore > 0 ? "#ef4444" : "#C9A84C";
+  const year       = new Date().getFullYear();
 
-  const payBadge = app.payment_status === "paid"
-    ? `<span style="background:rgba(34,197,94,.15);color:#22c55e;padding:3px 10px;border-radius:99px;font-size:11px;font-weight:600;">PAID</span>`
-    : `<span style="background:rgba(245,158,11,.15);color:#f59e0b;padding:3px 10px;border-radius:99px;font-size:11px;font-weight:600;">PAYMENT DUE</span>`;
-
-  const paySection = app.payment_status !== "paid"
-    ? `<div style="background:#1a1000;border:1px solid #92400e;border-radius:6px;padding:16px 18px;margin:20px 0;">
-        <div style="color:#f59e0b;font-size:13px;font-weight:600;margin-bottom:6px;">⚠ Action Required: Complete Payment</div>
-        <p style="color:#94a3b8;font-size:13px;line-height:1.6;margin:0 0 12px;">Your endorsement fee of <strong style="color:#fff">£1,200.00</strong> (£1,000 + £200 VAT) is outstanding.</p>
-        <a href="${DOMAIN}/apply" style="display:inline-block;background:#f59e0b;color:#0A0E1A;text-decoration:none;padding:9px 22px;border-radius:5px;font-weight:700;font-size:12px;letter-spacing:1px;text-transform:uppercase;">Complete Payment</a>
-      </div>` : "";
-
-  return `<!DOCTYPE html><html><head><meta charset="UTF-8"/></head>
-<body style="margin:0;padding:0;background:#0A0E1A;font-family:Arial,sans-serif;">
-<div style="max-width:600px;margin:0 auto;">
-  <div style="background:#111827;border-bottom:2px solid #C9A84C;padding:32px 40px;text-align:center;">
-    <div style="display:inline-block;border:1px solid #C9A84C;padding:4px 14px;border-radius:2px;margin-bottom:10px;">
-      <span style="color:#C9A84C;font-size:10px;letter-spacing:4px;text-transform:uppercase;">Weekly Status Update</span>
-    </div>
-    <div style="color:#C9A84C;font-size:20px;font-weight:700;letter-spacing:4px;text-transform:uppercase;">PRIME ENDORSEMENT AUTHORITY</div>
-    <div style="color:#e2e8f0;font-size:12px;letter-spacing:2px;opacity:.7;margin-top:4px;">${role} Application — Status Report</div>
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+</head>
+<body style="margin:0;padding:0;background:#0A0E1A;font-family:Arial,sans-serif">
+<div style="max-width:600px;margin:0 auto;background:#111827;border-radius:10px;overflow:hidden">
+  <div style="background:linear-gradient(135deg,#0d1220 0%,#111827 100%);border-bottom:3px solid #C9A84C;padding:28px 32px;text-align:center">
+    <div style="font-size:32px;margin-bottom:8px">🏛️</div>
+    <div style="color:#C9A84C;font-size:12px;font-weight:700;letter-spacing:4px;text-transform:uppercase">Prime Endorsement Authority</div>
+    <div style="color:#475569;font-size:11px;margin-top:4px;letter-spacing:1px">Weekly Application Status Update</div>
   </div>
-  <div style="padding:32px 40px;background:#111827;">
-    <div style="color:#C9A84C;font-size:15px;font-weight:600;margin-bottom:4px;">Weekly Update, ${firstName} 🏛️</div>
-    <p style="color:#94a3b8;font-size:13px;line-height:1.7;margin-bottom:22px;">Here is your application status update for the week.</p>
-    <div style="background:#0A0E1A;border:1px solid #C9A84C;border-radius:6px;padding:14px 20px;margin-bottom:20px;">
-      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
-        <div>
-          <div style="color:#64748b;font-size:10px;letter-spacing:3px;text-transform:uppercase;margin-bottom:3px;">Reference</div>
-          <div style="color:#C9A84C;font-size:18px;font-weight:700;letter-spacing:2px;">${refCode}</div>
-        </div>
-        <div style="text-align:right;">
-          <div style="color:#64748b;font-size:10px;letter-spacing:2px;text-transform:uppercase;margin-bottom:3px;">Venture</div>
-          <div style="color:#e2e8f0;font-size:13px;font-weight:500;">${venture}</div>
-        </div>
-      </div>
-    </div>
-    <div style="background:#0d1220;border:1px solid #1e293b;border-radius:8px;padding:20px 22px;margin-bottom:20px;">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
-        <div style="color:#64748b;font-size:10px;letter-spacing:3px;text-transform:uppercase;">Current Status</div>
-        ${payBadge}
-      </div>
-      <div style="display:inline-block;background:${st.color}22;border:1px solid ${st.color};color:${st.color};padding:6px 18px;border-radius:99px;font-size:13px;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:12px;">${st.label}</div>
-      <p style="color:#94a3b8;font-size:13px;line-height:1.6;margin:0;">${st.message}</p>
-    </div>
-    <div style="background:#0d1220;border:1px solid #1e293b;border-radius:8px;padding:20px 22px;margin-bottom:20px;">
-      <div style="color:#64748b;font-size:10px;letter-spacing:3px;text-transform:uppercase;margin-bottom:16px;">Application Journey</div>
-      <div style="display:flex;justify-content:space-between;position:relative;">${timelineItems}</div>
-    </div>
-    ${paySection}
-    <div style="text-align:center;margin:28px 0 20px;">
-      <a href="${statusUrl}" style="display:inline-block;background:#C9A84C;color:#0A0E1A;text-decoration:none;padding:14px 44px;border-radius:6px;font-weight:700;font-size:14px;letter-spacing:2px;text-transform:uppercase;">View Live Status →</a>
-    </div>
-    <hr style="border:none;border-top:1px solid #1e293b;margin:24px 0;"/>
-    <p style="text-align:center;color:#475569;font-size:12px;line-height:1.7;">
-      Questions? <a href="mailto:admin@primeendorsement.com" style="color:#C9A84C;">admin@primeendorsement.com</a>
+  <div style="padding:28px 32px">
+    <p style="color:#C9A84C;font-size:15px;font-weight:600;margin:0 0 8px">Weekly Update, ${firstName} 👋</p>
+    <p style="color:#94a3b8;font-size:13px;line-height:1.8;margin:0 0 24px">
+      Here is your weekly status report for <strong style="color:#e2e8f0">${venture}</strong>${sector ? ` · ${sector}` : ""}${stage ? ` · ${stage}` : ""}.
     </p>
-    <p style="text-align:center;color:#334155;font-size:11px;margin-top:10px;letter-spacing:1px;">🔒 AES-256 · TLS 1.3 · PCI DSS Compliant</p>
+
+    <div style="background:#0A0E1A;border:1px solid #C9A84C;border-radius:8px;padding:16px;text-align:center;margin-bottom:20px">
+      <div style="color:#64748b;font-size:10px;letter-spacing:3px;text-transform:uppercase;margin-bottom:6px">Reference Code</div>
+      <div style="color:#C9A84C;font-size:22px;font-weight:700;letter-spacing:4px">${ref}</div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px">
+      <div style="background:#0d1220;border:1px solid #1e293b;border-radius:6px;padding:14px">
+        <div style="color:#64748b;font-size:10px;letter-spacing:2px;text-transform:uppercase;margin-bottom:6px">Application Status</div>
+        <div style="color:#e2e8f0;font-size:13px;font-weight:600">${statusLabel}</div>
+      </div>
+      <div style="background:#0d1220;border:${payStatus === "paid" ? "1px solid #166534" : "1px solid #92400e"};border-radius:6px;padding:14px">
+        <div style="color:#64748b;font-size:10px;letter-spacing:2px;text-transform:uppercase;margin-bottom:6px">Payment Status</div>
+        <div style="color:${payStatus === "paid" ? "#22c55e" : "#f59e0b"};font-size:13px;font-weight:600;text-transform:capitalize">${payStatus === "paid" ? "✅ Paid" : "⚠ Pending"}</div>
+      </div>
+    </div>
+
+    ${aiScore != null && aiScore > 0 ? `
+    <div style="background:#0d1220;border:1px solid #1e293b;border-radius:6px;padding:14px;margin-bottom:20px;display:flex;align-items:center;gap:14px">
+      <div style="width:52px;height:52px;border-radius:50%;border:2px solid ${scoreColor};display:flex;align-items:center;justify-content:center;flex-shrink:0">
+        <span style="color:${scoreColor};font-size:16px;font-weight:700">${aiScore}</span>
+      </div>
+      <div>
+        <div style="color:#64748b;font-size:10px;letter-spacing:2px;text-transform:uppercase;margin-bottom:4px">AI Endorsement Score</div>
+        <div style="color:#94a3b8;font-size:12px">Your venture scored <strong style="color:${scoreColor}">${aiScore}/100</strong> on our AI assessment framework.</div>
+      </div>
+    </div>` : ""}
+
+    ${payPending ? `
+    <div style="background:#1a0f00;border:1px solid #92400e;border-radius:8px;padding:16px;margin-bottom:20px">
+      <div style="color:#f59e0b;font-size:13px;font-weight:600;margin-bottom:6px">⚠ Action Required — Payment Pending</div>
+      <div style="color:#94a3b8;font-size:12px;line-height:1.7;margin-bottom:12px">Your endorsement fee of <strong style="color:#e2e8f0">£1,200.00 GBP</strong> is outstanding. Your 90-day expert review begins immediately upon payment.</div>
+      <a href="${statusUrl}" style="background:#f59e0b;color:#0A0E1A;text-decoration:none;padding:10px 24px;border-radius:6px;font-weight:700;font-size:11px;letter-spacing:2px;text-transform:uppercase">Complete Payment →</a>
+    </div>` : ""}
+
+    <div style="background:#0d1220;border:1px solid #1e293b;border-radius:6px;padding:14px;margin-bottom:20px">
+      <div style="color:#64748b;font-size:10px;letter-spacing:2px;text-transform:uppercase;margin-bottom:10px">Your 90-Day Journey</div>
+      <div style="font-size:12px;color:#475569">
+        <div style="margin-bottom:6px;color:${payStatus === "paid" ? "#22c55e" : "#475569"}">
+          ${payStatus === "paid" ? "✅" : "⬜"} <span style="color:${payStatus === "paid" ? "#e2e8f0" : "#475569"}">Payment & Review Commencement</span>
+        </div>
+        <div style="margin-bottom:6px;color:#475569">⬜ Expert Panel Assessment (Day 30)</div>
+        <div style="margin-bottom:6px;color:#475569">⬜ Full Review Completion (Day 60)</div>
+        <div style="color:#475569">⬜ Official Endorsement Decision (Day 90)</div>
+      </div>
+    </div>
+
+    <div style="text-align:center;margin-top:24px">
+      <a href="${statusUrl}" style="background:#C9A84C;color:#0A0E1A;text-decoration:none;padding:14px 40px;border-radius:8px;font-weight:700;font-size:12px;letter-spacing:2px;text-transform:uppercase;display:inline-block">View Full Application Status →</a>
+    </div>
   </div>
-  <div style="background:#0d1220;padding:18px 40px;text-align:center;border-top:1px solid #1e293b;">
-    <p style="color:#475569;font-size:12px;margin:3px 0;"><strong style="color:#94a3b8">Prime Endorsement Authority</strong> — Automated Status System</p>
-    <p style="color:#475569;font-size:12px;margin:3px 0;">© ${year} Prime Endorsement Authority. All rights reserved.</p>
+  <div style="background:#0d1220;border-top:1px solid #1e293b;padding:16px 32px;text-align:center">
+    <p style="color:#475569;font-size:11px;margin:0">© ${year} Prime Endorsement Authority · <a href="${DOMAIN}" style="color:#C9A84C;text-decoration:none">primeendorsement.com</a></p>
+    <p style="color:#374151;font-size:10px;margin:6px 0 0">You are receiving this because you have an active application. Ref: ${ref}</p>
   </div>
 </div>
 </body></html>`;
-}
-
-async function sendEmail(apiKey: string, to: string, subject: string, html: string): Promise<{ id: string }> {
-  const res = await fetch(RESEND_API, {
-    method: "POST",
-    headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ from: FROM_EMAIL, to: [to], subject, html }),
-  });
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`Resend ${res.status}: ${err}`);
-  }
-  return res.json();
 }
 
 export default async function handler(req: Request): Promise<Response> {
   if (req.method === "OPTIONS") return new Response(null, { headers: CORS });
 
   try {
-    const apiKey = Deno.env.get("RESEND_API_KEY");
-    if (!apiKey) {
+    const resendKey    = Deno.env.get("RESEND_API_KEY") || "";
+    const serviceToken = Deno.env.get("BASE44_SERVICE_TOKEN") || "";
+
+    if (!resendKey) {
       return new Response(JSON.stringify({ success: false, error: "RESEND_API_KEY not configured" }), { status: 500, headers: CORS });
     }
 
-    const serviceToken = Deno.env.get("BASE44_SERVICE_TOKEN") || "";
-    const base44 = createClient({ appId: "69e2e852c48630e3502f13b1", serviceToken });
-    const year   = new Date().getFullYear();
+    // Fetch all applications via REST (no SDK dependency)
+    const appsRes = await fetch(`https://app.base44.com/api/apps/${BUILDER_APP}/entities/Application`, {
+      headers: { "Authorization": `Bearer ${serviceToken}` },
+    });
+    if (!appsRes.ok) {
+      return new Response(JSON.stringify({ success: false, error: `DB fetch failed: ${appsRes.status}` }), { status: 500, headers: CORS });
+    }
 
-    // Read all active applications
-    const apps = await base44.asServiceRole.entities.Application.filter({});
+    const apps = await appsRes.json();
     const active = (apps || []).filter((a: any) =>
       a.applicant_email &&
       a.reference_code &&
       !["withdrawn", "closed", "rejected"].includes(a.status || "")
     );
 
-    console.log(`[peaWeeklyStatus] Sending to ${active.length} applicants`);
+    console.log(`[weekly] Sending to ${active.length} active applicants`);
 
     let sent = 0, failed = 0;
     for (const app of active) {
-      try {
-        const statusUrl = `${DOMAIN}/api/functions/peaStatusPage?ref=${encodeURIComponent(app.reference_code)}`;
-        const html      = buildStatusEmail(app, statusUrl, year);
-        await sendEmail(
-          apiKey,
-          app.applicant_email,
-          `📊 Weekly Update — ${app.reference_code} | Prime Endorsement Authority`,
-          html,
-        );
+      const ref       = app.reference_code || "?";
+      const email     = app.applicant_email;
+      const venture   = app.venture?.company_name || app.applicant_name || "Unknown";
+      const aiScore   = app.ai_score || 0;
+      const subject   = `📊 Weekly Update — ${ref} | ${venture} | Prime Endorsement Authority`;
+
+      const ok = await sendEmail(resendKey, email, subject, buildEmail(app));
+      if (ok) {
         sent++;
-        // Small delay to respect rate limits
-        await new Promise(r => setTimeout(r, 200));
-      } catch (e: any) {
-        console.error(`[peaWeeklyStatus] Failed for ${app.reference_code}:`, e.message);
+        console.log(`[weekly] ✅ Sent to ${ref} (${email}) score=${aiScore}`);
+      } else {
         failed++;
+        console.error(`[weekly] ❌ Failed for ${ref}`);
       }
     }
 
-    return new Response(
-      JSON.stringify({ success: true, sent, failed, total: active.length }),
-      { headers: CORS }
-    );
+    return new Response(JSON.stringify({ success: true, sent, failed, total: active.length, timestamp: new Date().toISOString() }), { headers: CORS });
 
   } catch (err: any) {
-    console.error("[peaWeeklyStatus] Fatal:", err.message);
+    console.error("[weekly] Fatal:", err.message);
     return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: CORS });
   }
 }

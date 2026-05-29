@@ -138,9 +138,20 @@ export default async function handler(req: Request): Promise<Response> {
     const session = await stripeRes.json();
 
     if (session.payment_status !== "paid") {
+      // Payment not yet completed — return a clear pending state, not an error
+      // This is a valid state: user initiated checkout but hasn't paid yet
+      const pending_status = session.payment_status || "unpaid";
+      console.log(`[verify] Session ${session_id} payment_status=${pending_status} — awaiting payment`);
       return new Response(
-        JSON.stringify({ success: false, verified: false, payment_status: session.payment_status }),
-        { status: 402, headers: CORS }
+        JSON.stringify({
+          success:        true,
+          verified:       false,
+          payment_status: pending_status,
+          status:         "awaiting_payment",
+          message:        "Payment not yet completed. Please complete your Stripe payment.",
+          checkout_url:   session.url || null,
+        }),
+        { status: 200, headers: CORS }
       );
     }
 
