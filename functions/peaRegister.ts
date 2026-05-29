@@ -1022,7 +1022,7 @@ export default async function handler(req: Request): Promise<Response> {
           const venture = existing.venture_name || body.venture_name || "Your Venture";
           const checkout = await createStripeCheckout({ email, name: existing.applicant_name, venture, ref: existing.reference_code, appId: existing.id, stripeKey });
           if (checkout) {
-            await dbUpdate(BUILDER_APP, "Application", existing.id, serviceToken, { stripe_session_id: checkout.sessionId });
+            await dbUpdate(BUILDER_APP, "Application", existing.id, serviceToken, { payment_reference: checkout.sessionId });
             const statusUrl = `${DOMAIN}/api/functions/peaStatusPage?ref=${encodeURIComponent(existing.reference_code)}`;
             return new Response(duplicateScreen(existing.reference_code, statusUrl), { headers: HTML_HEADERS });
           }
@@ -1051,30 +1051,35 @@ export default async function handler(req: Request): Promise<Response> {
 
       // Create Application record
       const appRecord = await dbCreate(BUILDER_APP, "Application", serviceToken, {
-        reference_code:         ref,
-        status:                 "submitted",
-        payment_status:         "pending",
-        applicant_name:         body.applicant_name,
-        applicant_email:        email,
-        applicant_role:         body.applicant_role || "Founder",
-        date_of_birth:          body.date_of_birth || null,
-        phone_number:           body.phone_number || "",
-        nationality:            body.nationality,
-        country_of_residence:   body.country_of_residence,
-        linkedin_url:           body.linkedin_url || "",
-        website_url:            body.website_url  || "",
-        venture_name:           body.venture_name,
-        venture_stage:          body.venture_stage,
-        venture_sector:         body.venture_sector,
-        venture_description:    body.venture_description,
-        co_founder_name:        body.co_founder_name  || "",
-        co_founder_email:       body.co_founder_email || "",
-        documents_submitted:    false,
-        declaration_agreed:     body.declaration_agreed === "true",
-        ai_score:               aiScore  || null,
-        ai_summary:             aiSummary || null,
-        invitation_token:       body._token || null,
-        submitted_at:           now,
+        reference_code:   ref,
+        status:           "submitted",
+        payment_status:   "pending",
+        application_type: (body.applicant_role || "Founder").toLowerCase().replace(/\s+/g, "_"),
+        application_fee:  1200.00,
+        currency:         "GBP",
+        applicant_name:   body.applicant_name,
+        applicant_email:  email,
+        submitted_at:     now,
+        session_token:    body._token || null,
+        ai_score:         aiScore  || null,
+        founder: {
+          full_name:            body.applicant_name,
+          role:                 body.applicant_role || "Founder",
+          nationality:          body.nationality,
+          country_of_residence: body.country_of_residence,
+          phone:                body.phone_number || "",
+          date_of_birth:        body.date_of_birth || null,
+          linkedin:             body.linkedin_url  || "",
+        },
+        venture: {
+          company_name:  body.venture_name,
+          stage:         body.venture_stage,
+          sector:        body.venture_sector,
+          one_liner:     (body.venture_description || "").slice(0, 160),
+          website:       body.website_url || "",
+          headquarters:  body.country_of_residence,
+          founded_year:  body.founded_year ? parseInt(body.founded_year) : null,
+        },
       });
 
       console.log(`[register] Created ${ref} id=${appRecord.id}`);
@@ -1132,7 +1137,7 @@ export default async function handler(req: Request): Promise<Response> {
         if (checkout) {
           checkoutUrl   = checkout.url;
           stripeSession = checkout.sessionId;
-          await dbUpdate(BUILDER_APP, "Application", appRecord.id, serviceToken, { stripe_session_id: stripeSession });
+          await dbUpdate(BUILDER_APP, "Application", appRecord.id, serviceToken, { payment_reference: stripeSession });
         }
       }
 
