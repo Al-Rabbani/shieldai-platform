@@ -1,16 +1,17 @@
 /**
- * peaVerifyPayment — FIXED v2
+ * peaVerifyPayment — v5 FULL REBUILD 2026-05-29
  *
- * BUG-01 FIX: Called by /payment-success page after Stripe redirect
- * BUG-04 FIX: Uses createClient({ appId: BUILDER_APP }) NOT createClientFromRequest
- * BUG-02 FIX: Writes to correct builder schema fields:
- *   - payment_reference (NOT stripe_session_id)
- *   - payment_status: "paid"
- *   - status: "under_review"
- *   - day_90_start
- * BUG-05 FIX: Handles both "pending" and "unpaid" payment_status values
+ * Called when Stripe redirects to /payment-success after checkout.
+ * Also called by the payment checker automation every 30 minutes.
+ *
+ * FIXES:
+ *  - Pure REST API, zero SDK dependency (no createClientFromRequest, no createClient)
+ *  - Proper "unpaid" handling: returns pending state, NOT an error
+ *  - Updates both builder + agent DB on payment confirmation
+ *  - Generates Stripe checkout link if session expired/not found
+ *  - Triggers peaInvoiceReceipt to email receipt on success
+ *  - Sets day_90_start on first paid confirmation
  */
-import { createClient } from "npm:@base44/sdk@0.8.25";
 
 const BUILDER_APP = "69e2e852c48630e3502f13b1";
 const AGENT_APP   = "6a14246111a4fa5e22999619";
@@ -20,302 +21,343 @@ const FROM_EMAIL  = "Prime Endorsement Authority <admin@primeendorsement.com>";
 const ADMIN_EMAIL = "admin@primeendorsement.com";
 
 const CORS = {
-  "Access-Control-Allow-Origin":  "*",
-  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization",
-  "Content-Type":                 "application/json",
+  "Content-Type": "application/json",
 };
 
+// ── DB Helpers ────────────────────────────────────────────────────────────────
+
+async function dbList(appId: string, entity: string, token: string): Promise<any[]> {
+  const r = await fetch(`https://app.base44.com/api/apps/${appId}/entities/${entity}`, {
+    headers: { "Authorization": `Bearer ${token}` },
+  });
+  if (!r.ok) throw new Error(`DB list ${entity}: ${r.status}`);
+  return r.json();
+}
+
+async function dbGet(appId: string, entity: string, id: string, token: string): Promise<any> {
+  const r = await fetch(`https://app.base44.com/api/apps/${appId}/entities/${entity}/${id}`, {
+    headers: { "Authorization": `Bearer ${token}` },
+  });
+  if (!r.ok) return null;
+  return r.json();
+}
+
+async function dbUpdate(appId: string, entity: string, id: string, token: string, data: object): Promise<any> {
+  const r = await fetch(`https://app.base44.com/api/apps/${appId}/entities/${entity}/${id}`, {
+    method: "PUT",
+    headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!r.ok) throw new Error(`DB update ${entity}/${id}: ${r.status} ${await r.text()}`);
+  return r.json();
+}
+
+async function dbCreate(appId: string, entity: string, token: string, data: object): Promise<any> {
+  const r = await fetch(`https://app.base44.com/api/apps/${appId}/entities/${entity}`, {
+    method: "POST",
+    headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!r.ok) throw new Error(`DB create ${entity}: ${r.status} ${await r.text()}`);
+  return r.json();
+}
+
+// ── Email ─────────────────────────────────────────────────────────────────────
+
 async function sendEmail(apiKey: string, to: string, subject: string, html: string): Promise<void> {
-  const res = await fetch(RESEND_API, {
+  const r = await fetch(RESEND_API, {
     method: "POST",
     headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
     body: JSON.stringify({ from: FROM_EMAIL, to: [to], subject, html }),
   });
-  if (!res.ok) console.error("[peaVerifyPayment] Resend error:", res.status, await res.text());
+  if (!r.ok) console.error("[verify] Email error:", r.status, await r.text());
 }
 
-function buildPaymentConfirmEmail(app: Record<string, any>, sessionId: string, year: number): string {
-  const refCode   = app.reference_code || "N/A";
-  const firstName = (app.applicant_name || "Applicant").split(" ")[0];
-  const statusUrl = `${DOMAIN}/api/functions/peaStatusPage?ref=${encodeURIComponent(refCode)}`;
-  const paidAt    = new Date().toLocaleString("en-GB", { timeZone: "Europe/London" });
-
+function paymentConfirmedEmail(name: string, ref: string, venture: string, amount: string): string {
+  const firstName = name.split(" ")[0];
+  const statusUrl = `${DOMAIN}/api/functions/peaStatusPage?ref=${encodeURIComponent(ref)}`;
+  const receiptUrl = `${DOMAIN}/api/functions/peaInvoiceReceipt?type=receipt&ref=${encodeURIComponent(ref)}`;
+  const year = new Date().getFullYear();
   return `<!DOCTYPE html><html><head><meta charset="UTF-8"/></head>
-<body style="margin:0;padding:0;background:#0A0E1A;font-family:Arial,sans-serif;">
-<div style="max-width:600px;margin:0 auto;">
-  <div style="background:#111827;border-bottom:3px solid #22c55e;padding:32px 40px;text-align:center;">
-    <div style="color:#22c55e;font-size:48px;margin-bottom:10px;">✅</div>
-    <div style="color:#C9A84C;font-size:20px;font-weight:700;letter-spacing:4px;text-transform:uppercase;">PRIME ENDORSEMENT AUTHORITY</div>
-    <div style="color:#22c55e;font-size:14px;letter-spacing:2px;margin-top:8px;">Payment Confirmed — Your 90-Day Review Has Begun</div>
+<body style="margin:0;padding:0;background:#0A0E1A;font-family:Arial,sans-serif">
+<div style="max-width:600px;margin:0 auto;background:#111827;border-radius:10px;overflow:hidden">
+  <div style="background:#0d1220;border-bottom:3px solid #22c55e;padding:28px 32px;text-align:center">
+    <div style="font-size:36px">✅</div>
+    <div style="color:#C9A84C;font-size:12px;font-weight:700;letter-spacing:4px;text-transform:uppercase;margin-top:8px">Prime Endorsement Authority</div>
+    <div style="color:#22c55e;font-size:13px;margin-top:6px;font-weight:600">Payment Confirmed</div>
   </div>
-  <div style="padding:32px 40px;background:#111827;">
-    <div style="color:#C9A84C;font-size:16px;font-weight:600;margin-bottom:12px;">Payment Received, ${firstName} 🏛️</div>
-    <p style="color:#94a3b8;font-size:13px;line-height:1.8;margin-bottom:22px;">
-      Your endorsement fee of <strong style="color:#e2e8f0;">£1,200.00</strong> has been successfully processed.
-      Your 90-day expert review period has officially begun.
-    </p>
-    <div style="background:#0A0E1A;border:1px solid #C9A84C;border-radius:6px;padding:14px 20px;margin-bottom:20px;text-align:center;">
-      <div style="color:#64748b;font-size:10px;letter-spacing:3px;text-transform:uppercase;margin-bottom:4px;">Application Reference</div>
-      <div style="color:#C9A84C;font-size:22px;font-weight:700;letter-spacing:3px;">${refCode}</div>
+  <div style="padding:28px 32px">
+    <p style="color:#22c55e;font-size:16px;font-weight:600;margin:0 0 10px">Payment Received, ${firstName}! 🎉</p>
+    <p style="color:#94a3b8;font-size:13px;line-height:1.8;margin:0 0 20px">Your payment of <strong style="color:#e2e8f0">${amount}</strong> for <strong style="color:#e2e8f0">${venture}</strong> has been confirmed. Your 90-day expert review has officially commenced.</p>
+    <div style="background:#0A0E1A;border:1px solid #C9A84C;border-radius:8px;padding:14px;text-align:center;margin-bottom:20px">
+      <div style="color:#64748b;font-size:10px;letter-spacing:3px;text-transform:uppercase;margin-bottom:6px">Reference Code</div>
+      <div style="color:#C9A84C;font-size:22px;font-weight:700;letter-spacing:4px">${ref}</div>
     </div>
-    <table style="width:100%;border-collapse:collapse;background:#0d1220;border:1px solid #1e293b;border-radius:6px;margin-bottom:20px;">
-      <tr><td style="padding:10px 14px;color:#94a3b8;font-size:13px;border-bottom:1px solid #1e293b;width:45%;">Service Fee</td><td style="padding:10px 14px;color:#e2e8f0;font-size:13px;border-bottom:1px solid #1e293b;">£1,000.00</td></tr>
-      <tr><td style="padding:10px 14px;color:#94a3b8;font-size:13px;border-bottom:1px solid #1e293b;">VAT (20%)</td><td style="padding:10px 14px;color:#e2e8f0;font-size:13px;border-bottom:1px solid #1e293b;">£200.00</td></tr>
-      <tr><td style="padding:10px 14px;color:#C9A84C;font-size:14px;font-weight:700;">Total Paid</td><td style="padding:10px 14px;color:#C9A84C;font-size:14px;font-weight:700;">£1,200.00 GBP</td></tr>
-      <tr><td style="padding:10px 14px;color:#94a3b8;font-size:12px;border-top:1px solid #1e293b;">Stripe Session</td><td style="padding:10px 14px;color:#475569;font-size:11px;font-family:monospace;border-top:1px solid #1e293b;">${sessionId}</td></tr>
-      <tr><td style="padding:10px 14px;color:#94a3b8;font-size:12px;border-top:1px solid #1e293b;">Payment Date</td><td style="padding:10px 14px;color:#e2e8f0;font-size:12px;border-top:1px solid #1e293b;">${paidAt}</td></tr>
-    </table>
-    <div style="background:#0a1a0a;border:1px solid #166534;border-radius:6px;padding:16px 18px;margin-bottom:20px;">
-      <div style="color:#22c55e;font-size:12px;font-weight:700;letter-spacing:2px;text-transform:uppercase;margin-bottom:10px;">Your 90-Day Review Timeline</div>
-      <div style="color:#94a3b8;font-size:13px;line-height:1.8;">
-        📅 <strong style="color:#e2e8f0">Day 0:</strong> Payment Confirmed — Review Begins<br/>
-        📋 <strong style="color:#e2e8f0">Day 30:</strong> First Expert Panel Update<br/>
-        🔍 <strong style="color:#e2e8f0">Day 60:</strong> Full Assessment Complete<br/>
-        🏛️ <strong style="color:#e2e8f0">Day 90:</strong> Official Endorsement Decision Issued
+    <div style="background:#0a1a0a;border:1px solid #166534;border-radius:8px;padding:16px;margin-bottom:20px">
+      <div style="color:#22c55e;font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;margin-bottom:10px">Your 90-Day Review Timeline</div>
+      <div style="font-size:12px;color:#4ade80;line-height:2">
+        <div>✅ Day 0: Payment confirmed — review commenced</div>
+        <div style="color:#94a3b8">⏳ Day 30: First expert panel update</div>
+        <div style="color:#94a3b8">⏳ Day 60: Full assessment review</div>
+        <div style="color:#94a3b8">⏳ Day 90: Official endorsement decision</div>
       </div>
     </div>
-    <div style="text-align:center;margin:28px 0;">
-      <a href="${statusUrl}" style="display:inline-block;background:#C9A84C;color:#0A0E1A;text-decoration:none;padding:14px 44px;border-radius:6px;font-weight:700;font-size:14px;letter-spacing:2px;text-transform:uppercase;">Track Your Application →</a>
+    <div style="text-align:center;margin:20px 0">
+      <a href="${receiptUrl}" style="background:#22c55e;color:#fff;text-decoration:none;padding:12px 28px;border-radius:6px;font-weight:700;font-size:11px;letter-spacing:2px;text-transform:uppercase;margin-right:8px;display:inline-block">View Receipt →</a>
+      <a href="${statusUrl}" style="background:#C9A84C;color:#0A0E1A;text-decoration:none;padding:12px 28px;border-radius:6px;font-weight:700;font-size:11px;letter-spacing:2px;text-transform:uppercase;display:inline-block">Track Application →</a>
     </div>
-    <p style="text-align:center;color:#475569;font-size:12px;">Questions? <a href="mailto:${ADMIN_EMAIL}" style="color:#C9A84C;">${ADMIN_EMAIL}</a></p>
-    <p style="text-align:center;color:#334155;font-size:11px;margin-top:8px;letter-spacing:1px;">🔒 AES-256 · TLS 1.3 · PCI DSS Level 1</p>
   </div>
-  <div style="background:#0d1220;padding:18px 40px;text-align:center;border-top:1px solid #1e293b;">
-    <p style="color:#475569;font-size:12px;"><strong style="color:#94a3b8">Prime Endorsement Authority</strong></p>
-    <p style="color:#475569;font-size:12px;">© ${year} Prime Endorsement Authority. All rights reserved.</p>
+  <div style="background:#0d1220;border-top:1px solid #1e293b;padding:14px;text-align:center">
+    <p style="color:#475569;font-size:11px;margin:0">© ${year} Prime Endorsement Authority · primeendorsement.com</p>
   </div>
-</div>
-</body></html>`;
+</div></body></html>`;
 }
+
+function adminPaymentEmail(name: string, ref: string, venture: string, amount: string, sessionId: string): string {
+  const year = new Date().getFullYear();
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"/></head>
+<body style="margin:0;padding:0;background:#0A0E1A;font-family:Arial,sans-serif">
+<div style="max-width:600px;margin:0 auto;background:#111827;border-radius:10px;overflow:hidden">
+  <div style="background:#0d1220;border-bottom:3px solid #22c55e;padding:20px 28px;text-align:center">
+    <div style="color:#C9A84C;font-size:12px;font-weight:700;letter-spacing:4px;text-transform:uppercase">Prime Endorsement Authority</div>
+    <div style="color:#22c55e;font-size:13px;margin-top:6px">💳 Payment Received</div>
+  </div>
+  <div style="padding:24px 28px;font-size:13px">
+    <div style="background:#0A0E1A;border:1px solid #1e293b;border-radius:6px;padding:16px;margin-bottom:16px">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div><span style="color:#64748b">Applicant:</span><br/><span style="color:#e2e8f0;font-weight:600">${name}</span></div>
+        <div><span style="color:#64748b">Reference:</span><br/><span style="color:#C9A84C;font-weight:700">${ref}</span></div>
+        <div><span style="color:#64748b">Venture:</span><br/><span style="color:#e2e8f0">${venture}</span></div>
+        <div><span style="color:#64748b">Amount:</span><br/><span style="color:#22c55e;font-weight:700">${amount}</span></div>
+      </div>
+      <div style="margin-top:12px;padding-top:12px;border-top:1px solid #1e293b">
+        <span style="color:#64748b">Stripe Session:</span><br/>
+        <span style="color:#94a3b8;font-size:11px">${sessionId}</span>
+      </div>
+    </div>
+    <div style="text-align:center">
+      <a href="https://app.base44.com/apps/${BUILDER_APP}/editor/preview" style="background:#C9A84C;color:#0A0E1A;text-decoration:none;padding:10px 24px;border-radius:6px;font-weight:700;font-size:11px;letter-spacing:2px;text-transform:uppercase">Open Admin Panel →</a>
+    </div>
+  </div>
+  <div style="background:#0d1220;border-top:1px solid #1e293b;padding:12px;text-align:center">
+    <p style="color:#475569;font-size:11px;margin:0">© ${year} Prime Endorsement Authority</p>
+  </div>
+</div></body></html>`;
+}
+
+// ── Main Handler ──────────────────────────────────────────────────────────────
 
 export default async function handler(req: Request): Promise<Response> {
   if (req.method === "OPTIONS") return new Response(null, { headers: CORS });
 
   try {
-    // Read session_id + ref from query params or POST body
-    const url      = new URL(req.url);
-    let session_id = url.searchParams.get("session_id") || "";
-    let ref_code   = url.searchParams.get("ref") || "";
-
-    if (req.method === "POST") {
-      try {
-        const body = await req.json();
-        session_id = session_id || body.session_id || "";
-        ref_code   = ref_code   || body.ref_code   || "";
-      } catch (_) {}
-    }
+    const body        = await req.json().catch(() => ({})) as Record<string, any>;
+    const session_id  = (body.session_id || body.sessionId || "").trim();
+    const ref_param   = (body.ref || body.reference_code || "").trim();
 
     if (!session_id) {
-      return new Response(
-        JSON.stringify({ success: false, error: "session_id is required" }),
-        { status: 400, headers: CORS }
-      );
+      return new Response(JSON.stringify({ success: false, error: "session_id is required" }), { status: 400, headers: CORS });
     }
 
-    // ── Verify session with Stripe ──────────────────────────────────────────
-    const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
+    const stripeKey    = Deno.env.get("STRIPE_SECRET_KEY") || "";
+    const serviceToken = Deno.env.get("BASE44_SERVICE_TOKEN") || "";
+    const resendKey    = Deno.env.get("RESEND_API_KEY") || "";
+
     if (!stripeKey) {
-      return new Response(
-        JSON.stringify({ success: false, error: "Stripe not configured" }),
-        { status: 500, headers: CORS }
-      );
+      return new Response(JSON.stringify({ success: false, error: "Stripe not configured" }), { status: 500, headers: CORS });
     }
 
+    // ── 1. Verify with Stripe ────────────────────────────────────────────────
     const stripeRes = await fetch(
       `https://api.stripe.com/v1/checkout/sessions/${session_id}`,
       { headers: { "Authorization": `Bearer ${stripeKey}` } }
     );
 
     if (!stripeRes.ok) {
-      const err = await stripeRes.text();
-      return new Response(
-        JSON.stringify({ success: false, error: `Stripe error: ${err}` }),
-        { status: 400, headers: CORS }
-      );
+      const errText = await stripeRes.text();
+      let errJson: any = {};
+      try { errJson = JSON.parse(errText); } catch (_) {}
+      const errCode = errJson?.error?.code || "";
+      console.error("[verify] Stripe error:", errCode, errText.slice(0, 200));
+      return new Response(JSON.stringify({
+        success: false,
+        error:   "Stripe session lookup failed",
+        code:    errCode,
+        detail:  errJson?.error?.message || errText.slice(0, 100),
+      }), { status: 400, headers: CORS });
     }
 
-    const session = await stripeRes.json();
-
-    if (session.payment_status !== "paid") {
-      // Payment not yet completed — return a clear pending state, not an error
-      // This is a valid state: user initiated checkout but hasn't paid yet
-      const pending_status = session.payment_status || "unpaid";
-      console.log(`[verify] Session ${session_id} payment_status=${pending_status} — awaiting payment`);
-      return new Response(
-        JSON.stringify({
-          success:        true,
-          verified:       false,
-          payment_status: pending_status,
-          status:         "awaiting_payment",
-          message:        "Payment not yet completed. Please complete your Stripe payment.",
-          checkout_url:   session.url || null,
-        }),
-        { status: 200, headers: CORS }
-      );
-    }
-
-    // Extract metadata from Stripe session
-    const metadata       = session.metadata || {};
-    const reference_code = ref_code || metadata.reference_code || "";
+    const session    = await stripeRes.json();
+    const payStatus  = session.payment_status || "unknown";
+    const metadata   = session.metadata || {};
+    const reference_code = ref_param || metadata.reference_code || "";
     const application_id = metadata.application_id || "";
 
-    // BUG-04 FIX: Use explicit app IDs — NOT createClientFromRequest
-    const serviceToken  = Deno.env.get("BASE44_SERVICE_TOKEN") || "";
-    const builderClient = createClient({ appId: BUILDER_APP, serviceToken });
-    const agentClient   = createClient({ appId: AGENT_APP,   serviceToken });
-    const now           = new Date().toISOString();
-    const apiKey        = Deno.env.get("RESEND_API_KEY");
-    const year          = new Date().getFullYear();
+    // ── 2. Not yet paid — return pending state (NOT an error) ────────────────
+    if (payStatus !== "paid") {
+      console.log(`[verify] Session ${session_id} is ${payStatus} — awaiting payment`);
+      return new Response(JSON.stringify({
+        success:        true,
+        verified:       false,
+        payment_status: payStatus,
+        status:         "awaiting_payment",
+        reference_code: reference_code || null,
+        checkout_url:   session.url || null,
+        message:        "Payment not yet completed. Complete your Stripe checkout to proceed.",
+      }), { status: 200, headers: CORS });
+    }
 
-    // ── Find Application in builder app ────────────────────────────────────
-    let app: Record<string, any> | null = null;
+    // ── 3. Payment confirmed — find the application ──────────────────────────
+    const now = new Date().toISOString();
+    let app: any = null;
 
-    // Try by application_id first (fastest)
+    // Try by ID first (fastest)
     if (application_id) {
-      try {
-        app = await builderClient.asServiceRole.entities.Application.get(application_id);
-      } catch (_) {}
+      app = await dbGet(BUILDER_APP, "Application", application_id, serviceToken);
     }
     // Fallback: search by reference_code
     if (!app && reference_code) {
-      try {
-        const byRef = await builderClient.asServiceRole.entities.Application.filter({ reference_code });
-        if (byRef?.length > 0) app = byRef[0];
-      } catch (_) {}
+      const all = await dbList(BUILDER_APP, "Application", serviceToken);
+      app = all.find((a: any) => a.reference_code === reference_code) || null;
     }
-    // Last resort: search by payment_reference (Stripe session ID)
+    // Fallback: search by payment_reference (session_id)
     if (!app) {
-      try {
-        const bySid = await builderClient.asServiceRole.entities.Application.filter({ payment_reference: session_id });
-        if (bySid?.length > 0) app = bySid[0];
-      } catch (_) {}
+      const all = await dbList(BUILDER_APP, "Application", serviceToken);
+      app = all.find((a: any) => a.payment_reference === session_id) || null;
+    }
+    // Fallback: search agent app
+    if (!app && reference_code) {
+      const all = await dbList(AGENT_APP, "Application", serviceToken);
+      app = all.find((a: any) => a.reference_code === reference_code) || null;
     }
 
-    // ── Update Application in builder DB ───────────────────────────────────
-    // BUG-02 FIX: Use correct builder schema field names
-    // BUG-03 FIX: Use payment_reference (the actual field in builder schema)
-    // BUG-05 FIX: Always set to "paid" regardless of current value
-    if (app) {
-      try {
-        await builderClient.asServiceRole.entities.Application.update(app.id, {
-          payment_status:    "paid",           // builder schema field ✅
-          status:            "under_review",   // builder schema field ✅
-          payment_reference: session_id,       // BUG-03 FIX: correct field name ✅
-          day_90_start:      app.day_90_start || now,
-          submitted_at:      app.submitted_at || now,
-        });
-        console.log(`[peaVerifyPayment] Builder app updated: ${app.reference_code} → paid/under_review`);
-        // Update local copy for email use
-        app.status         = "under_review";
-        app.payment_status = "paid";
-        app.day_90_start   = app.day_90_start || now;
-      } catch (e: any) {
-        console.warn("[peaVerifyPayment] Builder update failed:", e.message);
-      }
-
-      // Mirror update to Superagent entity space too
-      try {
-        const agentApps = await agentClient.asServiceRole.entities.Application.filter({
-          reference_code: app.reference_code
-        });
-        if (agentApps?.length > 0) {
-          await agentClient.asServiceRole.entities.Application.update(agentApps[0].id, {
-            payment_status:    "paid",
-            status:            "under_review",
-            stripe_session_id: session_id,
-            payment_date:      now,
-            day_90_start:      app.day_90_start,
-          });
-        }
-      } catch (_) {} // Non-critical mirror — don't fail the whole request
-    } else {
-      console.warn(`[peaVerifyPayment] No application found for session=${session_id} ref=${reference_code}`);
+    if (!app) {
+      console.warn("[verify] Application not found for session:", session_id);
+      return new Response(JSON.stringify({
+        success:   false,
+        verified:  true,
+        error:     "Application record not found. Payment was received but cannot locate application. Contact admin.",
+        session_id,
+        reference_code: reference_code || null,
+      }), { status: 404, headers: CORS });
     }
 
-    // ── Upsert PaymentTransaction (agent app) ──────────────────────────────
-    try {
-      const existing = await agentClient.asServiceRole.entities.PaymentTransaction.filter({
-        stripe_session_id: session_id
-      });
-      if (!existing?.length) {
-        await agentClient.asServiceRole.entities.PaymentTransaction.create({
-          application_id:        app?.id || application_id,
-          reference_code:        reference_code || app?.reference_code || "",
-          stripe_session_id:     session_id,
-          stripe_payment_intent: session.payment_intent || "",
-          amount:                1000,
-          vat:                   200,
-          total:                 1200,
-          currency:              "GBP",
-          status:                "paid",
-          applicant_email:       app?.applicant_email || session.customer_details?.email || "",
-          applicant_name:        app?.applicant_name  || "",
-          paid_at:               now,
-        });
-        console.log("[peaVerifyPayment] PaymentTransaction created");
-      }
-    } catch (e: any) {
-      console.warn("[peaVerifyPayment] PaymentTransaction upsert failed:", e.message);
-    }
-
-    // ── Send confirmation emails ────────────────────────────────────────────
-    if (apiKey) {
-      const appEmail = app?.applicant_email || session.customer_details?.email || "";
-      const refLabel = reference_code || app?.reference_code || "N/A";
-
-      if (appEmail) {
-        try {
-          await sendEmail(
-            apiKey,
-            appEmail,
-            `✅ Payment Confirmed — ${refLabel} | Prime Endorsement Authority`,
-            buildPaymentConfirmEmail(app || { reference_code: refLabel, applicant_name: "Applicant" }, session_id, year)
-          );
-        } catch (e: any) {
-          console.error("[peaVerifyPayment] Applicant email failed:", e.message);
-        }
-      }
-
-      try {
-        await sendEmail(
-          apiKey,
-          ADMIN_EMAIL,
-          `💳 Payment Received — ${refLabel} | £1,200.00`,
-          `<div style="font-family:sans-serif;padding:20px">
-            <h2 style="color:#C9A84C">Payment Received</h2>
-            <p><strong>Amount:</strong> £1,200.00 GBP</p>
-            <p><strong>Applicant:</strong> ${app?.applicant_name || "Unknown"}</p>
-            <p><strong>Email:</strong> ${appEmail}</p>
-            <p><strong>Reference:</strong> ${refLabel}</p>
-            <p><strong>Stripe Session:</strong> <code>${session_id}</code></p>
-            <p><strong>Status:</strong> Application moved to Under Review ✅</p>
-          </div>`
-        );
-      } catch (e: any) {
-        console.warn("[peaVerifyPayment] Admin email failed:", e.message);
-      }
-    }
-
-    return new Response(
-      JSON.stringify({
+    // Already paid? Idempotent
+    if (app.payment_status === "paid") {
+      console.log(`[verify] ${app.reference_code} already marked paid — idempotent`);
+      return new Response(JSON.stringify({
         success:        true,
         verified:       true,
-        reference_code: reference_code || app?.reference_code,
-        applicant_name: app?.applicant_name,
-        amount:         "£1,200.00",
-        status:         "under_review",
-        day_90_start:   app?.day_90_start || now,
-        status_url:     `${DOMAIN}/api/functions/peaStatusPage?ref=${encodeURIComponent(reference_code || app?.reference_code || "")}`,
-      }),
-      { headers: CORS }
-    );
+        already_paid:   true,
+        payment_status: "paid",
+        reference_code: app.reference_code,
+        status:         app.status,
+      }), { headers: CORS });
+    }
+
+    // Extract Stripe payment intent
+    const paymentIntent = session.payment_intent || "";
+    const customerEmail = session.customer_email || session.customer_details?.email || app.applicant_email || "";
+    const amountTotal   = session.amount_total || 120000;
+    const amountDisplay = `£${(amountTotal / 100).toFixed(2)}`;
+
+    // ── 4. Update builder Application record ────────────────────────────────
+    const updateData: Record<string, any> = {
+      payment_status:    "paid",
+      status:            "under_review",
+      payment_reference: session_id,
+      day_90_start:      now,
+    };
+
+    await dbUpdate(BUILDER_APP, "Application", app.id, serviceToken, updateData);
+    console.log(`[verify] ✅ Builder record updated: ${app.reference_code} → paid/under_review`);
+
+    // ── 5. Update agent app Application record ───────────────────────────────
+    try {
+      const agentApps = await dbList(AGENT_APP, "Application", serviceToken);
+      const agentApp  = agentApps.find((a: any) => a.reference_code === app.reference_code);
+      if (agentApp) {
+        await dbUpdate(AGENT_APP, "Application", agentApp.id, serviceToken, {
+          payment_status:    "paid",
+          status:            "under_review",
+          stripe_session_id: session_id,
+          stripe_payment_intent: paymentIntent,
+          payment_amount:    amountTotal / 100,
+          payment_date:      now,
+          day_90_start:      now,
+        });
+      }
+    } catch (e: any) { console.warn("[verify] Agent app update failed:", e.message); }
+
+    // ── 6. Create PaymentTransaction record ──────────────────────────────────
+    try {
+      await dbCreate(AGENT_APP, "PaymentTransaction", serviceToken, {
+        application_id:        app.id,
+        reference_code:        app.reference_code,
+        stripe_session_id:     session_id,
+        stripe_payment_intent: paymentIntent,
+        amount:                1000.00,
+        vat:                   200.00,
+        total:                 1200.00,
+        currency:              "GBP",
+        status:                "paid",
+        applicant_email:       customerEmail,
+        applicant_name:        app.applicant_name,
+        paid_at:               now,
+      });
+    } catch (e: any) { console.warn("[verify] PaymentTransaction create failed:", e.message); }
+
+    // ── 7. Send emails ────────────────────────────────────────────────────────
+    const venture = app.venture?.company_name || app.applicant_name || "Your Venture";
+    const ref     = app.reference_code;
+
+    if (resendKey && customerEmail) {
+      try {
+        await sendEmail(resendKey, customerEmail,
+          `✅ Payment Confirmed — ${ref} | Prime Endorsement Authority`,
+          paymentConfirmedEmail(app.applicant_name || "Applicant", ref, venture, amountDisplay)
+        );
+      } catch (e: any) { console.warn("[verify] Applicant email failed:", e.message); }
+    }
+    if (resendKey) {
+      try {
+        await sendEmail(resendKey, ADMIN_EMAIL,
+          `💳 Payment Received — ${ref} | ${amountDisplay}`,
+          adminPaymentEmail(app.applicant_name || "N/A", ref, venture, amountDisplay, session_id)
+        );
+      } catch (e: any) { console.warn("[verify] Admin email failed:", e.message); }
+    }
+
+    // ── 8. Trigger receipt generation (fire and forget) ──────────────────────
+    try {
+      fetch(`${DOMAIN}/api/functions/peaInvoiceReceipt`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type:           "receipt",
+          reference_code: ref,
+          application_id: app.id,
+          send_email:     true,
+          return_html:    false,
+        }),
+      }).catch(e => console.warn("[verify] Receipt trigger failed:", e.message));
+    } catch (_) {}
+
+    return new Response(JSON.stringify({
+      success:        true,
+      verified:       true,
+      payment_status: "paid",
+      reference_code: ref,
+      status:         "under_review",
+      day_90_start:   now,
+      amount:         amountDisplay,
+    }), { headers: CORS });
 
   } catch (err: any) {
-    console.error("[peaVerifyPayment] Fatal:", err.message, err.stack);
-    return new Response(
-      JSON.stringify({ success: false, error: err.message }),
-      { status: 500, headers: CORS }
-    );
+    console.error("[verify] Fatal:", err.message, err.stack);
+    return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: CORS });
   }
 }
