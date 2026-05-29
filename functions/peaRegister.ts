@@ -1110,37 +1110,48 @@ export default async function handler(req: Request): Promise<Response> {
         }
       }
 
-      // Mirror to agent app (flat schema with doc URLs)
+      // Mirror to agent app — direct REST write (bypasses builder isolate)
       try {
-        const agentRecord = await dbCreate(AGENT_APP, "Application", serviceToken, {
-          reference_code:        ref,
-          status:                "submitted",
-          payment_status:        "pending",
-          applicant_name:        body.applicant_name,
-          applicant_email:       email,
-          applicant_role:        body.applicant_role || "Founder",
-          date_of_birth:         body.date_of_birth || null,
-          phone_number:          body.phone_number || "",
-          nationality:           body.nationality,
-          country_of_residence:  body.country_of_residence,
-          linkedin_url:          body.linkedin_url  || "",
-          website_url:           body.website_url   || "",
-          venture_name:          body.venture_name,
-          venture_stage:         body.venture_stage,
-          venture_sector:        body.venture_sector,
-          venture_description:   body.venture_description,
-          co_founder_name:       body.co_founder_name  || "",
-          co_founder_email:      body.co_founder_email || "",
-          declaration_agreed:    body.declaration_agreed === "true",
-          documents_submitted:   docsUploaded > 0,
-          ai_score:              aiScore   || null,
-          ai_summary:            aiSummary || null,
-          submitted_at:          now,
-          invitation_token:      body._token || null,
+        const agentPayload = {
+          reference_code:                ref,
+          status:                        "submitted",
+          payment_status:                "pending",
+          applicant_name:                body.applicant_name,
+          applicant_email:               email,
+          applicant_role:                body.applicant_role || "Founder",
+          date_of_birth:                 body.date_of_birth  || null,
+          phone_number:                  body.phone_number   || "",
+          nationality:                   body.nationality,
+          country_of_residence:          body.country_of_residence,
+          linkedin_url:                  body.linkedin_url   || "",
+          website_url:                   body.website_url    || "",
+          venture_name:                  body.venture_name,
+          venture_stage:                 body.venture_stage,
+          venture_sector:                body.venture_sector,
+          venture_description:           body.venture_description,
+          co_founder_name:               body.co_founder_name  || "",
+          co_founder_email:              body.co_founder_email || "",
+          declaration_agreed:            body.declaration_agreed === "true",
+          documents_submitted:           docsUploaded > 0,
+          ai_score:                      aiScore   || null,
+          ai_summary:                    aiSummary || null,
+          submitted_at:                  now,
+          invitation_token:              body._token || null,
+          stripe_session_id:             null,
           ...agentDocUpdates,
+        };
+        const agentR = await fetch(`https://app.base44.com/api/apps/${AGENT_APP}/entities/Application`, {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${serviceToken}`, "Content-Type": "application/json" },
+          body: JSON.stringify(agentPayload),
         });
-        console.log(`[register] Agent mirror created: ${agentRecord.id}`);
-      } catch (e: any) { console.warn("[register] Agent mirror failed:", e.message); }
+        if (agentR.ok) {
+          const agentRec = await agentR.json();
+          console.log(`[register] Agent record created: ${ref} (${agentRec.id})`);
+        } else {
+          console.warn(`[register] Agent write failed: ${agentR.status} ${await agentR.text()}`);
+        }
+      } catch (e: any) { console.warn("[register] Agent mirror error:", e.message); }
 
       // Stripe checkout
       let checkoutUrl  = `${DOMAIN}/api/functions/peaStatusPage?ref=${encodeURIComponent(ref)}`;
@@ -1152,13 +1163,24 @@ export default async function handler(req: Request): Promise<Response> {
           stripeSession = checkout.sessionId;
           // Builder uses payment_reference; agent app uses stripe_session_id
           await dbUpdate(BUILDER_APP, "Application", appRecord.id, serviceToken, { payment_reference: stripeSession });
+          // Sync stripe_session_id to agent app via direct REST
           try {
-            const agentApps = await dbList(AGENT_APP, "Application", serviceToken);
-            const agentRec  = agentApps.find((a: any) => a.reference_code === ref);
-            if (agentRec) {
-              await dbUpdate(AGENT_APP, "Application", agentRec.id, serviceToken, { stripe_session_id: stripeSession });
+            const agListR = await fetch(`https://app.base44.com/api/apps/${AGENT_APP}/entities/Application`, {
+              headers: { "Authorization": `Bearer ${serviceToken}` },
+            });
+            if (agListR.ok) {
+              const agList   = await agListR.json();
+              const agentRec = agList.find((a: any) => a.reference_code === ref);
+              if (agentRec) {
+                await fetch(`https://app.base44.com/api/apps/${AGENT_APP}/entities/Application/${agentRec.id}`, {
+                  method: "PUT",
+                  headers: { "Authorization": `Bearer ${serviceToken}`, "Content-Type": "application/json" },
+                  body: JSON.stringify({ stripe_session_id: stripeSession }),
+                });
+                console.log(`[register] Agent stripe_session_id synced for ${ref}`);
+              }
             }
-          } catch (e: any) { console.warn("[register] Agent stripe update failed:", e.message); }
+          } catch (e: any) { console.warn("[register] Agent stripe sync:", e.message); }
         }
       }
 
