@@ -345,6 +345,7 @@ export default async function handler(req: Request): Promise<Response> {
         stage:         b.venture_stage || "Pre-Seed",
         sector:        b.venture_sector || "Other",
         description:   String(b.venture_description || "").trim(),
+        one_liner:     String(b.venture_description || "").slice(0, 300).trim() || null,
         website:       b.website_url || b.website || "",
         headquarters:  b.country_of_residence || "",
         team_size:     b.team_size || null,
