@@ -248,7 +248,7 @@ function buildForm(opts: { locked?: boolean; lockReason?: string; prefill?: Reco
       <div class="row">
         <div class="field">
           <label>LinkedIn Profile</label>
-          <input type="text" name="linkedin_url" value="${v(\"linkedin_url\")}" placeholder="https://linkedin.com/in/your-profile" autocomplete="off"/>
+          <input type="url" name="linkedin_url" value="${v("linkedin_url")}" placeholder="https://linkedin.com/in/…"/>
         </div>
         <div class="field">
           <label>Date of Birth</label>
@@ -267,7 +267,7 @@ function buildForm(opts: { locked?: boolean; lockReason?: string; prefill?: Reco
         </div>
         <div class="field">
           <label>Website</label>
-          <input type="text" name="website_url" value="${v(\"website_url\")}" placeholder="https://yourcompany.com" autocomplete="off"/>
+          <input type="url" name="website_url" value="${v("website_url")}" placeholder="https://yourcompany.com"/>
         </div>
       </div>
       <div class="row">
@@ -324,17 +324,10 @@ function buildForm(opts: { locked?: boolean; lockReason?: string; prefill?: Reco
 
 <script>
 document.getElementById('regForm').addEventListener('submit', function(e) {
-  // Only disable the button AFTER the browser confirms all native validation passes
-  // This prevents the form freezing when a field fails HTML5 validation
-  var form = document.getElementById('regForm');
-  if (!form.checkValidity()) {
-    // Let the browser show its own validation messages — do NOT disable the button
-    return;
-  }
-  var btn = document.getElementById('submitBtn');
-  var loading = document.getElementById('loadingMsg');
+  const btn = document.getElementById('submitBtn');
+  const loading = document.getElementById('loadingMsg');
   btn.disabled = true;
-  btn.textContent = 'Submitting…';
+  btn.style.display = 'none';
   loading.style.display = 'block';
 });
 
