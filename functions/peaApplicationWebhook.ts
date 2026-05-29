@@ -123,7 +123,7 @@ async function createStripeSession(ref: string, email_addr: string, name: string
       "metadata[reference_code]": ref,
       "metadata[applicant_name]": name,
       "metadata[application_id]": app_id,
-      success_url: `${DOMAIN}/payment-success?session_id={CHECKOUT_SESSION_ID}&ref=${encodeURIComponent(ref)}`,
+      success_url: `${DOMAIN}/api/functions/peaPaymentSuccess?session_id={CHECKOUT_SESSION_ID}&ref=${encodeURIComponent(ref)}`,  // BUG-01/06 FIX: server-rendered success page
       cancel_url: `${DOMAIN}/api/functions/peaStatusPage?ref=${encodeURIComponent(ref)}`,
       expires_at: String(Math.floor(Date.now() / 1000) + 82800), // 23h
       "payment_intent_data[description]": `PEA Endorsement — ${ref}`,
