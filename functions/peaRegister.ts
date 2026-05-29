@@ -894,7 +894,7 @@ updateProgress();
 
 // ── Upload document to Base44 public storage ──────────────────────────────────
 
-async function uploadDocument(file: File, serviceToken: string, appId: string, fieldName: string, ref: string): Promise<string | null> {
+async function uploadDocument(file: File, serviceToken: string, appId: string): Promise<string | null> {
   try {
     const formData = new FormData();
     formData.append("file", file, file.name);
@@ -1085,48 +1085,61 @@ export default async function handler(req: Request): Promise<Response> {
       console.log(`[register] Created ${ref} id=${appRecord.id}`);
 
       // Upload documents
-      const docMap: Record<string, string> = {
-        doc_passport:   "doc_passport_url",
-        doc_address:    "doc_proof_address_url",
-        doc_bizreg:     "doc_business_registration_url",
-        doc_bizplan:    "doc_business_plan_url",
-        doc_financials: "doc_financial_projections_url",
-        doc_pitch:      "doc_pitch_deck_url",
-      };
+      // Document field mapping:
+      // formField        → builder field (nested in compliance{})  → agent flat field
+      const docFormFields: Array<[string, string]> = [
+        ["doc_passport",   "doc_passport_url"],
+        ["doc_address",    "doc_proof_address_url"],
+        ["doc_bizreg",     "doc_business_registration_url"],
+        ["doc_bizplan",    "doc_business_plan_url"],
+        ["doc_financials", "doc_financial_projections_url"],
+        ["doc_pitch",      "doc_pitch_deck_url"],
+      ];
 
-      const docUpdates: Record<string, string> = {};
+      const agentDocUpdates: Record<string, string> = {};
       let docsUploaded = 0;
-      for (const [fieldName, dbField] of Object.entries(docMap)) {
-        const file = files[fieldName];
+
+      for (const [formField, agentField] of docFormFields) {
+        const file = files[formField];
         if (file) {
-          const uploadedUrl = await uploadDocument(file, serviceToken, BUILDER_APP, fieldName, ref);
+          const uploadedUrl = await uploadDocument(file, serviceToken, AGENT_APP);
           if (uploadedUrl) {
-            docUpdates[dbField] = uploadedUrl;
+            agentDocUpdates[agentField] = uploadedUrl;
             docsUploaded++;
           }
         }
       }
-      if (Object.keys(docUpdates).length > 0) {
-        await dbUpdate(BUILDER_APP, "Application", appRecord.id, serviceToken, {
-          ...docUpdates,
-          documents_submitted: true,
-        });
-      }
 
-      // Mirror to agent app
+      // Mirror to agent app (flat schema with doc URLs)
       try {
-        await dbCreate(AGENT_APP, "Application", serviceToken, {
-          reference_code: ref, status: "submitted", payment_status: "pending",
-          applicant_name: body.applicant_name, applicant_email: email,
-          applicant_role: body.applicant_role || "Founder",
-          venture_name: body.venture_name, venture_stage: body.venture_stage,
-          venture_sector: body.venture_sector, venture_description: body.venture_description,
-          nationality: body.nationality, country_of_residence: body.country_of_residence,
-          phone_number: body.phone_number || "", linkedin_url: body.linkedin_url || "",
-          website_url: body.website_url || "", ai_score: aiScore || null,
-          ai_summary: aiSummary || null, submitted_at: now,
-          documents_submitted: docsUploaded > 0,
+        const agentRecord = await dbCreate(AGENT_APP, "Application", serviceToken, {
+          reference_code:        ref,
+          status:                "submitted",
+          payment_status:        "pending",
+          applicant_name:        body.applicant_name,
+          applicant_email:       email,
+          applicant_role:        body.applicant_role || "Founder",
+          date_of_birth:         body.date_of_birth || null,
+          phone_number:          body.phone_number || "",
+          nationality:           body.nationality,
+          country_of_residence:  body.country_of_residence,
+          linkedin_url:          body.linkedin_url  || "",
+          website_url:           body.website_url   || "",
+          venture_name:          body.venture_name,
+          venture_stage:         body.venture_stage,
+          venture_sector:        body.venture_sector,
+          venture_description:   body.venture_description,
+          co_founder_name:       body.co_founder_name  || "",
+          co_founder_email:      body.co_founder_email || "",
+          declaration_agreed:    body.declaration_agreed === "true",
+          documents_submitted:   docsUploaded > 0,
+          ai_score:              aiScore   || null,
+          ai_summary:            aiSummary || null,
+          submitted_at:          now,
+          invitation_token:      body._token || null,
+          ...agentDocUpdates,
         });
+        console.log(`[register] Agent mirror created: ${agentRecord.id}`);
       } catch (e: any) { console.warn("[register] Agent mirror failed:", e.message); }
 
       // Stripe checkout
@@ -1137,7 +1150,15 @@ export default async function handler(req: Request): Promise<Response> {
         if (checkout) {
           checkoutUrl   = checkout.url;
           stripeSession = checkout.sessionId;
+          // Builder uses payment_reference; agent app uses stripe_session_id
           await dbUpdate(BUILDER_APP, "Application", appRecord.id, serviceToken, { payment_reference: stripeSession });
+          try {
+            const agentApps = await dbList(AGENT_APP, "Application", serviceToken);
+            const agentRec  = agentApps.find((a: any) => a.reference_code === ref);
+            if (agentRec) {
+              await dbUpdate(AGENT_APP, "Application", agentRec.id, serviceToken, { stripe_session_id: stripeSession });
+            }
+          } catch (e: any) { console.warn("[register] Agent stripe update failed:", e.message); }
         }
       }
 
