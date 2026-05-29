@@ -3,7 +3,7 @@
  * Sends weekly status update emails to ALL active applicants.
  * Triggered every Monday at 08:00.
  */
-import { createClientFromRequest } from "npm:@base44/sdk@0.8.25";
+import { createClient } from "npm:@base44/sdk@0.8.25";
 
 const RESEND_API  = "https://api.resend.com/emails";
 const FROM_EMAIL  = "Prime Endorsement Authority <admin@primeendorsement.com>";
@@ -148,7 +148,8 @@ export default async function handler(req: Request): Promise<Response> {
       return new Response(JSON.stringify({ success: false, error: "RESEND_API_KEY not configured" }), { status: 500, headers: CORS });
     }
 
-    const base44 = createClientFromRequest(req);
+    const serviceToken = Deno.env.get("BASE44_SERVICE_TOKEN") || "";
+    const base44 = createClient({ appId: "69e2e852c48630e3502f13b1", serviceToken });
     const year   = new Date().getFullYear();
 
     // Read all active applications

@@ -232,26 +232,33 @@ export default async function handler(req: Request): Promise<Response> {
     // ── Create Application record in builder app ───────────────────────────────
     const appRecord = await builderClient.asServiceRole.entities.Application.create({
       reference_code,
-      status: "submitted",
-      payment_status: "unpaid",
-      applicant_name:        String(body.applicant_name || "").trim(),
-      applicant_email:       emailAddr,
-      applicant_role:        body.applicant_role || "Founder",
-      venture_name:          String(body.venture_name || "").trim(),
-      venture_stage:         body.venture_stage || body.stage || "Pre-Seed",
-      venture_sector:        body.venture_sector || body.sector || "Other",
-      venture_description:   String(body.venture_description || "").trim(),
-      nationality:           String(body.nationality || "").trim(),
-      country_of_residence:  String(body.country_of_residence || "").trim(),
-      phone_number:          String(body.phone_number || body.phone || "").trim(),
-      linkedin_url:          String(body.linkedin_url || body.linkedin || "").trim(),
-      website_url:           String(body.website_url || body.website || "").trim(),
-      passport_url:          String(body.passport_url || "").trim(),
-      documents_submitted:   !!(body.passport_url || body.business_doc_url),
-      co_founder_name:       String(body.co_founder_name || body.cofounder_name || "").trim(),
-      co_founder_email:      String(body.co_founder_email || body.cofounder_email || "").trim(),
-      submitted_at:          now,
-      invitation_token:      body.invitation_token || body._token || null,
+      status:          "submitted",
+      payment_status:  "pending",               // BUG-05 FIX: builder uses "pending" not "unpaid"
+      application_type: (body.applicant_role || "founder").toLowerCase(), // BUG-02 FIX: correct field
+      applicant_name:   String(body.applicant_name || "").trim(),
+      applicant_email:  emailAddr,
+      application_fee:  1200,
+      currency:         "GBP",
+      // Founder nested object — builder schema uses this for portal display
+      founder: {
+        full_name:          String(body.applicant_name || "").trim(),
+        role:               body.applicant_role || "founder",
+        nationality:        String(body.nationality || "").trim(),
+        country_of_residence: String(body.country_of_residence || "").trim(),
+        phone:              String(body.phone_number || body.phone || "").trim(),
+        linkedin:           String(body.linkedin_url || body.linkedin || "").trim(),
+      },
+      venture: {
+        company_name:       String(body.venture_name || "").trim(),
+        stage:              body.venture_stage || body.stage || "Pre-Seed",
+        sector:             body.venture_sector || body.sector || "Other",
+        description:        String(body.venture_description || "").trim(),
+        website:            String(body.website_url || body.website || "").trim(),
+      },
+      kyc_status:      "not_started",
+      auth_status:     "not_started",
+      session_token:   body.invitation_token || body._token || null, // BUG-07 FIX: correct field
+      submitted_at:    now,
     });
 
     console.log("Application created in builder:", appRecord?.id, reference_code);
@@ -260,8 +267,8 @@ export default async function handler(req: Request): Promise<Response> {
     try {
       await agentClient.asServiceRole.entities.Application.create({
         reference_code,
-        status: "submitted",
-        payment_status: "unpaid",
+        status:          "submitted",
+        payment_status:  "pending",  // BUG-05 FIX: consistent with builder
         applicant_name:  String(body.applicant_name || "").trim(),
         applicant_email: emailAddr,
         applicant_role:  body.applicant_role || "Founder",
@@ -279,11 +286,11 @@ export default async function handler(req: Request): Promise<Response> {
       appRecord?.id || ""
     );
 
-    // Save stripe session ID to record
+    // BUG-03 FIX: save to payment_reference (correct builder schema field)
     if (stripe.session_id && appRecord?.id) {
       try {
         await builderClient.asServiceRole.entities.Application.update(appRecord.id, {
-          stripe_session_id: stripe.session_id,
+          payment_reference: stripe.session_id,  // BUG-03 FIX: correct field name ✅
         });
       } catch (_) {}
     }

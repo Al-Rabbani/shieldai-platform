@@ -151,8 +151,7 @@ export default async function handler(req: Request): Promise<Response> {
       const apps = await base44.asServiceRole.entities.Application.filter({ reference_code });
       if (apps.length > 0) {
         await base44.asServiceRole.entities.Application.update(apps[0].id, {
-          invitation_token: token,
-          token_expires_at: expiresAt,
+          session_token: token,  // BUG-07 FIX: correct builder schema field (was invitation_token) ✅
           status: apps[0].status === "draft" ? "invited" : apps[0].status,
         });
         console.log(`Application ${reference_code} updated with invite token`);
