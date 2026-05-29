@@ -1,14 +1,17 @@
 /**
- * peaNotifyAdmin — v3 (Resend API, no SMTP)
- * Sends full application details to admin@primeendorsement.com
- * Called after a new registration is submitted.
+ * peaNotifyAdmin — v4 REBUILT 2026-05-29
+ *
+ * Called by automations to notify admin of status changes.
+ * FIXED: Uses direct REST API (no createClientFromRequest — breaks in automation context)
+ * FIXED: Zero hardcoded keys
+ * ENHANCED: Rich HTML email with AI score display
  */
-import { createClientFromRequest } from "npm:@base44/sdk@0.8.25";
 
-const RESEND_API = "https://api.resend.com/emails";
-const FROM_EMAIL = "Prime Endorsement Authority <admin@primeendorsement.com>";
+const BUILDER_APP = "69e2e852c48630e3502f13b1";
+const DOMAIN      = "https://primeendorsement.com";
+const RESEND_API  = "https://api.resend.com/emails";
+const FROM_EMAIL  = "Prime Endorsement Authority <admin@primeendorsement.com>";
 const ADMIN_EMAIL = "admin@primeendorsement.com";
-const DOMAIN = "https://primeendorsement.com";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -17,144 +20,143 @@ const CORS = {
   "Content-Type": "application/json",
 };
 
-function buildAdminEmail(app: Record<string, any>, year: number): string {
-  const statusUrl = `${DOMAIN}/api/functions/peaStatusPage?ref=${encodeURIComponent(app.reference_code || "")}`;
-  const adminUrl  = `${DOMAIN}/pea-admin`;
+const STATUS_META: Record<string, { label: string; color: string; emoji: string }> = {
+  submitted:         { label: "Submitted",          color: "#3b82f6", emoji: "📋" },
+  under_review:      { label: "Under Review",       color: "#8b5cf6", emoji: "🔍" },
+  ai_screening:      { label: "AI Screening",       color: "#06b6d4", emoji: "🤖" },
+  documents_pending: { label: "Documents Pending",  color: "#f59e0b", emoji: "📎" },
+  kyc_in_progress:   { label: "KYC In Progress",    color: "#f97316", emoji: "🪪" },
+  panel_review:      { label: "Panel Review",       color: "#a855f7", emoji: "👥" },
+  approved:          { label: "Approved",           color: "#22c55e", emoji: "✅" },
+  endorsed:          { label: "Endorsed",           color: "#C9A84C", emoji: "🏛️" },
+  rejected:          { label: "Rejected",           color: "#ef4444", emoji: "❌" },
+  withdrawn:         { label: "Withdrawn",          color: "#6b7280", emoji: "↩️" },
+  paid:              { label: "Paid",               color: "#22c55e", emoji: "💳" },
+};
 
-  const rows = [
-    ["Reference Code",       app.reference_code       || "—"],
-    ["Applicant Name",       app.applicant_name        || "—"],
-    ["Email",                app.applicant_email       || "—"],
-    ["Phone",                app.phone_number          || "—"],
-    ["Role",                 app.applicant_role        || "Founder"],
-    ["Nationality",          app.nationality           || "—"],
-    ["Country of Residence", app.country_of_residence  || "—"],
-    ["LinkedIn",             app.linkedin_url          || "—"],
-    ["Website",              app.website_url           || "—"],
-    ["Venture Name",         app.venture_name          || "—"],
-    ["Venture Sector",       app.venture_sector        || "—"],
-    ["Venture Stage",        app.venture_stage         || "—"],
-    ["Co-Founder Name",      app.co_founder_name       || "—"],
-    ["Co-Founder Email",     app.co_founder_email      || "—"],
-    ["Payment Status",       app.payment_status        || "unpaid"],
-    ["AI Score",             app.ai_score ? `${app.ai_score}/100` : "—"],
-    ["Submitted At",         app.submitted_at ? new Date(app.submitted_at).toLocaleString("en-GB") : "—"],
-  ];
+async function getApplication(id: string, token: string): Promise<any> {
+  const r = await fetch(`https://app.base44.com/api/apps/${BUILDER_APP}/entities/Application/${id}`, {
+    headers: { "Authorization": `Bearer ${token}` },
+  });
+  if (!r.ok) return null;
+  return r.json();
+}
 
-  const tableRows = rows.map(([label, value]) => `
-    <tr>
-      <td style="padding:9px 14px;color:#94a3b8;font-size:13px;border-bottom:1px solid #1e293b;width:40%;font-weight:500;">${label}</td>
-      <td style="padding:9px 14px;color:#e2e8f0;font-size:13px;border-bottom:1px solid #1e293b;">${value}</td>
-    </tr>`).join("");
-
-  const venture = app.venture_description
-    ? `<div style="background:#0d1220;border:1px solid #1e293b;border-radius:6px;padding:16px 18px;margin:20px 0;">
-        <div style="color:#64748b;font-size:10px;letter-spacing:3px;text-transform:uppercase;margin-bottom:8px;">Venture Description</div>
-        <div style="color:#cbd5e1;font-size:13px;line-height:1.8;">${app.venture_description}</div>
-      </div>` : "";
-
-  const aiSummary = app.ai_summary
-    ? `<div style="background:#0a1a0a;border:1px solid #166534;border-radius:6px;padding:16px 18px;margin:20px 0;">
-        <div style="color:#22c55e;font-size:10px;letter-spacing:3px;text-transform:uppercase;margin-bottom:8px;">AI Analysis Summary</div>
-        <div style="color:#cbd5e1;font-size:13px;line-height:1.8;">${app.ai_summary}</div>
-      </div>` : "";
-
-  return `<!DOCTYPE html><html><head><meta charset="UTF-8"/></head>
-<body style="margin:0;padding:0;background:#0A0E1A;font-family:Arial,sans-serif;">
-<div style="max-width:660px;margin:0 auto;">
-  <div style="background:#111827;border-bottom:2px solid #C9A84C;padding:32px 40px;text-align:center;">
-    <div style="display:inline-block;border:1px solid #C9A84C;padding:4px 14px;border-radius:2px;margin-bottom:10px;">
-      <span style="color:#C9A84C;font-size:10px;letter-spacing:4px;text-transform:uppercase;">New Application Received</span>
-    </div>
-    <div style="color:#C9A84C;font-size:20px;font-weight:700;letter-spacing:4px;text-transform:uppercase;">PRIME ENDORSEMENT AUTHORITY</div>
-    <div style="color:#e2e8f0;font-size:12px;letter-spacing:2px;opacity:.7;margin-top:4px;">Secure Registration — Admin Notification</div>
-  </div>
-  <div style="padding:32px 40px;background:#111827;">
-    <div style="color:#C9A84C;font-size:15px;font-weight:600;margin-bottom:4px;">New Application Submitted 🏛️</div>
-    <p style="color:#94a3b8;font-size:13px;line-height:1.7;margin-bottom:22px;">
-      A new applicant has completed the AI-Powered Digital Registration System.
-    </p>
-    <div style="background:#0A0E1A;border:1px solid #C9A84C;border-radius:6px;padding:14px 20px;margin-bottom:22px;text-align:center;">
-      <div style="color:#64748b;font-size:10px;letter-spacing:3px;text-transform:uppercase;margin-bottom:4px;">Application Reference</div>
-      <div style="color:#C9A84C;font-size:22px;font-weight:700;letter-spacing:3px;">${app.reference_code || "N/A"}</div>
-    </div>
-    <table style="width:100%;border-collapse:collapse;background:#0d1220;border:1px solid #1e293b;border-radius:6px;overflow:hidden;">
-      ${tableRows}
-    </table>
-    ${venture}
-    ${aiSummary}
-    <div style="margin-top:26px;">
-      <a href="${adminUrl}" style="display:inline-block;background:#C9A84C;color:#0A0E1A;text-decoration:none;padding:12px 28px;border-radius:6px;font-weight:700;font-size:13px;letter-spacing:2px;text-transform:uppercase;margin-right:12px;">Open Admin Panel</a>
-      <a href="${statusUrl}" style="display:inline-block;background:transparent;border:1px solid #C9A84C;color:#C9A84C;text-decoration:none;padding:12px 28px;border-radius:6px;font-weight:700;font-size:13px;letter-spacing:2px;text-transform:uppercase;">View Status Page</a>
-    </div>
-    <hr style="border:none;border-top:1px solid #1e293b;margin:28px 0;"/>
-    <p style="text-align:center;color:#475569;font-size:11px;letter-spacing:1px;">🔒 AES-256 Encrypted · TLS 1.3 · PCI DSS Compliant</p>
-  </div>
-  <div style="background:#0d1220;padding:20px 40px;text-align:center;border-top:1px solid #1e293b;">
-    <p style="color:#475569;font-size:12px;margin:3px 0;"><strong style="color:#94a3b8">Prime Endorsement Authority</strong> — Admin System</p>
-    <p style="color:#475569;font-size:12px;margin:3px 0;">© ${year} Prime Endorsement Authority. All rights reserved.</p>
-  </div>
-</div>
-</body></html>`;
+async function findByRef(ref: string, token: string): Promise<any> {
+  const r = await fetch(`https://app.base44.com/api/apps/${BUILDER_APP}/entities/Application`, {
+    headers: { "Authorization": `Bearer ${token}` },
+  });
+  if (!r.ok) return null;
+  const all = await r.json();
+  return all.find((a: any) => a.reference_code === ref) || null;
 }
 
 async function sendEmail(apiKey: string, to: string, subject: string, html: string): Promise<void> {
-  const res = await fetch(RESEND_API, {
+  const r = await fetch(RESEND_API, {
     method: "POST",
-    headers: {
-      "Authorization": `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
+    headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
     body: JSON.stringify({ from: FROM_EMAIL, to: [to], subject, html }),
   });
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`Resend API error ${res.status}: ${err}`);
-  }
+  if (!r.ok) console.error("[notify] Email error:", r.status, await r.text());
+}
+
+function adminEmail(app: Record<string, any>, eventType: string): string {
+  const ref       = app.reference_code || "N/A";
+  const name      = app.applicant_name || "Unknown";
+  const email     = app.applicant_email || "";
+  const status    = app.status || "unknown";
+  const payStatus = app.payment_status || "pending";
+  const aiScore   = app.ai_score;
+  const aiSummary = app.ai_analysis?.summary || "";
+  const venture   = app.venture?.company_name || "N/A";
+  const sector    = app.venture?.sector || "N/A";
+  const stage     = app.venture?.stage || "N/A";
+  const sMeta     = STATUS_META[status] || { label: status, color: "#94a3b8", emoji: "📋" };
+  const scoreColor = aiScore >= 70 ? "#22c55e" : aiScore >= 50 ? "#f59e0b" : aiScore > 0 ? "#ef4444" : "#475569";
+  const year = new Date().getFullYear();
+  const statusUrl  = `${DOMAIN}/api/functions/peaStatusPage?ref=${encodeURIComponent(ref)}`;
+
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"/></head>
+<body style="margin:0;padding:0;background:#0A0E1A;font-family:Arial,sans-serif">
+<div style="max-width:600px;margin:0 auto;background:#111827;border-radius:10px;overflow:hidden">
+  <div style="background:#0d1220;border-bottom:3px solid #C9A84C;padding:24px;text-align:center">
+    <div style="color:#C9A84C;font-size:13px;font-weight:700;letter-spacing:4px;text-transform:uppercase">Prime Endorsement Authority</div>
+    <div style="color:${sMeta.color};font-size:13px;margin-top:6px">${sMeta.emoji} Application Update — ${eventType}</div>
+  </div>
+  <div style="padding:28px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+      <div>
+        <div style="color:#64748b;font-size:10px;letter-spacing:2px;text-transform:uppercase">Reference</div>
+        <div style="color:#C9A84C;font-size:20px;font-weight:700;letter-spacing:2px">${ref}</div>
+      </div>
+      ${aiScore != null && aiScore > 0 ? `<div style="text-align:right">
+        <div style="color:#64748b;font-size:10px;letter-spacing:2px;text-transform:uppercase">AI Score</div>
+        <div style="color:${scoreColor};font-size:28px;font-weight:700">${aiScore}/100</div>
+      </div>` : ""}
+    </div>
+    <div style="background:#0A0E1A;border:1px solid #1e293b;border-radius:8px;padding:16px;margin-bottom:16px">
+      <table style="width:100%;font-size:12px;border-collapse:collapse">
+        <tr><td style="color:#64748b;padding:5px 8px">Applicant</td><td style="color:#e2e8f0;padding:5px 8px">${name}</td></tr>
+        <tr><td style="color:#64748b;padding:5px 8px">Email</td><td style="color:#e2e8f0;padding:5px 8px">${email}</td></tr>
+        <tr><td style="color:#64748b;padding:5px 8px">Venture</td><td style="color:#e2e8f0;padding:5px 8px">${venture}</td></tr>
+        <tr><td style="color:#64748b;padding:5px 8px">Sector</td><td style="color:#e2e8f0;padding:5px 8px">${sector}</td></tr>
+        <tr><td style="color:#64748b;padding:5px 8px">Stage</td><td style="color:#e2e8f0;padding:5px 8px">${stage}</td></tr>
+        <tr><td style="color:#64748b;padding:5px 8px">Status</td><td style="color:${sMeta.color};padding:5px 8px;font-weight:600">${sMeta.emoji} ${sMeta.label}</td></tr>
+        <tr><td style="color:#64748b;padding:5px 8px">Payment</td><td style="color:${payStatus === "paid" ? "#22c55e" : "#f59e0b"};padding:5px 8px;font-weight:600;text-transform:capitalize">${payStatus}</td></tr>
+      </table>
+    </div>
+    ${aiSummary ? `<div style="background:#0a1a0a;border:1px solid #166534;border-radius:8px;padding:14px;margin-bottom:16px">
+      <div style="color:#22c55e;font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;margin-bottom:8px">AI Analysis</div>
+      <div style="color:#94a3b8;font-size:13px;line-height:1.7">${aiSummary}</div>
+    </div>` : ""}
+    <div style="text-align:center;margin:20px 0">
+      <a href="${statusUrl}" style="background:#C9A84C;color:#0A0E1A;text-decoration:none;padding:12px 32px;border-radius:6px;font-weight:700;font-size:12px;letter-spacing:2px;text-transform:uppercase">View Application →</a>
+    </div>
+  </div>
+  <div style="background:#0d1220;border-top:1px solid #1e293b;padding:14px;text-align:center">
+    <p style="color:#475569;font-size:11px;margin:0">© ${year} Prime Endorsement Authority</p>
+  </div>
+</div></body></html>`;
 }
 
 export default async function handler(req: Request): Promise<Response> {
   if (req.method === "OPTIONS") return new Response(null, { headers: CORS });
 
   try {
-    const body = await req.json();
-    const reference_code: string = body.reference_code || "";
-    const application_id: string = body.application_id || "";
+    const body = await req.json().catch(() => ({}));
+    const { application_id, reference_code, event_type = "update" } = body;
 
-    const base44 = createClientFromRequest(req);
+    const serviceToken = Deno.env.get("BASE44_SERVICE_TOKEN") || "";
+    const resendKey    = Deno.env.get("RESEND_API_KEY") || "";
 
-    let app: Record<string, any> = body;
-    if (application_id) {
-      try {
-        const fetched = await base44.asServiceRole.entities.Application.get(application_id);
-        if (fetched) app = fetched;
-      } catch (_) {}
-    }
-    if (!app.reference_code && reference_code) {
-      try {
-        const byRef = await base44.asServiceRole.entities.Application.filter({ reference_code });
-        if (byRef?.length > 0) app = byRef[0];
-      } catch (_) {}
-    }
-
-    const apiKey = Deno.env.get("RESEND_API_KEY");
-    if (!apiKey) {
+    if (!resendKey) {
       return new Response(JSON.stringify({ success: false, error: "RESEND_API_KEY not configured" }), { status: 500, headers: CORS });
     }
 
-    const html = buildAdminEmail(app, new Date().getFullYear());
+    // Fetch the application
+    let app: any = null;
+    if (application_id) {
+      app = await getApplication(application_id, serviceToken);
+    }
+    if (!app && reference_code) {
+      app = await findByRef(reference_code, serviceToken);
+    }
+
+    if (!app) {
+      return new Response(JSON.stringify({ success: false, error: "Application not found" }), { status: 404, headers: CORS });
+    }
+
     await sendEmail(
-      apiKey,
+      resendKey,
       ADMIN_EMAIL,
-      `🏛️ New Application: ${app.applicant_name || "Unknown"} — ${app.reference_code || "N/A"}`,
-      html,
+      `${STATUS_META[app.status]?.emoji || "📋"} Application Update — ${app.reference_code} | PEA`,
+      adminEmail(app, event_type)
     );
 
-    console.log("[peaNotifyAdmin] Admin notified for:", app.reference_code);
-    return new Response(JSON.stringify({ success: true, reference_code: app.reference_code }), { headers: CORS });
+    return new Response(JSON.stringify({ success: true, notified: ADMIN_EMAIL, ref: app.reference_code }), { headers: CORS });
 
   } catch (err: any) {
-    console.error("[peaNotifyAdmin] error:", err.message);
+    console.error("[notify] Fatal:", err.message);
     return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: CORS });
   }
 }

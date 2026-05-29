@@ -1,338 +1,456 @@
 /**
- * peaApplicationWebhook v4 — Complete Registration Endpoint
+ * peaApplicationWebhook — v6 REBUILT 2026-05-29
  *
- * Called directly by the /apply form via fetch().
- * Handles the FULL registration flow in one call:
- *   1. Validate payload
- *   2. Deduplicate by email
- *   3. Generate reference code (PEA-YYYY-XXXXXX)
- *   4. Write Application record to builder app (69e2e852c48630e3502f13b1)
- *   5. Mirror to Superagent app for automations
- *   6. Send confirmation email to applicant (Resend)
- *   7. Send admin notification email (Resend)
- *   8. Create Stripe checkout session (£1,200 GBP)
- *   9. Return { success, reference_code, stripe_url, stripe_session_id }
+ * Handles ALL new application submissions from the public registration form.
+ * Full lifecycle:
+ *   POST → validate → dedup → AI score → create builder record → Stripe checkout → emails
  *
- * Also handles legacy payment mirroring (_type: "payment")
+ * SCHEMA: uses correct builder field names (founder{}, venture{}, application_type, session_token, payment_reference)
+ * SECURITY: zero hardcoded keys — all via Deno.env
+ * AI: scores applicant on submission using OpenAI
  */
-import { createClient } from "npm:@base44/sdk@0.8.25";
 
 const BUILDER_APP  = "69e2e852c48630e3502f13b1";
 const AGENT_APP    = "6a14246111a4fa5e22999619";
 const DOMAIN       = "https://primeendorsement.com";
-const RESEND_URL   = "https://api.resend.com/emails";
-const FROM         = "Prime Endorsement Authority <admin@primeendorsement.com>";
+const RESEND_API   = "https://api.resend.com/emails";
+const FROM_EMAIL   = "Prime Endorsement Authority <admin@primeendorsement.com>";
 const ADMIN_EMAIL  = "admin@primeendorsement.com";
+const FEE_AMOUNT   = 120000; // £1,200.00 in pence
+const FEE_DISPLAY  = "£1,200.00";
 
 const CORS = {
-  "Access-Control-Allow-Origin":  "*",
-  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-PEA-Key",
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
   "Content-Type": "application/json",
 };
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
-function genRef(): string {
-  return `PEA-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`;
+function refCode(): string {
+  const year = new Date().getFullYear();
+  const num  = String(Math.floor(100000 + Math.random() * 900000));
+  return `PEA-${year}-${num}`;
 }
 
-async function email(to: string, subject: string, html: string): Promise<void> {
-  const key = Deno.env.get("RESEND_API_KEY") || "";
-  if (!key) return;
+async function dbGet(appId: string, entity: string, token: string): Promise<any[]> {
+  const r = await fetch(`https://app.base44.com/api/apps/${appId}/entities/${entity}`, {
+    headers: { "Authorization": `Bearer ${token}` },
+  });
+  if (!r.ok) throw new Error(`DB GET ${entity} failed: ${r.status}`);
+  return r.json();
+}
+
+async function dbCreate(appId: string, entity: string, token: string, data: object): Promise<any> {
+  const r = await fetch(`https://app.base44.com/api/apps/${appId}/entities/${entity}`, {
+    method: "POST",
+    headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!r.ok) throw new Error(`DB CREATE ${entity} failed: ${r.status} ${await r.text()}`);
+  return r.json();
+}
+
+async function dbUpdate(appId: string, entity: string, id: string, token: string, data: object): Promise<any> {
+  const r = await fetch(`https://app.base44.com/api/apps/${appId}/entities/${entity}/${id}`, {
+    method: "PUT",
+    headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!r.ok) throw new Error(`DB UPDATE ${entity} failed: ${r.status}`);
+  return r.json();
+}
+
+async function sendEmail(apiKey: string, to: string, subject: string, html: string): Promise<void> {
+  const r = await fetch(RESEND_API, {
+    method: "POST",
+    headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ from: FROM_EMAIL, to: [to], subject, html }),
+  });
+  if (!r.ok) console.error("[webhook] Email error:", r.status, await r.text());
+}
+
+// ── AI Scoring ────────────────────────────────────────────────────────────────
+
+async function scoreApplication(b: Record<string, any>, openaiKey: string): Promise<{ score: number; summary: string; analysis: object }> {
+  const prompt = `You are a senior expert reviewer for Prime Endorsement Authority, a global digital authority certifying exceptional founder ventures.
+
+Score this application from 0-100 and provide a concise analysis.
+
+APPLICANT: ${b.applicant_name}
+ROLE: ${b.applicant_role || "Founder"}
+NATIONALITY: ${b.nationality}
+COUNTRY: ${b.country_of_residence}
+VENTURE: ${b.venture_name}
+STAGE: ${b.venture_stage}
+SECTOR: ${b.venture_sector}
+DESCRIPTION: ${b.venture_description}
+
+Evaluate across these dimensions:
+1. Founder credibility and background (0-20)
+2. Venture innovation and differentiation (0-20)  
+3. Market opportunity and timing (0-20)
+4. Stage-appropriate traction (0-20)
+5. Global potential and scalability (0-20)
+
+Respond in this exact JSON format:
+{
+  "score": <0-100>,
+  "summary": "<2-3 sentence executive summary for admin review>",
+  "founder_credibility": <0-20>,
+  "venture_innovation": <0-20>,
+  "market_opportunity": <0-20>,
+  "traction": <0-20>,
+  "global_potential": <0-20>,
+  "recommendation": "<Recommend / Consider / Decline>",
+  "key_strengths": ["<strength1>", "<strength2>"],
+  "key_concerns": ["<concern1>"]
+}`;
+
   try {
-    const r = await fetch(RESEND_URL, {
+    const r = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
-      headers: { "Authorization": `Bearer ${key}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ from: FROM, to: [to], subject, html }),
+      headers: { "Authorization": `Bearer ${openaiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        messages: [{ role: "user", content: prompt }],
+        temperature: 0.3,
+        response_format: { type: "json_object" },
+      }),
     });
-    if (!r.ok) console.error("Resend:", r.status, await r.text());
-  } catch (e) { console.error("Email error:", e); }
+    if (!r.ok) throw new Error(`OpenAI ${r.status}: ${await r.text()}`);
+    const data = await r.json();
+    const parsed = JSON.parse(data.choices[0].message.content);
+    return {
+      score:    Math.min(100, Math.max(0, parsed.score || 0)),
+      summary:  parsed.summary || "AI analysis completed.",
+      analysis: parsed,
+    };
+  } catch (e: any) {
+    console.error("[webhook] AI scoring failed:", e.message);
+    return { score: 0, summary: "AI analysis pending.", analysis: {} };
+  }
 }
 
-function applicantEmail(name: string, ref: string, venture: string): string {
-  const su = `${DOMAIN}/api/functions/peaStatusPage?ref=${encodeURIComponent(ref)}`;
-  return `<!DOCTYPE html><html><body style="background:#0A0E1A;font-family:Arial,sans-serif;color:#e2e8f0;margin:0;padding:0">
-<div style="max-width:600px;margin:0 auto;padding:40px 24px">
-  <div style="text-align:center;margin-bottom:28px">
-    <div style="color:#C9A84C;font-size:10px;letter-spacing:5px;text-transform:uppercase;margin-bottom:6px">Application Received</div>
-    <div style="color:#C9A84C;font-size:20px;font-weight:700;letter-spacing:2px;text-transform:uppercase">Prime Endorsement Authority</div>
-    <div style="width:40px;height:2px;background:#C9A84C;margin:10px auto 0"></div>
+// ── Email Templates ───────────────────────────────────────────────────────────
+
+function applicantConfirmationEmail(firstName: string, ref: string, ventureName: string): string {
+  const year = new Date().getFullYear();
+  const statusUrl = `${DOMAIN}/api/functions/peaStatusPage?ref=${encodeURIComponent(ref)}`;
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"/></head>
+<body style="margin:0;padding:0;background:#0A0E1A;font-family:Arial,sans-serif">
+<div style="max-width:600px;margin:0 auto;background:#111827;border-radius:10px;overflow:hidden">
+  <div style="background:linear-gradient(135deg,#0d1220 0%,#111827 100%);border-bottom:3px solid #C9A84C;padding:32px;text-align:center">
+    <div style="font-size:40px;margin-bottom:8px">🏛️</div>
+    <div style="color:#C9A84C;font-size:13px;font-weight:700;letter-spacing:4px;text-transform:uppercase">Prime Endorsement Authority</div>
+    <div style="color:#94a3b8;font-size:12px;margin-top:6px;letter-spacing:1px">Global Digital Authority for Founder Ventures</div>
   </div>
-  <p style="color:#94a3b8;font-size:14px;margin-bottom:16px">Dear ${name},</p>
-  <p style="color:#94a3b8;font-size:14px;line-height:1.7;margin-bottom:20px">
-    Your application for <strong style="color:#e2e8f0">${venture}</strong> has been successfully received by Prime Endorsement Authority and your details have been logged in our secure AI assessment system.
-  </p>
-  <div style="background:#111827;border:1px solid #1e293b;border-radius:8px;padding:20px;margin-bottom:20px;text-align:center">
-    <div style="color:#64748b;font-size:10px;letter-spacing:3px;text-transform:uppercase;margin-bottom:8px">Your Reference Code</div>
-    <div style="color:#C9A84C;font-size:26px;font-weight:800;letter-spacing:4px;font-family:'Courier New',monospace">${ref}</div>
-    <div style="color:#475569;font-size:11px;margin-top:6px">Keep this safe — you need it to track your application and complete payment</div>
+  <div style="padding:32px">
+    <p style="color:#C9A84C;font-size:16px;font-weight:600;margin:0 0 10px">Application Received, ${firstName} 🎉</p>
+    <p style="color:#94a3b8;font-size:13px;line-height:1.8;margin:0 0 24px">Your application for <strong style="color:#e2e8f0">${ventureName}</strong> has been received and is now queued for our expert review panel. Complete your payment to begin your 90-day assessment.</p>
+    <div style="background:#0A0E1A;border:1px solid #C9A84C;border-radius:8px;padding:18px;text-align:center;margin-bottom:20px">
+      <div style="color:#64748b;font-size:10px;letter-spacing:3px;text-transform:uppercase;margin-bottom:6px">Your Reference Code</div>
+      <div style="color:#C9A84C;font-size:26px;font-weight:700;letter-spacing:4px">${ref}</div>
+    </div>
+    <div style="background:#0d1220;border:1px solid #1e293b;border-radius:8px;padding:16px;margin-bottom:20px">
+      <div style="color:#94a3b8;font-size:12px;margin-bottom:12px;font-weight:600;text-transform:uppercase;letter-spacing:1px">Next Steps</div>
+      <div style="color:#94a3b8;font-size:13px;line-height:2">
+        <div>✅ <strong style="color:#e2e8f0">Step 1:</strong> Application submitted</div>
+        <div>💳 <strong style="color:#e2e8f0">Step 2:</strong> Complete payment (${FEE_DISPLAY})</div>
+        <div>🔍 <strong style="color:#e2e8f0">Step 3:</strong> 90-day expert review begins</div>
+        <div>🏛️ <strong style="color:#e2e8f0">Step 4:</strong> Official endorsement decision</div>
+      </div>
+    </div>
+    <div style="text-align:center;margin:24px 0">
+      <a href="${statusUrl}" style="background:#C9A84C;color:#0A0E1A;text-decoration:none;padding:14px 40px;border-radius:8px;font-weight:700;font-size:12px;letter-spacing:2px;text-transform:uppercase">Track Your Application →</a>
+    </div>
+    <p style="text-align:center;color:#475569;font-size:12px">Questions? <a href="mailto:${ADMIN_EMAIL}" style="color:#C9A84C">${ADMIN_EMAIL}</a></p>
   </div>
-  <div style="background:#111827;border:1px solid #1e293b;border-radius:8px;padding:20px;margin-bottom:20px">
-    <div style="color:#64748b;font-size:10px;letter-spacing:3px;text-transform:uppercase;margin-bottom:14px">What Happens Next</div>
-    <div style="margin-bottom:12px;display:flex;gap:12px"><div style="color:#C9A84C;font-weight:700;width:20px;flex-shrink:0">1.</div><div><div style="color:#e2e8f0;font-size:13px;font-weight:600">Complete Payment</div><div style="color:#64748b;font-size:12px;margin-top:2px">£1,200.00 (£1,000 + £200 VAT) to begin your formal expert review. Use the Stripe link provided or your reference code at the status portal.</div></div></div>
-    <div style="margin-bottom:12px;display:flex;gap:12px"><div style="color:#C9A84C;font-weight:700;width:20px;flex-shrink:0">2.</div><div><div style="color:#e2e8f0;font-size:13px;font-weight:600">AI Pre-Screening</div><div style="color:#64748b;font-size:12px;margin-top:2px">Our AI engine evaluates your application across 5 innovation dimensions within 2-5 business days.</div></div></div>
-    <div style="margin-bottom:12px;display:flex;gap:12px"><div style="color:#C9A84C;font-weight:700;width:20px;flex-shrink:0">3.</div><div><div style="color:#e2e8f0;font-size:13px;font-weight:600">Expert Panel Review</div><div style="color:#64748b;font-size:12px;margin-top:2px">Independent expert reviewers assess your venture over a 60-day period.</div></div></div>
-    <div style="display:flex;gap:12px"><div style="color:#C9A84C;font-weight:700;width:20px;flex-shrink:0">4.</div><div><div style="color:#e2e8f0;font-size:13px;font-weight:600">Decision</div><div style="color:#64748b;font-size:12px;margin-top:2px">Final endorsement decision communicated within 90 days of payment confirmation.</div></div></div>
+  <div style="background:#0d1220;border-top:1px solid #1e293b;padding:16px;text-align:center">
+    <p style="color:#475569;font-size:11px;margin:0">© ${year} Prime Endorsement Authority · All rights reserved · <a href="${DOMAIN}" style="color:#C9A84C">primeendorsement.com</a></p>
   </div>
-  <div style="text-align:center;margin-bottom:20px">
-    <a href="${su}" style="background:#C9A84C;color:#0A0E1A;text-decoration:none;padding:14px 32px;border-radius:6px;font-weight:700;font-size:12px;letter-spacing:2px;text-transform:uppercase;display:inline-block">Track My Application →</a>
-  </div>
-  <p style="color:#475569;font-size:12px;text-align:center;line-height:1.7">
-    Questions? Contact us at <a href="mailto:${ADMIN_EMAIL}" style="color:#C9A84C">${ADMIN_EMAIL}</a><br/>
-    <span style="color:#1e293b;font-size:10px">🔒 AES-256 · TLS 1.3 · ISO 27001 · FIPS 140-2</span>
-  </p>
 </div></body></html>`;
 }
 
-function adminNotifEmail(b: Record<string, any>, ref: string): string {
-  const rows = [
-    ["Reference", ref], ["Name", b.applicant_name], ["Email", b.applicant_email],
-    ["Role", b.applicant_role], ["Venture", b.venture_name], ["Sector", b.venture_sector],
-    ["Stage", b.venture_stage], ["Nationality", b.nationality], ["Country", b.country_of_residence],
-    ["Phone", b.phone_number], ["LinkedIn", b.linkedin_url],
-  ].filter(([, v]) => v)
-   .map(([k, v]) => `<tr><td style="padding:9px 14px;font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:1px;border-bottom:1px solid #1e293b;width:32%">${k}</td><td style="padding:9px 14px;font-size:13px;color:#e2e8f0;border-bottom:1px solid #1e293b">${v}</td></tr>`)
-   .join("");
-  const desc = b.venture_description ? `<div style="background:#111827;border:1px solid #1e293b;border-radius:6px;padding:14px;margin-top:14px"><div style="color:#64748b;font-size:10px;letter-spacing:2px;text-transform:uppercase;margin-bottom:6px">Venture Description</div><div style="color:#94a3b8;font-size:12px;line-height:1.7">${b.venture_description}</div></div>` : "";
-  return `<!DOCTYPE html><html><body style="background:#0A0E1A;font-family:Arial,sans-serif;color:#e2e8f0;margin:0;padding:0">
-<div style="max-width:640px;margin:0 auto;padding:40px 24px">
-  <div style="color:#C9A84C;font-size:16px;font-weight:700;margin-bottom:6px">🏛 New Application Received</div>
-  <div style="color:#64748b;font-size:12px;margin-bottom:20px">${new Date().toLocaleString("en-GB", { dateStyle: "long", timeStyle: "short" })} UTC</div>
-  <table style="width:100%;border-collapse:collapse;background:#111827;border-radius:8px;overflow:hidden">${rows}</table>
-  ${desc}
-  <div style="margin-top:20px;text-align:center">
-    <a href="${DOMAIN}/admin" style="background:#C9A84C;color:#0A0E1A;text-decoration:none;padding:12px 28px;border-radius:6px;font-weight:700;font-size:12px;letter-spacing:1px;text-transform:uppercase;display:inline-block">Open Admin Panel →</a>
+function adminNotificationEmail(b: Record<string, any>, ref: string, aiScore: number, aiSummary: string, checkoutUrl: string): string {
+  const year = new Date().getFullYear();
+  const scoreColor = aiScore >= 70 ? "#22c55e" : aiScore >= 50 ? "#f59e0b" : "#ef4444";
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"/></head>
+<body style="margin:0;padding:0;background:#0A0E1A;font-family:Arial,sans-serif">
+<div style="max-width:600px;margin:0 auto;background:#111827;border-radius:10px;overflow:hidden">
+  <div style="background:#0d1220;border-bottom:3px solid #C9A84C;padding:24px;text-align:center">
+    <div style="color:#C9A84C;font-size:13px;font-weight:700;letter-spacing:4px;text-transform:uppercase">Prime Endorsement Authority</div>
+    <div style="color:#22c55e;font-size:12px;margin-top:6px">🆕 New Application Received</div>
+  </div>
+  <div style="padding:28px">
+    <div style="display:flex;justify-content:space-between;margin-bottom:20px">
+      <div>
+        <div style="color:#64748b;font-size:10px;letter-spacing:2px;text-transform:uppercase">Reference</div>
+        <div style="color:#C9A84C;font-size:18px;font-weight:700;letter-spacing:2px">${ref}</div>
+      </div>
+      <div style="text-align:right">
+        <div style="color:#64748b;font-size:10px;letter-spacing:2px;text-transform:uppercase">AI Score</div>
+        <div style="color:${scoreColor};font-size:24px;font-weight:700">${aiScore}/100</div>
+      </div>
+    </div>
+    <div style="background:#0A0E1A;border:1px solid #1e293b;border-radius:8px;padding:16px;margin-bottom:16px">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:12px">
+        <div><span style="color:#64748b">Applicant:</span> <span style="color:#e2e8f0">${b.applicant_name}</span></div>
+        <div><span style="color:#64748b">Email:</span> <span style="color:#e2e8f0">${b.applicant_email}</span></div>
+        <div><span style="color:#64748b">Venture:</span> <span style="color:#e2e8f0">${b.venture_name}</span></div>
+        <div><span style="color:#64748b">Sector:</span> <span style="color:#e2e8f0">${b.venture_sector || "N/A"}</span></div>
+        <div><span style="color:#64748b">Stage:</span> <span style="color:#e2e8f0">${b.venture_stage || "N/A"}</span></div>
+        <div><span style="color:#64748b">Nationality:</span> <span style="color:#e2e8f0">${b.nationality}</span></div>
+      </div>
+    </div>
+    ${aiSummary ? `<div style="background:#0a1a0a;border:1px solid #166534;border-radius:8px;padding:14px;margin-bottom:16px">
+      <div style="color:#22c55e;font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;margin-bottom:8px">AI Analysis Summary</div>
+      <div style="color:#94a3b8;font-size:13px;line-height:1.7">${aiSummary}</div>
+    </div>` : ""}
+    <div style="text-align:center;margin-top:20px">
+      <a href="${checkoutUrl}" style="background:#22c55e;color:#fff;text-decoration:none;padding:12px 32px;border-radius:6px;font-weight:700;font-size:12px;letter-spacing:2px;text-transform:uppercase;margin-right:10px">View Checkout →</a>
+      <a href="https://app.base44.com/apps/${BUILDER_APP}/editor/preview" style="background:#C9A84C;color:#0A0E1A;text-decoration:none;padding:12px 32px;border-radius:6px;font-weight:700;font-size:12px;letter-spacing:2px;text-transform:uppercase">Admin Panel →</a>
+    </div>
+  </div>
+  <div style="background:#0d1220;border-top:1px solid #1e293b;padding:14px;text-align:center">
+    <p style="color:#475569;font-size:11px;margin:0">© ${year} Prime Endorsement Authority</p>
   </div>
 </div></body></html>`;
 }
 
-async function createStripeSession(ref: string, email_addr: string, name: string, app_id: string): Promise<{ url?: string; session_id?: string }> {
-  const sk = Deno.env.get("STRIPE_SECRET_KEY") || "";
-  if (!sk) return {};
-  try {
-    const p = new URLSearchParams({
-      "payment_method_types[]": "card",
-      "line_items[0][price_data][currency]": "gbp",
-      "line_items[0][price_data][product_data][name]": "UK Innovator Founder Visa Endorsement — Prime Endorsement Authority",
-      "line_items[0][price_data][product_data][description]": `Application ${ref}`,
-      "line_items[0][price_data][unit_amount]": "120000",
-      "line_items[0][quantity]": "1",
-      mode: "payment",
-      customer_email: email_addr,
-      "metadata[reference_code]": ref,
-      "metadata[applicant_name]": name,
-      "metadata[application_id]": app_id,
-      success_url: `${DOMAIN}/api/functions/peaPaymentSuccess?session_id={CHECKOUT_SESSION_ID}&ref=${encodeURIComponent(ref)}`,  // BUG-01/06 FIX: server-rendered success page
-      cancel_url: `${DOMAIN}/api/functions/peaStatusPage?ref=${encodeURIComponent(ref)}`,
-      expires_at: String(Math.floor(Date.now() / 1000) + 82800), // 23h
-      "payment_intent_data[description]": `PEA Endorsement — ${ref}`,
-      "payment_intent_data[statement_descriptor]": "PRIME ENDORSEMENT",
-    });
-    const r = await fetch("https://api.stripe.com/v1/checkout/sessions", {
-      method: "POST",
-      headers: { "Authorization": `Bearer ${sk}`, "Content-Type": "application/x-www-form-urlencoded" },
-      body: p.toString(),
-    });
-    const d = await r.json();
-    if (!r.ok) { console.error("Stripe error:", d); return {}; }
-    return { url: d.url, session_id: d.id };
-  } catch (e) { console.error("Stripe exception:", e); return {}; }
-}
-
-// ─── Main Handler ─────────────────────────────────────────────────────────────
+// ── Main Handler ──────────────────────────────────────────────────────────────
 
 export default async function handler(req: Request): Promise<Response> {
   if (req.method === "OPTIONS") return new Response(null, { headers: CORS });
-  if (req.method !== "POST") {
-    return new Response(JSON.stringify({ error: "Method not allowed" }), { status: 405, headers: CORS });
-  }
-
-  let body: Record<string, any>;
-  try { body = await req.json(); }
-  catch { return new Response(JSON.stringify({ error: "Invalid JSON body" }), { status: 400, headers: CORS }); }
-
-  const builderClient = createClient({ appId: BUILDER_APP });
-  const agentClient   = createClient({ appId: AGENT_APP });
-
-  // ── LEGACY: Payment mirror ──────────────────────────────────────────────────
-  if (body._type === "payment") {
-    try {
-      const existing = await agentClient.asServiceRole.entities.PaymentTransaction.filter({ stripe_session_id: body.stripe_session_id }).catch(() => []);
-      if (existing.length > 0) return new Response(JSON.stringify({ success: true, duplicate: true }), { headers: CORS });
-      const pt = await agentClient.asServiceRole.entities.PaymentTransaction.create({
-        application_id: body.application_id || "",
-        reference_code: body.reference_code || "",
-        stripe_session_id: body.stripe_session_id || "",
-        stripe_payment_intent: body.stripe_payment_intent || "",
-        amount: 1000, vat: 200, total: 1200, currency: "GBP", status: "paid",
-        applicant_email: body.applicant_email || "",
-        applicant_name: body.applicant_name || "",
-        paid_at: body.paid_at || new Date().toISOString(),
-        receipt_url: body.receipt_url || "",
-      });
-      return new Response(JSON.stringify({ success: true, id: pt.id }), { headers: CORS });
-    } catch (e: any) {
-      return new Response(JSON.stringify({ success: false, error: e.message }), { status: 500, headers: CORS });
-    }
-  }
-
-  // ── NEW: Full Registration Flow ─────────────────────────────────────────────
-
-  // Validate required fields
-  const required = ["applicant_name", "applicant_email", "venture_name", "venture_description", "nationality", "country_of_residence", "applicant_role"];
-  const missing = required.filter(f => !String(body[f] || "").trim());
-  if (missing.length > 0) {
-    return new Response(JSON.stringify({ error: `Missing required fields: ${missing.join(", ")}` }), { status: 400, headers: CORS });
-  }
-
-  const emailAddr = String(body.applicant_email).trim().toLowerCase();
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailAddr)) {
-    return new Response(JSON.stringify({ error: "Invalid email address" }), { status: 400, headers: CORS });
-  }
 
   try {
-    // ── Deduplication ──────────────────────────────────────────────────────────
-    let existing: any[] = [];
-    try { existing = await builderClient.asServiceRole.entities.Application.filter({ applicant_email: emailAddr }); } catch (_) {}
+    if (req.method !== "POST") {
+      return new Response(JSON.stringify({ error: "POST required" }), { status: 405, headers: CORS });
+    }
 
-    if (existing.length > 0) {
-      const ex = existing[0];
-      const ref = ex.reference_code;
-      // If unpaid — create a new Stripe session and return it
-      if (ex.payment_status !== "paid") {
-        const stripe = await createStripeSession(ref, emailAddr, ex.applicant_name || body.applicant_name, ex.id);
+    const body = await req.json().catch(() => ({}));
+    const b    = body as Record<string, any>;
+
+    // ── Validate required fields ──────────────────────────────────────────
+    const required = ["applicant_name", "applicant_email", "venture_name", "venture_description", "nationality", "country_of_residence"];
+    const missing  = required.filter(f => !b[f]?.toString().trim());
+    if (missing.length > 0) {
+      return new Response(JSON.stringify({ success: false, error: `Missing required fields: ${missing.join(", ")}` }), { status: 400, headers: CORS });
+    }
+
+    const email = b.applicant_email.trim().toLowerCase();
+    const serviceToken = Deno.env.get("BASE44_SERVICE_TOKEN") || "";
+    const resendKey    = Deno.env.get("RESEND_API_KEY") || "";
+    const stripeKey    = Deno.env.get("STRIPE_SECRET_KEY") || "";
+    const openaiKey    = Deno.env.get("OPENAI_API_KEY") || "";
+
+    // ── Deduplication ─────────────────────────────────────────────────────
+    const allApps = await dbGet(BUILDER_APP, "Application", serviceToken);
+    const existing = allApps.find((a: any) =>
+      a.applicant_email?.toLowerCase() === email &&
+      !["withdrawn", "closed", "rejected"].includes(a.status || "")
+    );
+
+    if (existing) {
+      // Return existing checkout if they already have one
+      if (existing.payment_status === "paid") {
         return new Response(JSON.stringify({
-          success: true, duplicate: true,
-          reference_code: ref,
-          stripe_url: stripe.url || null,
-          message: "Application already exists. Returning payment link."
-        }), { headers: CORS });
+          success: false,
+          error:   "duplicate",
+          message: "An active application already exists for this email address.",
+          reference_code: existing.reference_code,
+        }), { status: 409, headers: CORS });
       }
-      // Already paid — return status
-      return new Response(JSON.stringify({
-        success: true, duplicate: true, already_paid: true,
-        reference_code: ref,
-        status_url: `${DOMAIN}/api/functions/peaStatusPage?ref=${encodeURIComponent(ref)}`,
-        message: "Application already submitted and paid."
-      }), { headers: CORS });
+      // Regenerate checkout for unpaid existing
+      if (stripeKey && existing.reference_code) {
+        try {
+          const sc = await fetch("https://api.stripe.com/v1/checkout/sessions", {
+            method: "POST",
+            headers: { "Authorization": `Bearer ${stripeKey}`, "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({
+              "payment_method_types[0]": "card",
+              "line_items[0][price_data][currency]": "gbp",
+              "line_items[0][price_data][product_data][name]": "Prime Endorsement Authority — Endorsement Fee",
+              "line_items[0][price_data][product_data][description]": `${b.venture_name} · Ref: ${existing.reference_code}`,
+              "line_items[0][price_data][unit_amount]": String(FEE_AMOUNT),
+              "line_items[0][quantity]": "1",
+              "mode": "payment",
+              "success_url": `${DOMAIN}/api/functions/peaPaymentSuccess?session_id={CHECKOUT_SESSION_ID}&ref=${encodeURIComponent(existing.reference_code)}`,
+              "cancel_url":  `${DOMAIN}/api/functions/peaStatusPage?ref=${encodeURIComponent(existing.reference_code)}`,
+              "customer_email": email,
+              "metadata[reference_code]":  existing.reference_code,
+              "metadata[application_id]":  existing.id,
+            }),
+          });
+          if (sc.ok) {
+            const sess = await sc.json();
+            await dbUpdate(BUILDER_APP, "Application", existing.id, serviceToken, { payment_reference: sess.id });
+            return new Response(JSON.stringify({ success: true, reference_code: existing.reference_code, checkout_url: sess.url, existing: true }), { headers: CORS });
+          }
+        } catch (_) {}
+      }
+      return new Response(JSON.stringify({ success: true, reference_code: existing.reference_code, existing: true }), { headers: CORS });
     }
 
-    // ── Generate reference code ────────────────────────────────────────────────
-    // Retry up to 5 times to avoid collisions
-    let reference_code = genRef();
-    for (let i = 0; i < 4; i++) {
-      const check = await builderClient.asServiceRole.entities.Application.filter({ reference_code }).catch(() => []);
-      if (!check.length) break;
-      reference_code = genRef();
+    // ── Generate reference code ───────────────────────────────────────────
+    let ref = refCode();
+    // Ensure unique
+    for (let i = 0; i < 5; i++) {
+      const clash = allApps.find((a: any) => a.reference_code === ref);
+      if (!clash) break;
+      ref = refCode();
     }
 
+    // ── AI Scoring ────────────────────────────────────────────────────────
+    let aiScore   = 0;
+    let aiSummary = "";
+    let aiAnalysis: object = {};
+    if (openaiKey) {
+      ({ score: aiScore, summary: aiSummary, analysis: aiAnalysis } = await scoreApplication(b, openaiKey));
+      console.log(`[webhook] AI score for ${ref}: ${aiScore}`);
+    } else {
+      console.warn("[webhook] OPENAI_API_KEY not set — skipping AI scoring");
+    }
+
+    // ── Create Application record in builder DB ───────────────────────────
     const now = new Date().toISOString();
-
-    // ── Create Application record in builder app ───────────────────────────────
-    const appRecord = await builderClient.asServiceRole.entities.Application.create({
-      reference_code,
-      status:          "submitted",
-      payment_status:  "pending",               // BUG-05 FIX: builder uses "pending" not "unpaid"
-      application_type: (body.applicant_role || "founder").toLowerCase(), // BUG-02 FIX: correct field
-      applicant_name:   String(body.applicant_name || "").trim(),
-      applicant_email:  emailAddr,
-      application_fee:  1200,
+    const appRecord = await dbCreate(BUILDER_APP, "Application", serviceToken, {
+      reference_code:   ref,
+      status:           "submitted",
+      payment_status:   "pending",
+      application_type: (b.applicant_role || "founder").toLowerCase(),
+      application_fee:  1200.00,
       currency:         "GBP",
-      // Founder nested object — builder schema uses this for portal display
+      applicant_name:   String(b.applicant_name || "").trim(),
+      applicant_email:  email,
+      submitted_at:     now,
+      current_step:     1,
+      founder_application_complete: true,
+      auth_status:      "not_started",
+      kyc_status:       "not_started",
+      ai_score:         aiScore || null,
+      ai_analysis:      Object.keys(aiAnalysis).length ? aiAnalysis : null,
       founder: {
-        full_name:          String(body.applicant_name || "").trim(),
-        role:               body.applicant_role || "founder",
-        nationality:        String(body.nationality || "").trim(),
-        country_of_residence: String(body.country_of_residence || "").trim(),
-        phone:              String(body.phone_number || body.phone || "").trim(),
-        linkedin:           String(body.linkedin_url || body.linkedin || "").trim(),
+        full_name:          String(b.applicant_name || "").trim(),
+        role:               b.applicant_role || "Founder",
+        nationality:        b.nationality || "",
+        country_of_residence: b.country_of_residence || "",
+        phone:              String(b.phone_number || b.phone || "").trim(),
+        date_of_birth:      b.date_of_birth || null,
+        linkedin:           b.linkedin_url || b.linkedin || "",
       },
       venture: {
-        company_name:       String(body.venture_name || "").trim(),
-        stage:              body.venture_stage || body.stage || "Pre-Seed",
-        sector:             body.venture_sector || body.sector || "Other",
-        description:        String(body.venture_description || "").trim(),
-        website:            String(body.website_url || body.website || "").trim(),
+        company_name:  String(b.venture_name || "").trim(),
+        stage:         b.venture_stage || "Pre-Seed",
+        sector:        b.venture_sector || "Other",
+        description:   String(b.venture_description || "").trim(),
+        website:       b.website_url || b.website || "",
+        headquarters:  b.country_of_residence || "",
+        team_size:     b.team_size || null,
       },
-      kyc_status:      "not_started",
-      auth_status:     "not_started",
-      session_token:   body.invitation_token || body._token || null, // BUG-07 FIX: correct field
-      submitted_at:    now,
     });
 
-    console.log("Application created in builder:", appRecord?.id, reference_code);
+    console.log(`[webhook] Created application ${ref} (id: ${appRecord.id})`);
 
-    // ── Mirror to Superagent for automations ───────────────────────────────────
+    // Mirror to agent app
     try {
-      await agentClient.asServiceRole.entities.Application.create({
-        reference_code,
-        status:          "submitted",
-        payment_status:  "pending",  // BUG-05 FIX: consistent with builder
-        applicant_name:  String(body.applicant_name || "").trim(),
-        applicant_email: emailAddr,
-        applicant_role:  body.applicant_role || "Founder",
-        venture_name:    String(body.venture_name || "").trim(),
-        venture_sector:  body.venture_sector || body.sector || "Other",
-        submitted_at:    now,
+      await dbCreate(AGENT_APP, "Application", serviceToken, {
+        reference_code:   ref,
+        status:           "submitted",
+        payment_status:   "pending",
+        applicant_name:   String(b.applicant_name || "").trim(),
+        applicant_email:  email,
+        applicant_role:   b.applicant_role || "Founder",
+        venture_name:     String(b.venture_name || "").trim(),
+        venture_stage:    b.venture_stage || "",
+        venture_sector:   b.venture_sector || "",
+        venture_description: String(b.venture_description || "").trim(),
+        nationality:      b.nationality || "",
+        country_of_residence: b.country_of_residence || "",
+        phone_number:     String(b.phone_number || "").trim(),
+        linkedin_url:     b.linkedin_url || "",
+        website_url:      b.website_url || "",
+        ai_score:         aiScore || null,
+        ai_summary:       aiSummary || null,
+        submitted_at:     now,
       });
-    } catch (e) { console.error("Mirror error (non-fatal):", e); }
+    } catch (e: any) {
+      console.warn("[webhook] Agent app mirror failed:", e.message);
+    }
 
-    // ── Create Stripe checkout session ─────────────────────────────────────────
-    const stripe = await createStripeSession(
-      reference_code,
-      emailAddr,
-      String(body.applicant_name || "").trim(),
-      appRecord?.id || ""
-    );
+    // ── Stripe Checkout ───────────────────────────────────────────────────
+    let checkoutUrl = `${DOMAIN}/api/functions/peaStatusPage?ref=${encodeURIComponent(ref)}`;
+    let stripeSessionId = "";
 
-    // BUG-03 FIX: save to payment_reference (correct builder schema field)
-    if (stripe.session_id && appRecord?.id) {
+    if (stripeKey) {
       try {
-        await builderClient.asServiceRole.entities.Application.update(appRecord.id, {
-          payment_reference: stripe.session_id,  // BUG-03 FIX: correct field name ✅
+        const sc = await fetch("https://api.stripe.com/v1/checkout/sessions", {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${stripeKey}`, "Content-Type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({
+            "payment_method_types[0]": "card",
+            "line_items[0][price_data][currency]": "gbp",
+            "line_items[0][price_data][product_data][name]": "Prime Endorsement Authority — Endorsement Fee",
+            "line_items[0][price_data][product_data][description]": `${b.venture_name} · Ref: ${ref}`,
+            "line_items[0][quantity]": "1",
+            "line_items[0][price_data][unit_amount]": String(FEE_AMOUNT),
+            "mode": "payment",
+            "success_url": `${DOMAIN}/api/functions/peaPaymentSuccess?session_id={CHECKOUT_SESSION_ID}&ref=${encodeURIComponent(ref)}`,
+            "cancel_url":  `${DOMAIN}/api/functions/peaStatusPage?ref=${encodeURIComponent(ref)}`,
+            "customer_email": email,
+            "metadata[reference_code]":  ref,
+            "metadata[application_id]":  appRecord.id,
+            "payment_intent_data[description]": `PEA Endorsement Fee — ${ref}`,
+            "payment_intent_data[statement_descriptor]": "PRIME ENDORSEMENT",
+          }),
         });
-      } catch (_) {}
+        if (sc.ok) {
+          const sess    = await sc.json();
+          checkoutUrl   = sess.url;
+          stripeSessionId = sess.id;
+          await dbUpdate(BUILDER_APP, "Application", appRecord.id, serviceToken, { payment_reference: sess.id });
+          console.log(`[webhook] Stripe session created: ${sess.id}`);
+        } else {
+          console.error("[webhook] Stripe error:", await sc.text());
+        }
+      } catch (e: any) {
+        console.error("[webhook] Stripe checkout failed:", e.message);
+      }
     }
 
-    // ── Send emails (non-blocking) ─────────────────────────────────────────────
-    const firstName = String(body.applicant_name || "").trim().split(" ")[0];
-    await email(
-      emailAddr,
-      `Application Received — ${reference_code} | Prime Endorsement Authority`,
-      applicantEmail(firstName, reference_code, String(body.venture_name || "").trim())
-    );
-    await email(
-      ADMIN_EMAIL,
-      `🏛 New Application: ${body.applicant_name} — ${reference_code}`,
-      adminNotifEmail(body, reference_code)
-    );
-
-    // ── Co-founder notification ────────────────────────────────────────────────
-    const cfEmail = String(body.co_founder_email || body.cofounder_email || "").trim().toLowerCase();
-    if (cfEmail && cfEmail !== emailAddr && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cfEmail)) {
-      await email(
-        cfEmail,
-        `Co-Founder Application — ${reference_code} | Prime Endorsement Authority`,
-        applicantEmail(String(body.co_founder_name || body.cofounder_name || "Co-Founder").trim().split(" ")[0], reference_code, String(body.venture_name || "").trim())
-      );
+    // ── Send emails ───────────────────────────────────────────────────────
+    if (resendKey) {
+      const firstName = String(b.applicant_name || "Applicant").trim().split(" ")[0];
+      try {
+        await sendEmail(resendKey, email,
+          `🏛️ Application Received — ${ref} | Prime Endorsement Authority`,
+          applicantConfirmationEmail(firstName, ref, String(b.venture_name || "").trim())
+        );
+      } catch (e: any) {
+        console.warn("[webhook] Applicant email failed:", e.message);
+      }
+      try {
+        await sendEmail(resendKey, ADMIN_EMAIL,
+          `🆕 New Application — ${ref} | AI Score: ${aiScore}/100`,
+          adminNotificationEmail(b, ref, aiScore, aiSummary, checkoutUrl)
+        );
+      } catch (e: any) {
+        console.warn("[webhook] Admin email failed:", e.message);
+      }
     }
 
-    // ── Return success ─────────────────────────────────────────────────────────
     return new Response(JSON.stringify({
-      success: true,
-      reference_code,
-      app_id: appRecord?.id,
-      stripe_url:        stripe.url        || null,
-      stripe_session_id: stripe.session_id || null,
-      status_url: `${DOMAIN}/api/functions/peaStatusPage?ref=${encodeURIComponent(reference_code)}`,
-    }), { status: 200, headers: CORS });
+      success:        true,
+      reference_code: ref,
+      checkout_url:   checkoutUrl,
+      stripe_session: stripeSessionId || null,
+      ai_score:       aiScore,
+      ai_summary:     aiSummary,
+    }), { headers: CORS });
 
   } catch (err: any) {
-    console.error("Registration error:", err.message, err.stack);
-    return new Response(JSON.stringify({
-      success: false,
-      error: `Registration failed: ${err.message || "Internal server error"}`,
-    }), { status: 500, headers: CORS });
+    console.error("[webhook] Fatal:", err.message, err.stack);
+    return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: CORS });
   }
 }

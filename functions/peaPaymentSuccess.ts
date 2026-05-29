@@ -258,6 +258,24 @@ export default async function handler(req: Request): Promise<Response> {
       }
     } catch (e: any) { console.warn("[peaPaymentSuccess] PaymentTransaction failed:", e.message); }
 
+
+    // ── 2b. Trigger AI Receipt Generation ────────────────────────────────────
+    try {
+      const receiptUrl = `${DOMAIN}/api/functions/peaInvoiceReceipt`;
+      fetch(receiptUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type:           "receipt",
+          reference_code: finalRef,
+          application_id: app?.id || application_id,
+          send_email:     true,
+          return_html:    false,
+        }),
+      }).catch(e => console.warn("[peaPaymentSuccess] Receipt generation failed:", e.message));
+      console.log(`[peaPaymentSuccess] Receipt generation triggered for ${finalRef}`);
+    } catch (_) {}
+
     // ── 3. Send emails ─────────────────────────────────────────────────────
     const apiKey   = Deno.env.get("RESEND_API_KEY");
     const appEmail = app?.applicant_email || session.customer_details?.email || "";
