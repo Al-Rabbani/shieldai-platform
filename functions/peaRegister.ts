@@ -1,5 +1,5 @@
 /**
- * peaRegister — v5 ELITE REBUILD 2026-05-29
+ * peaRegister — v6 DUAL-SYNC 2026-05-30
  *
  * Full multi-step registration with document uploads, declaration & success screen.
  *
