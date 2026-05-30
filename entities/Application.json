@@ -8,7 +8,6 @@
       "type": "string",
       "enum": [
         "draft",
-        "invited",
         "submitted",
         "under_review",
         "ai_screening",
@@ -19,8 +18,7 @@
         "endorsed",
         "rejected",
         "withdrawn",
-        "closed",
-        "expired"
+        "closed"
       ]
     },
     "payment_status": {
@@ -28,8 +26,8 @@
       "enum": [
         "pending",
         "paid",
-        "failed",
-        "refunded"
+        "refunded",
+        "failed"
       ]
     },
     "applicant_email": {
@@ -145,6 +143,21 @@
     },
     "notes": {
       "type": "string"
+    },
+    "last_weekly_sent": {
+      "type": "string"
+    },
+    "weekly_sends_this_month": {
+      "type": "number"
+    },
+    "weekly_sends_month": {
+      "type": "string"
+    },
+    "registration_email_sent": {
+      "type": "boolean"
+    },
+    "payment_email_sent": {
+      "type": "boolean"
     }
   },
   "required": [],
