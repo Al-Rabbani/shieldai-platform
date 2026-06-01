@@ -1,5 +1,5 @@
 /**
- * peaSendPaymentLetter — v6 MAXIMUM PERFORMANCE 2026-06-01
+ * peaSendPaymentLetter — v7 FINAL 2026-06-01
  *
  * OPTIMIZATIONS:
  *  - Module-level env vars (read once, reused on every warm invocation)
@@ -174,7 +174,7 @@ function invoiceEmail(p: {
         <tr><td style="color:#64748b;padding:4px 0;width:140px">Reference:</td><td style="color:#C9A84C;font-weight:700;letter-spacing:2px">${p.ref}</td></tr>
         <tr><td style="color:#64748b;padding:4px 0">Applicant:</td><td style="color:#e2e8f0">${p.name}</td></tr>
         <tr><td style="color:#64748b;padding:4px 0">Venture:</td><td style="color:#e2e8f0">${p.venture}</td></tr>
-        <tr><td style="color:#64748b;padding:4px 0">Sector:</td><td style="color:#e2e8f0">${p.sector}${p.stage ? ` · ${p.stage}` : ""}</td></tr>
+        <tr><td style="color:#64748b;padding:4px 0">Sector:</td><td style="color:#e2e8f0">${p.sector}${p.stage ? " · " + p.stage : ""}</td></tr>
         <tr><td style="color:#64748b;padding:4px 0">Programme:</td><td style="color:#e2e8f0">UK Innovator Founder Visa Endorsement</td></tr>
       </table>
     </div>
