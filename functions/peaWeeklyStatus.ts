@@ -10,7 +10,7 @@
  *   - Never sends more than once per week per applicant
  */
 
-const AGENT_APP   = "6a14246111a4fa5e22999619";
+const BUILDER_APP = "69e2e852c48630e3502f13b1";
 const DOMAIN      = "https://primeendorsement.com";
 const RESEND_API  = "https://api.resend.com/emails";
 const FROM_EMAIL  = "Prime Endorsement Authority <admin@primeendorsement.com>";
@@ -67,11 +67,7 @@ function buildEmail(app: Record<string, any>): string {
 </head>
 <body style="margin:0;padding:0;background:#0A0E1A;font-family:Arial,sans-serif">
 <div style="max-width:600px;margin:0 auto;background:#111827;border-radius:10px;overflow:hidden">
-  <div style="background:linear-gradient(135deg,#0d1220 0%,#111827 100%);border-bottom:3px solid #C9A84C;padding:28px 32px;text-align:center">
-    <div style="font-size:32px;margin-bottom:8px">🏛️</div>
-    <div style="color:#C9A84C;font-size:12px;font-weight:700;letter-spacing:4px;text-transform:uppercase">Prime Endorsement Authority</div>
-    <div style="color:#475569;font-size:11px;margin-top:4px;letter-spacing:1px">Weekly Application Status Update</div>
-  </div>
+  <div style="background:#0d1220;border-bottom:3px solid #C9A84C;padding:20px 32px;text-align:center"><img src="https://media.base44.com/images/public/6a14246111a4fa5e22999619/5c4547244_PrimeLogo.png" alt="Prime Endorsement Authority" style="height:64px;width:auto;display:inline-block;margin-bottom:8px"/><div style="color:#C9A84C;font-size:11px;font-weight:700;letter-spacing:4px;text-transform:uppercase;margin-top:4px">Prime Endorsement Authority</div><div style="color:#475569;font-size:11px;margin-top:4px;letter-spacing:1px">Weekly Application Status Update</div></div>
   <div style="padding:28px 32px">
     <p style="color:#C9A84C;font-size:15px;font-weight:600;margin:0 0 8px">Weekly Update, ${firstName} 👋</p>
     <p style="color:#94a3b8;font-size:13px;line-height:1.8;margin:0 0 24px">
@@ -147,7 +143,7 @@ export default async function handler(req: Request): Promise<Response> {
     }
 
     // ── Fetch all active applications ────────────────────────────────────────
-    const appsRes = await fetch(`https://app.base44.com/api/apps/${AGENT_APP}/entities/Application`, {
+    const appsRes = await fetch(`https://app.base44.com/api/apps/${BUILDER_APP}/entities/Application`, {
       headers: { "Authorization": `Bearer ${serviceToken}` },
     });
     if (!appsRes.ok) {
@@ -201,7 +197,7 @@ export default async function handler(req: Request): Promise<Response> {
         results.push({ ref, action: "sent" });
 
         // ── Update last_weekly_sent + monthly counter ───────────────────────
-        await fetch(`https://app.base44.com/api/apps/${AGENT_APP}/entities/Application/${id}`, {
+        await fetch(`https://app.base44.com/api/apps/${BUILDER_APP}/entities/Application/${id}`, {
           method: "PUT",
           headers: { "Authorization": `Bearer ${serviceToken}`, "Content-Type": "application/json" },
           body: JSON.stringify({
