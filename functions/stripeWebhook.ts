@@ -45,7 +45,7 @@ async function dbGetById(appId: string, entity: string, id: string): Promise<any
 async function dbFilter(appId: string, entity: string, field: string, value: string): Promise<any[]> {
   try {
     const r = await fetchT(
-      `https://app.base44.com/api/apps/${appId}/entities/${entity}?filter=${field}:eq:${encodeURIComponent(value)}`,
+      `https://app.base44.com/api/apps/${appId}/entities/${entity}?${field}=${encodeURIComponent(value)}`,
       { headers: { Authorization: `Bearer ${_tok}` } }
     );
     if (!r.ok) return [];

@@ -50,7 +50,7 @@ async function fetchT(url: string, opts: RequestInit = {}, ms = 10000): Promise<
 async function dbFindByRef(appId: string, entity: string, ref: string): Promise<any | null> {
   try {
     const r = await fetchT(
-      `https://app.base44.com/api/apps/${appId}/entities/${entity}?filter=reference_code:eq:${encodeURIComponent(ref)}`,
+      `https://app.base44.com/api/apps/${appId}/entities/${entity}?reference_code=${encodeURIComponent(ref)}`,
       { headers: { Authorization: `Bearer ${_tok}` } }
     );
     if (!r.ok) return null;

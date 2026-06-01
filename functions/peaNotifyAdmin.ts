@@ -61,7 +61,7 @@ async function findApp(params: { id?: string; ref?: string }): Promise<any | nul
   if (params.ref) {
     try {
       const r = await fetchT(
-        `https://app.base44.com/api/apps/${BUILDER_APP}/entities/Application?filter=reference_code:eq:${encodeURIComponent(params.ref)}`,
+        `https://app.base44.com/api/apps/${BUILDER_APP}/entities/Application?reference_code=${encodeURIComponent(params.ref)}`,
         { headers: { Authorization: `Bearer ${_tok}` } }
       );
       if (r.ok) { const d = await r.json(); return (Array.isArray(d) ? d : d.data || [])[0] || null; }
