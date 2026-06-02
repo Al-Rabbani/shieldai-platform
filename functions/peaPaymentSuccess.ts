@@ -11,7 +11,6 @@
  *
  * The peaApplicationWebhook success_url is updated to point here instead of /payment-success
  */
-import { createClient } from "npm:@base44/sdk@0.8.25";
 
 const BUILDER_APP = "69e2e852c48630e3502f13b1";
 const AGENT_APP   = "6a14246111a4fa5e22999619";
@@ -19,6 +18,44 @@ const DOMAIN      = "https://primeendorsement.com";
 const RESEND_API  = "https://api.resend.com/emails";
 const FROM_EMAIL  = "Prime Endorsement Authority <admin@primeendorsement.com>";
 const ADMIN_EMAIL = "admin@primeendorsement.com";
+
+// ── Pure REST DB helpers (zero SDK) ──────────────────────────────────────────
+const BASE44_API    = "https://app.base44.com/api";
+const SERVICE_TOKEN = Deno.env.get("BASE44_SERVICE_TOKEN") || "";
+
+async function dbGet(appId: string, entity: string, id: string): Promise<any | null> {
+  try {
+    const r = await fetch(`${BASE44_API}/apps/${appId}/entities/${entity}/${id}`,
+      { headers: { Authorization: `Bearer ${SERVICE_TOKEN}` }, signal: AbortSignal.timeout(8000) });
+    return r.ok ? await r.json() : null;
+  } catch { return null; }
+}
+async function dbFilter(appId: string, entity: string, field: string, value: string): Promise<any[]> {
+  try {
+    const r = await fetch(`${BASE44_API}/apps/${appId}/entities/${entity}?${field}=${encodeURIComponent(value)}`,
+      { headers: { Authorization: `Bearer ${SERVICE_TOKEN}` }, signal: AbortSignal.timeout(8000) });
+    if (!r.ok) return [];
+    const d = await r.json();
+    return Array.isArray(d) ? d : [];
+  } catch { return []; }
+}
+async function dbUpdate(appId: string, entity: string, id: string, data: object): Promise<boolean> {
+  try {
+    const r = await fetch(`${BASE44_API}/apps/${appId}/entities/${entity}/${id}`,
+      { method: "PUT", headers: { Authorization: `Bearer ${SERVICE_TOKEN}`, "Content-Type": "application/json" },
+        body: JSON.stringify(data), signal: AbortSignal.timeout(8000) });
+    return r.ok;
+  } catch { return false; }
+}
+async function dbCreate(appId: string, entity: string, data: object): Promise<any | null> {
+  try {
+    const r = await fetch(`${BASE44_API}/apps/${appId}/entities/${entity}`,
+      { method: "POST", headers: { Authorization: `Bearer ${SERVICE_TOKEN}`, "Content-Type": "application/json" },
+        body: JSON.stringify(data), signal: AbortSignal.timeout(8000) });
+    return r.ok ? await r.json() : null;
+  } catch { return null; }
+}
+
 
 const HTML_HEADERS = { "Content-Type": "text/html; charset=utf-8" };
 
@@ -187,25 +224,23 @@ export default async function handler(req: Request): Promise<Response> {
     const reference_code = ref_param || metadata.reference_code || "";
     const application_id = metadata.application_id || "";
 
-    const serviceToken  = Deno.env.get("BASE44_SERVICE_TOKEN") || "";
-    const builderClient = createClient({ appId: BUILDER_APP, serviceToken });
-    const agentClient   = createClient({ appId: AGENT_APP,   serviceToken });
+    // Using pure REST helpers (dbGet, dbFilter, dbUpdate, dbCreate)
     const now           = new Date().toISOString();
 
     // Find the Application record
     let app: Record<string, any> | null = null;
     if (application_id) {
-      try { app = await builderClient.asServiceRole.entities.Application.get(application_id); } catch (_) {}
+      try { app = await dbGet(BUILDER_APP, "Application", application_id); } catch (_) {}
     }
     if (!app && reference_code) {
       try {
-        const byRef = await builderClient.asServiceRole.entities.Application.filter({ reference_code });
+        const byRef = await dbFilter(BUILDER_APP, "Application", "reference_code", reference_code);
         if (byRef?.length > 0) app = byRef[0];
       } catch (_) {}
     }
     if (!app) {
       try {
-        const bySid = await builderClient.asServiceRole.entities.Application.filter({ payment_reference: session_id });
+        const bySid = await dbFilter(BUILDER_APP, "Application", "stripe_session_id", session_id);
         if (bySid?.length > 0) app = bySid[0];
       } catch (_) {}
     }
@@ -216,7 +251,7 @@ export default async function handler(req: Request): Promise<Response> {
     // Update builder DB — BUG-02/03/05 FIX: correct field names
     if (app) {
       try {
-        await builderClient.asServiceRole.entities.Application.update(app.id, {
+        await dbUpdate(BUILDER_APP, "Application", app.id, {
           payment_status:    "paid",
           status:            "under_review",
           payment_reference: session_id,
@@ -228,9 +263,9 @@ export default async function handler(req: Request): Promise<Response> {
 
       // Mirror to agent app
       try {
-        const agentApps = await agentClient.asServiceRole.entities.Application.filter({ reference_code: finalRef });
+        const agentApps = await dbFilter(AGENT_APP, "Application", "reference_code", finalRef);
         if (agentApps?.length > 0) {
-          await agentClient.asServiceRole.entities.Application.update(agentApps[0].id, {
+          await dbUpdate(AGENT_APP, "Application", agentApps[0].id, {
             payment_status:    "paid",
             status:            "under_review",
             stripe_session_id: session_id,
@@ -243,9 +278,9 @@ export default async function handler(req: Request): Promise<Response> {
 
     // Upsert PaymentTransaction
     try {
-      const existing = await agentClient.asServiceRole.entities.PaymentTransaction.filter({ stripe_session_id: session_id });
+      const existing = await dbFilter(AGENT_APP, "PaymentTransaction", "stripe_session_id", session_id);
       if (!existing?.length) {
-        await agentClient.asServiceRole.entities.PaymentTransaction.create({
+        await dbCreate(AGENT_APP, "PaymentTransaction", {
           application_id:        app?.id || application_id,
           reference_code:        finalRef,
           stripe_session_id:     session_id,

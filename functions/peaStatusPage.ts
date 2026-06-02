@@ -1,10 +1,24 @@
 /**
- * peaStatusPage v3 — Self-contained status tracker
+ * peaStatusPage v4 — Self-contained status tracker (pure REST, zero SDK)
  * Queries Application entity directly — no peaGetStatus dependency.
  * URL: /api/functions/peaStatusPage?ref=PEA-2026-XXXXXX
  */
-// @ts-ignore
-import { base44 } from "npm:@base44/sdk@latest";
+const BUILDER_APP   = Deno.env.get("PRIME_ENDORSEMENT_APP_ID") || "69e2e852c48630e3502f13b1";
+const SERVICE_TOKEN = Deno.env.get("BASE44_SERVICE_TOKEN") || "";
+const BASE44_API    = "https://app.base44.com/api";
+
+async function dbFindByRef(appId: string, entity: string, ref: string): Promise<any | null> {
+  if (!SERVICE_TOKEN) return null;
+  try {
+    const r = await fetch(
+      `${BASE44_API}/apps/${appId}/entities/${entity}?reference_code=${encodeURIComponent(ref)}`,
+      { headers: { Authorization: `Bearer ${SERVICE_TOKEN}` }, signal: AbortSignal.timeout(8000) }
+    );
+    if (!r.ok) return null;
+    const rows = await r.json();
+    return Array.isArray(rows) ? (rows[0] || null) : null;
+  } catch { return null; }
+}
 
 export default async function handler(req: Request): Promise<Response> {
   const H = {
@@ -24,10 +38,8 @@ export default async function handler(req: Request): Promise<Response> {
 
   if (ref && ref.startsWith("PEA-")) {
     try {
-      const client = base44.createClient({ appId: "69e2e852c48630e3502f13b1" });
-      const results = await client.asServiceRole.entities.Application.filter({ reference_code: ref });
-      if (results && results.length > 0) {
-        const a = results[0];
+      const a = await dbFindByRef(BUILDER_APP, "Application", ref);
+      if (a) {
         // Normalise nested vs flat schema
         const vName = a.venture_name || (a.venture && a.venture.name) || "";
         const aName = a.applicant_name || (a.founder && a.founder.name) || "";
