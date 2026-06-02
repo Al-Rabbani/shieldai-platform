@@ -421,7 +421,7 @@ function buildHTML():string{
     <div class="si rv rv3"><span class="sn"><span class="cu" data-t="94">0</span><span class="sf">%</span></span><span class="sl">Assessment Precision</span><span class="su">Reviewer Accuracy Rating</span></div>
   </div>
   <div class="syb">
-    ${[["AES-256","ACTIVE","g"],["TLS 1.3","SECURE","g"],["FIPS 140-2","VALID","go"],["HMAC-SHA3","ONLINE","go"],["AUDIT TRAIL","100%","g"],["COI CHECK","CLEAR","g"],["ASSESSMENT","ONLINE","g"],["CERT REGISTRY","SYNCED","g"]].map(([l,s,c])=>`<div class="syc"><div class="syd ${c==="g"?"sydg":"sydgo"}"></div><span style="color:var(--mu)">${l}</span>&nbsp;<span style="color:#22c55e;font-weight:600">${s}</span></div>`).join("")}
+    ${[["AES-256","ACTIVE"],["TLS 1.3","SECURE"],["FIPS 140-2","VALID"],["HMAC-SHA3","ONLINE"],["AUDIT TRAIL","100%"],["COI CHECK","CLEAR"],["ASSESSMENT","ONLINE"],["CERT REGISTRY","SYNCED"]].map(([l,s])=>'<div class="syc"><div class="syd sydg"></div><span style="color:var(--mu)">'+l+'</span>&nbsp;<span style="color:#22c55e;font-weight:600">'+s+'</span></div>').join("")}
   </div>
 </div>
 
@@ -433,11 +433,11 @@ function buildHTML():string{
       <h2 class="sh">Infrastructure for UK innovation endorsement</h2>
       <p style="font-size:13px;color:var(--m2);line-height:1.8;margin-bottom:16px">Prime Endorsement Authority is not a UK Home Office Approved Endorsing Body and does not issue immigration endorsements. Our role is to provide advanced technology infrastructure, compliance systems, and institutional workflow support utilised by approved endorsing bodies and regulated partner institutions.</p>
       <div class="ml">
-        ${["UK Innovator Founder Visa Route","Home Office Approved Framework","UKVI Compliant Certificate Issuance","Independent Expert Review Panels","FCA-Aligned Compliance Standards","ISO 27001 Data Security Practices","FIPS 140-2 Cryptographic Standards","Immutable Forensic Audit Trails"].map(i=>`<div class="mi"><span class="mc">✦</span><span class="mx">${i}</span></div>`).join("")}
+        ${["UK Innovator Founder Visa Route","Home Office Approved Framework","UKVI Compliant Certificate Issuance","Independent Expert Review Panels","FCA-Aligned Compliance Standards","ISO 27001 Data Security Practices","FIPS 140-2 Cryptographic Standards","Immutable Forensic Audit Trails"].map(function(i){return'<div class="mi"><span class="mc">✦</span><span class="mx">'+i+'</span></div>';}).join("")}
       </div>
     </div>
     <div class="rv rv1">
-      ${[["🌍 Multi-Body Collaboration","Working with all Home Office Approved Endorsement Bodies for maximum reach and institutional credibility."],["🔐 Institutional Grade Security","Enterprise encryption, forensic audit trails and zero-trust compliance frameworks at every layer."],["📜 Verifiable Certificates","Official endorsement documents with cryptographic QR codes, immediately recognised by UKVI worldwide."],["⚡ Global Accessibility","Founders from any jurisdiction. 24/7 platform availability. Real-time status tracking across all active cases."]].map(([t,d])=>`<div class="hc2"><div class="ht">${t}</div><div class="hd2">${d}</div></div>`).join("")}
+      ${[["🌍 Multi-Body Collaboration","Working with all Home Office Approved Endorsement Bodies for maximum reach and institutional credibility."],["🔐 Institutional Grade Security","Enterprise encryption, forensic audit trails and zero-trust compliance frameworks at every layer."],["📜 Verifiable Certificates","Official endorsement documents with cryptographic QR codes, immediately recognised by UKVI worldwide."],["⚡ Global Accessibility","Founders from any jurisdiction. 24/7 platform availability. Real-time status tracking across all active cases."]].map(([t,d])=>'<div class="hc2"><div class="ht">'+t+'</div><div class="hd2">'+d+'</div></div>').join("")}
     </div>
   </div>
 </div>
@@ -460,13 +460,13 @@ function buildHTML():string{
       <div class="rtb" onclick="sr('reviewers',this)">Expert Reviewers</div>
     </div>
     <div class="rc ac" id="r-founders">
-      ${[["01","Investor Intelligence Directory","Anonymised listing in our curated investor-facing directory. Vetted angels, family offices and institutional VCs. Controlled introduction system with full founder consent."],["02","Strategic Advisory Network","Monthly office hours with sector experts. Peer mentorship from previously endorsed founders. Advisory board introductions and exclusive industry events."],["03","Milestone Progress Tracking","Post-endorsement KPI monitoring. Revenue, hiring, capital-raise and expansion milestones are tracked and compared against sector benchmarks in real time."],["04","Investor Secure Messaging","Direct encrypted messaging with connected investors. Full conversation history retained. Administrator-monitored for quality assurance and platform integrity."]].map(([n,t,d])=>`<div class="rf"><div class="rn">${n}</div><div><div class="rtl">${t}</div><div class="rde">${d}</div></div></div>`).join("")}
+      ${[["01","Investor Intelligence Directory","Anonymised listing in our curated investor-facing directory. Vetted angels, family offices and institutional VCs. Controlled introduction system with full founder consent."],["02","Strategic Advisory Network","Monthly office hours with sector experts. Peer mentorship from previously endorsed founders. Advisory board introductions and exclusive industry events."],["03","Milestone Progress Tracking","Post-endorsement KPI monitoring. Revenue, hiring, capital-raise and expansion milestones are tracked and compared against sector benchmarks in real time."],["04","Investor Secure Messaging","Direct encrypted messaging with connected investors. Full conversation history retained. Administrator-monitored for quality assurance and platform integrity."]].map(([n,t,d])=>'<div class="rf"><div class="rn">'+n+'</div><div><div class="rtl">'+t+'</div><div class="rde">'+d+'</div></div></div>').join("")}
     </div>
     <div class="rc" id="r-admins">
-      ${[["01","Registration Management","Initiate and manage all applicant registrations. Dispatch cryptographically-signed invitations. Monitor intake pipeline in real time."],["02","Assessment Score Review","Review and override preliminary assessment scores with documented rationale. A full audit trail is maintained for all review decisions."],["03","Reviewer Assignment Engine","Assign 2–3 independent expert reviewers per application. COI screening runs automatically. Track reviewer progress and turnaround times."],["04","Command Centre Analytics","Full portfolio dashboard covering funnel health, approval rates, sector distribution and compliance monitoring."]].map(([n,t,d])=>`<div class="rf"><div class="rn">${n}</div><div><div class="rtl">${t}</div><div class="rde">${d}</div></div></div>`).join("")}
+      ${[["01","Registration Management","Initiate and manage all applicant registrations. Dispatch cryptographically-signed invitations. Monitor intake pipeline in real time."],["02","Assessment Score Review","Review and override preliminary assessment scores with documented rationale. A full audit trail is maintained for all review decisions."],["03","Reviewer Assignment Engine","Assign 2–3 independent expert reviewers per application. COI screening runs automatically. Track reviewer progress and turnaround times."],["04","Command Centre Analytics","Full portfolio dashboard covering funnel health, approval rates, sector distribution and compliance monitoring."]].map(([n,t,d])=>'<div class="rf"><div class="rn">'+n+'</div><div><div class="rtl">'+t+'</div><div class="rde">'+d+'</div></div></div>').join("")}
     </div>
     <div class="rc" id="r-reviewers">
-      ${[["01","Assigned Case Management","Access only your assigned applications. Full document vault access. Structured 5-dimension scoring rubric with guidance notes and benchmarks."],["02","COI Declaration System","Mandatory conflict-of-interest declaration before each review. Automatic reassignment on positive COI. Full audit logging."],["03","Panel Coordination","Multi-reviewer calibration tools. Discrepancy alerts trigger binding adjudication. Lead reviewer finalises with full documentation."],["04","Certificate Issuance","Approved cases instantly generate PDF certificates with cryptographic QR codes. Cases not approved receive structured, documented feedback in accordance with review protocols."]].map(([n,t,d])=>`<div class="rf"><div class="rn">${n}</div><div><div class="rtl">${t}</div><div class="rde">${d}</div></div></div>`).join("")}
+      ${[["01","Assigned Case Management","Access only your assigned applications. Full document vault access. Structured 5-dimension scoring rubric with guidance notes and benchmarks."],["02","COI Declaration System","Mandatory conflict-of-interest declaration before each review. Automatic reassignment on positive COI. Full audit logging."],["03","Panel Coordination","Multi-reviewer calibration tools. Discrepancy alerts trigger binding adjudication. Lead reviewer finalises with full documentation."],["04","Certificate Issuance","Approved cases instantly generate PDF certificates with cryptographic QR codes. Cases not approved receive structured, documented feedback in accordance with review protocols."]].map(([n,t,d])=>'<div class="rf"><div class="rn">'+n+'</div><div><div class="rtl">'+t+'</div><div class="rde">'+d+'</div></div></div>').join("")}
     </div>
   </div>
 </section>
@@ -480,7 +480,7 @@ function buildHTML():string{
   </div>
 </section>
 
-<!-- FEES -->
+<!-- PROGRAMME OVERVIEW -->
 <section class="sec" id="overview" style="background:var(--bg2)">
   <div class="sei">
     <div class="rv" style="text-align:center;margin-bottom:52px">
@@ -496,7 +496,7 @@ function buildHTML():string{
         ["📜","QR-Verified Certificate","Approved founders receive an official endorsement certificate with cryptographic QR verification, immediately recognised by UKVI."],
         ["🌐","Post-Endorsement Ecosystem","Endorsed founders gain lifetime access to our investor intelligence directory, strategic advisory network and structured milestone tracking."],
         ["🛡️","Compliance-First Architecture","Built on zero-trust security principles, FIPS 140-2 cryptographic standards and an immutable forensic audit trail at every layer."]
-      ].map(([icon,title,desc])=>`<div class="hc2 rv"><div class="ht">${icon} ${title}</div><div class="hd2">${desc}</div></div>`).join("")}
+      ].map(([icon,title,desc])=>'<div class="hc2 rv"><div class="ht">'+icon+' '+title+'</div><div class="hd2">'+desc+'</div></div>').join("")}
     </div>
     <div style="text-align:center" class="rv">
       <div style="background:rgba(201,168,76,.06);border:1px solid rgba(201,168,76,.18);border-radius:12px;padding:28px 36px;max-width:520px;margin:0 auto;display:inline-block">
@@ -536,7 +536,7 @@ function buildHTML():string{
     <div>
       <div class="nl" style="margin-bottom:14px"><div class="ni">P</div><div class="nt"><span class="na">Prime Endorsement</span><span class="nb">Authority</span></div></div>
       <p class="ftg">Institutional-grade infrastructure for the UK Innovator Founder Visa endorsement ecosystem. Invitation-only. Professionally administered.</p>
-      <div class="fcm">${["ISO 27001","FIPS 140-2","AES-256","TLS 1.3","UKVI Aligned","Est. 2025"].map(b=>`<span class="fbg">${b}</span>`).join("")}</div>
+      <div class="fcm">${["ISO 27001","FIPS 140-2","AES-256","TLS 1.3","UKVI Aligned","Est. 2025"].map(function(b){return'<span class="fbg">'+b+'</span>';}).join("")}</div>
     </div>
     <div><div class="fc3">Platform</div><div class="fls"><a class="flk" href="/api/functions/peaHomePage">Home</a><a class="flk" href="/apply">Apply</a><a class="flk" href="/api/functions/peaStatusPage">Track Application</a><a class="flk" href="/portal">Member Portal</a></div></div>
     <div><div class="fc3">Authority</div><div class="fls"><a class="flk" href="#">Privacy Policy</a><a class="flk" href="#">Terms of Service</a><a class="flk" href="#">Cookie Policy</a><a class="flk" href="#">Security Standards</a></div></div>
