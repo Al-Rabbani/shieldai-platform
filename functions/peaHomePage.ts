@@ -229,7 +229,7 @@ const STAGES=[
   ["Applicant Completes Registration","Day 1","Invited applicants activate their secure portal and commence their application.","Upon receiving the invitation, applicants activate their secure account and proceed through a structured onboarding process covering: founder profile, venture details, innovation case, market opportunity, financial outlook and strategic vision.","Structured onboarding with guided section completion throughout."],
   ["Document Submission and Verification","Day 1 to 2","Upload supporting documents for structured review and cross-validation.","Applicants upload pitch decks, business plans, financial models and identity documents. Each submission is reviewed for completeness, cross-referenced for consistency and logged within the secure document vault.","Full document review and structured completeness validation upon submission."],
   ["Structured Assessment and Scoring","Day 2 to 5","Applications are assessed and scored across five core evaluation dimensions.","Each application is evaluated for innovation depth, market opportunity, team capability, financial viability and global impact. The preliminary assessment score guides the expert review panel and identifies areas requiring enhanced due diligence.","Scored across Innovation, Viability, Team, Market and Global Impact."],
-  ["Payment & Formal Intake","Day 5","Secure Stripe payment activates full reviewer access and formal workflow.","Payment is processed via Stripe enterprise-grade checkout. Confirmation triggers automated workflow: documents enter the review vault, reviewer assignment begins and the applicant receives real-time status updates.","Automated workflow activation upon payment confirmation."],
+  ["Programme Activation","Day 5","Programme fee confirmation activates full reviewer access and the formal assessment workflow.","Upon programme fee confirmation, an automated workflow is initiated: documents enter the secure review vault, reviewer assignment commences and the applicant receives real-time status updates.","Automated workflow activation upon programme confirmation."],
   ["Expert Multi-Reviewer Panel","Day 5–60","2–3 independent experts evaluate across a structured 5-dimension rubric.","Assigned expert reviewers apply a rigorous scoring rubric. The Administrator Command Centre monitors progress in real time. COI protocols operate automatically. Discrepancies trigger a calibration review with binding adjudication.","Mandatory conflict-of-interest screening enforced across all reviewer assignments."],
   ["Decision & Certificate Issuance","Day 60–90","Final decision communicated. Official QR-verified certificate generated instantly.","The lead reviewer finalises the decision with full documentation. Approved applicants instantly receive a PDF endorsement certificate with cryptographic QR verification. Every action is logged to an immutable audit trail.","QR-verified endorsement certificate, immediately recognised by UKVI."],
   ["Post-Endorsement Business Journey","Ongoing","Investor network, advisory ecosystem and structured milestone tracking, permanently active.","Endorsed founders join our exclusive post-endorsement ecosystem: investor directory access, monthly advisory office hours, peer mentorship and structured milestone tracking. The Administration team monitors portfolio performance through dedicated oversight dashboards.","Lifetime access to the Prime Endorsement Authority post-endorsement ecosystem."]
@@ -249,8 +249,7 @@ const FAQS=[
   ["How does Prime Endorsement Authority work?","We provide the technology infrastructure, structured assessment framework and compliance systems used by Home Office Approved Endorsement Bodies. All registrations are administrator-initiated. Applicants receive a personalised, secure invitation to complete their application through the encrypted member portal."],
   ["Who can register? Can anyone apply directly?","All registrations are initiated exclusively by the Prime Endorsement Authority administration team. No self-registration is permitted. Applicants receive a secure cryptographically-signed invitation link. This ensures quality control from the first step."],
   ["How does the initial assessment process work?","Applications are evaluated across five innovation dimensions. Uploaded documents are reviewed for completeness and cross-referenced for consistency. An advisory assessment score is generated to guide the expert review panel and identify areas requiring closer examination."],
-  ["How long does the endorsement process take?","The full process takes up to 90 days from registration activation to final decision. Stages 1–4 (registration through initial assessment): 5 days. Stage 5 (payment): 1 day. Stage 6 (expert panel): 55 days. Stage 7 (decision): up to 30 days from panel completion."],
-  ["What is the application fee?","The programme fee is £1,200 (£1,000 plus £200 VAT). This includes structured assessment, expert panel evaluation, encrypted document management, real-time status tracking and, if approved, a QR-verified endorsement certificate and lifetime post-endorsement ecosystem access."],
+  ["How long does the endorsement process take?","The full process takes up to 90 days from registration activation to final decision. Stages 1 to 4 (registration through initial assessment): 5 days. Stage 5 (programme activation): 1 day. Stage 6 (expert panel review): 55 days. Stage 7 (decision): up to 30 days following panel completion."],
   ["Is my personal data and documentation secure?","All data is encrypted with AES-256-GCM at rest and in transit. Documents are stored in an encrypted vault. All access is logged to an immutable forensic audit trail. We are ISO 27001 aligned and FIPS 140-2 compliant. Only assigned reviewers can access your documents."],
   ["What happens after endorsement is granted?","Endorsed founders receive a QR-verified PDF certificate immediately. You gain access to our investor intelligence directory, monthly advisory office hours, peer mentorship programme and structured milestone tracking. All post-endorsement benefits remain permanently active."]
 ];
@@ -304,7 +303,7 @@ function buildHTML():string{
     <nav class="nv">
       <a class="nk" href="/api/functions/peaHomePage">Home</a>
       <a class="nk" href="#how-it-works">How It Works</a>
-      <a class="nk" href="#fees">Fees</a>
+      <a class="nk" href="#how-it-works">The Process</a>
       <a class="nk" href="#faq">Contact</a>
     </nav>
     <div class="nr">
@@ -336,7 +335,7 @@ function buildHTML():string{
 </div>
 
 <!-- COMPLIANCE TICKER -->
-<div class="ct"><div class="cti"><span class="ctx">✦ HOME OFFICE APPROVED ENDORSEMENT PARTNER ✦ AES-256 ENCRYPTION ACTIVE ✦ REAL-TIME MULTI-REVIEWER PANEL PROCESSING ✦ FORENSIC AUDIT TRAIL: 100% INTEGRITY ✦ ZERO-TOLERANCE COI PROTOCOLS ENFORCED ✦ UKVI CERTIFICATE REGISTRY: FULLY SYNCED ✦ TLS 1.3 · FIPS 140-2 · ISO 27001 STANDARDS ✦ LIVE THREAT MONITORING: NO INCIDENTS DETECTED ✦ GLOBAL FOUNDERS · UK INNOVATION PATHWAY ✦</span><span class="ctx">✦ HOME OFFICE APPROVED ENDORSEMENT PARTNER ✦ AES-256 ENCRYPTION ACTIVE ✦ REAL-TIME MULTI-REVIEWER PANEL PROCESSING ✦ FORENSIC AUDIT TRAIL: 100% INTEGRITY ✦ ZERO-TOLERANCE COI PROTOCOLS ENFORCED ✦ UKVI CERTIFICATE REGISTRY: FULLY SYNCED ✦ TLS 1.3 · FIPS 140-2 · ISO 27001 STANDARDS ✦ LIVE THREAT MONITORING: NO INCIDENTS DETECTED ✦ GLOBAL FOUNDERS · UK INNOVATION PATHWAY ✦</span></div></div>
+<div class="ct"><div class="cti"><span class="ctx">✦ HOME OFFICE APPROVED ENDORSEMENT PARTNER ✦ AES-256 ENCRYPTION ACTIVE ✦ REAL-TIME MULTI-REVIEWER PANEL PROCESSING ✦ FORENSIC AUDIT TRAIL: 100% INTEGRITY ✦ ZERO-TOLERANCE COI PROTOCOLS ENFORCED ✦ UKVI CERTIFICATE REGISTRY: FULLY SYNCED ✦ TLS 1.3 · FIPS 140-2 · ISO 27001 STANDARDS ✦ GLOBAL FOUNDERS · UK INNOVATION PATHWAY ✦</span><span class="ctx">✦ HOME OFFICE APPROVED ENDORSEMENT PARTNER ✦ AES-256 ENCRYPTION ACTIVE ✦ REAL-TIME MULTI-REVIEWER PANEL PROCESSING ✦ FORENSIC AUDIT TRAIL: 100% INTEGRITY ✦ ZERO-TOLERANCE COI PROTOCOLS ENFORCED ✦ UKVI CERTIFICATE REGISTRY: FULLY SYNCED ✦ TLS 1.3 · FIPS 140-2 · ISO 27001 STANDARDS ✦ GLOBAL FOUNDERS · UK INNOVATION PATHWAY ✦</span></div></div>
 
 <!-- HERO -->
 <section class="hr" id="hero-section">
@@ -346,18 +345,18 @@ function buildHTML():string{
   </div>
   <div class="hc">
     <div>
-      <div class="hbdg"><div class="bdot"></div>INVITATION-ONLY · BY REFERRAL · HOME OFFICE APPROVED · ● LIVE</div>
+      <div class="hbdg"><div class="bdot"></div>INVITATION-ONLY · HOME OFFICE APPROVED PARTNER · UKVI ALIGNED · ● LIVE</div>
       <div class="hh">
         <div><span class="hw wh">Prime</span></div>
         <div><span class="hw wh">Endorsement</span></div>
         <div><span class="hw gd">Authority</span></div>
       </div>
-      <div class="hsl">Global Digital Endorsement Infrastructure</div>
+      <div class="hsl">Institutional Digital Endorsement Infrastructure</div>
       <p class="hd">A proprietary digital endorsement infrastructure platform designed to support the UK innovation and business endorsement ecosystem through advanced technology, compliance automation, secure digital workflows, and institutional-grade assessment support systems.</p>
       <p class="hdi">Prime Endorsement Authority is not a UK Home Office Approved Endorsing Body. We provide advanced technology infrastructure, compliance systems, and institutional workflow support to officially designated Home Office Approved Endorsing Bodies and regulated partner institutions.</p>
       <div class="hca">
         <a href="/api/functions/peaStatusPage" target="_self"><button class="cp">Track My Application →</button></a>
-        <a href="/apply"><button class="cg">Apply for Endorsement</button></a>
+        <a href="mailto:admin@primeendorsement.com"><button class="cg">Contact Us</button></a>
       </div>
       <div class="htr">
         <div class="trb"><span class="trt">🏛 Home Office Approved</span><span class="trs">Fully accredited · UKVI aligned</span></div>
@@ -390,21 +389,21 @@ function buildHTML():string{
             <div class="fr"><div class="sc">87</div><div class="fi"><div class="fn">QuantumPay Solutions</div><div class="fm">PEA-2026-0182 · FinTech</div></div><div class="sb se">Endorsed</div></div>
             <div class="fr"><div class="sc">91</div><div class="fi"><div class="fn">BioSynth Diagnostics</div><div class="fm">PEA-2026-0179 · HealthTech</div></div><div class="sb sr">In Review</div></div>
             <div class="fr"><div class="sc">79</div><div class="fi"><div class="fn">GreenGrid Systems</div><div class="fm">PEA-2026-0175 · ClimaTech</div></div><div class="sb se">Endorsed</div></div>
-            <div class="fr"><div class="sc">94</div><div class="fi"><div class="fn">NeuralEdge AI</div><div class="fm">PEA-2026-0171 · DeepTech</div></div><div class="sb sr">In Review</div></div>
+            <div class="fr"><div class="sc">94</div><div class="fi"><div class="fn">NeuralEdge Systems</div><div class="fm">PEA-2026-0171 · DeepTech</div></div><div class="sb sr">In Review</div></div>
           </div>
           <div id="dt-founder" style="display:none">
             <div class="dlh"><div class="ld"></div><span class="ll">FOUNDER PORTAL</span><span class="lv">· Active Session</span></div>
             <div style="margin-bottom:12px"><div style="font-size:10px;color:var(--mu);letter-spacing:.1em;text-transform:uppercase;margin-bottom:6px">90-Day Progress</div><div style="background:rgba(255,255,255,.04);border-radius:4px;height:8px;overflow:hidden"><div style="background:linear-gradient(90deg,var(--g),rgba(201,168,76,.4));height:100%;width:68%;border-radius:4px"></div></div><div style="display:flex;justify-content:space-between;margin-top:4px;font-size:9px;color:var(--mu)"><span>Day 1</span><span>Day 61 / 90</span><span>Day 90</span></div></div>
-            <div class="dss" style="grid-template-columns:repeat(3,1fr)"><div class="dsc"><span class="dsv" style="font-size:13px">Review</span><span class="dsl">Status</span></div><div class="dsc"><span class="dsv" style="font-size:13px">Paid</span><span class="dsl">Payment</span></div><div class="dsc"><span class="dsv" style="font-size:13px">Day 61</span><span class="dsl">Progress</span></div></div>
+            <div class="dss" style="grid-template-columns:repeat(3,1fr)"><div class="dsc"><span class="dsv" style="font-size:13px">Review</span><span class="dsl">Status</span></div><div class="dsc"><span class="dsv" style="font-size:13px">Active</span><span class="dsl">Status</span></div><div class="dsc"><span class="dsv" style="font-size:13px">Day 61</span><span class="dsl">Progress</span></div></div>
             <div style="font-size:11px;color:var(--mu);padding:10px;background:rgba(201,168,76,.03);border:1px solid rgba(201,168,76,.1);border-radius:4px">Expert review panel assigned. Expected decision: Day 85–90. Documents verified ✓</div>
           </div>
           <div id="dt-investor" style="display:none">
             <div class="dlh"><div class="ld"></div><span class="ll">INVESTOR VIEW</span><span class="lv">· Verified Access</span></div>
-            <div class="dss"><div class="dsc"><span class="dsv">184</span><span class="dsl">Portfolio</span></div><div class="dsc"><span class="dsv">68%</span><span class="dsl">Endorsed</span></div><div class="dsc"><span class="dsv">£42M</span><span class="dsl">Raised</span></div><div class="dsc"><span class="dsv">8</span><span class="dsl">Sectors</span></div></div>
+            <div class="dss"><div class="dsc"><span class="dsv">184</span><span class="dsl">Portfolio</span></div><div class="dsc"><span class="dsv">68%</span><span class="dsl">Endorsed</span></div><div class="dsc"><span class="dsv">42+</span><span class="dsl">Countries</span></div><div class="dsc"><span class="dsv">8</span><span class="dsl">Sectors</span></div></div>
             <div class="fh"><span class="ft">Top Sectors</span></div>
             <div class="fr"><span style="font-size:11px;color:var(--tx);flex:1">FinTech</span><span style="font-size:11px;color:var(--g)">32%</span></div>
             <div class="fr"><span style="font-size:11px;color:var(--tx);flex:1">HealthTech</span><span style="font-size:11px;color:var(--g)">24%</span></div>
-            <div class="fr" style="border-bottom:none"><span style="font-size:11px;color:var(--tx);flex:1">DeepTech / AI</span><span style="font-size:11px;color:var(--g)">19%</span></div>
+            <div class="fr" style="border-bottom:none"><span style="font-size:11px;color:var(--tx);flex:1">DeepTech</span><span style="font-size:11px;color:var(--g)">19%</span></div>
           </div>
         </div>
         <div class="df">🔒 AES-256 · TLS 1.3 · FIPS 140-2 &nbsp;·&nbsp; All systems operational</div>
@@ -416,7 +415,7 @@ function buildHTML():string{
 <!-- STATS -->
 <div class="ss2">
   <div class="sg">
-    <div class="si rv"><span class="sn"><span class="cu" data-t="2000">0</span><span class="sf">+</span></span><span class="sl">Global Founders Served</span><span class="su">From 42 Countries</span></div>
+    <div class="si rv"><span class="sn"><span class="cu" data-t="2000">0</span><span class="sf">+</span></span><span class="sl">Founders Supported</span><span class="su">Across 42 Countries</span></div>
     <div class="si rv rv1"><span class="sn"><span class="cu" data-t="90">0</span></span><span class="sl">Day Decision Timeline</span><span class="su">End-to-End</span></div>
     <div class="si rv rv2"><span class="sn"><span class="cu" data-t="94">0</span><span class="sf">%</span></span><span class="sl">Endorsement Success Rate</span><span class="su">Among Submitted Cases</span></div>
     <div class="si rv rv3"><span class="sn"><span class="cu" data-t="94">0</span><span class="sf">%</span></span><span class="sl">Assessment Precision</span><span class="su">Reviewer Accuracy Rating</span></div>
@@ -431,14 +430,14 @@ function buildHTML():string{
   <div class="mg">
     <div class="rv">
       <div class="ey">Institutional Mission & Legal Positioning</div>
-      <h2 class="sh">Infrastructure for modern UK innovation endorsement.</h2>
+      <h2 class="sh">Infrastructure for UK innovation endorsement</h2>
       <p style="font-size:13px;color:var(--m2);line-height:1.8;margin-bottom:16px">Prime Endorsement Authority is not a UK Home Office Approved Endorsing Body and does not issue immigration endorsements. Our role is to provide advanced technology infrastructure, compliance systems, and institutional workflow support utilised by approved endorsing bodies and regulated partner institutions.</p>
       <div class="ml">
         ${["UK Innovator Founder Visa Route","Home Office Approved Framework","UKVI Compliant Certificate Issuance","Independent Expert Review Panels","FCA-Aligned Compliance Standards","ISO 27001 Data Security Practices","FIPS 140-2 Cryptographic Standards","Immutable Forensic Audit Trails"].map(i=>`<div class="mi"><span class="mc">✦</span><span class="mx">${i}</span></div>`).join("")}
       </div>
     </div>
     <div class="rv rv1">
-      ${[["🌍 Multi-Body Collaboration","Working with all Home Office Approved Endorsement Bodies for maximum reach and institutional credibility."],["🔐 Institutional Grade Security","Enterprise encryption, forensic audit trails and zero-trust compliance frameworks at every layer."],["📜 Verifiable Certificates","Official endorsement documents with cryptographic QR codes, immediately recognised by UKVI worldwide."],["⚡ Global Accessibility","Founders from any jurisdiction. Multi-currency. 24/7 platform availability. Real-time status tracking."]].map(([t,d])=>`<div class="hc2"><div class="ht">${t}</div><div class="hd2">${d}</div></div>`).join("")}
+      ${[["🌍 Multi-Body Collaboration","Working with all Home Office Approved Endorsement Bodies for maximum reach and institutional credibility."],["🔐 Institutional Grade Security","Enterprise encryption, forensic audit trails and zero-trust compliance frameworks at every layer."],["📜 Verifiable Certificates","Official endorsement documents with cryptographic QR codes, immediately recognised by UKVI worldwide."],["⚡ Global Accessibility","Founders from any jurisdiction. 24/7 platform availability. Real-time status tracking across all active cases."]].map(([t,d])=>`<div class="hc2"><div class="ht">${t}</div><div class="hd2">${d}</div></div>`).join("")}
     </div>
   </div>
 </div>
@@ -446,7 +445,7 @@ function buildHTML():string{
 <!-- CAPABILITIES -->
 <section class="sec" id="capabilities">
   <div class="sei">
-    <div class="rv"><div class="ey">Technology Intelligence Platform</div><h2 class="sh">Six pillars of enterprise intelligence.</h2><p class="sp">Click any capability to see exactly how it operates inside the platform.</p></div>
+    <div class="rv"><div class="ey">Platform Architecture</div><h2 class="sh">Six pillars of institutional infrastructure.</h2><p class="sp">Select any capability to explore how it operates within the platform.</p></div>
     <div class="cg2">${capsHTML}</div>
   </div>
 </section>
@@ -454,20 +453,20 @@ function buildHTML():string{
 <!-- ROLES -->
 <section class="sec" style="background:var(--bg2);padding-top:64px;padding-bottom:64px">
   <div class="sei">
-    <div class="rv"><div class="ey">Platform Ecosystem</div><h2 class="sh">Built for every role. Sovereign by design.</h2><p class="sp">Select your role to explore what the platform delivers.</p></div>
+    <div class="rv"><div class="ey">Platform Ecosystem</div><h2 class="sh">Built for every role in the ecosystem.</h2><p class="sp">Select a role to explore what the platform provides.</p></div>
     <div class="rts">
       <div class="rtb ac" onclick="sr('founders',this)">Endorsed Founders</div>
       <div class="rtb" onclick="sr('admins',this)">Administrators</div>
       <div class="rtb" onclick="sr('reviewers',this)">Expert Reviewers</div>
     </div>
     <div class="rc ac" id="r-founders">
-      ${[["01","Investor Intelligence Directory","Anonymised listing in our curated investor-facing directory. Vetted angels, family offices and institutional VCs. Controlled introduction system with full founder consent."],["02","Strategic Advisory Network","Monthly office hours with sector experts. Peer mentorship from previously endorsed founders. Advisory board introductions and exclusive industry events."],["03","AI Milestone Progress Tracking","Post-endorsement KPI monitoring. Revenue, hiring, capital-raise and expansion milestones tracked and compared against sector benchmarks in real time."],["04","Investor Secure Messaging","Direct encrypted messaging with connected investors. Full conversation history retained. Administrator-monitored for quality assurance and platform integrity."]].map(([n,t,d])=>`<div class="rf"><div class="rn">${n}</div><div><div class="rtl">${t}</div><div class="rde">${d}</div></div></div>`).join("")}
+      ${[["01","Investor Intelligence Directory","Anonymised listing in our curated investor-facing directory. Vetted angels, family offices and institutional VCs. Controlled introduction system with full founder consent."],["02","Strategic Advisory Network","Monthly office hours with sector experts. Peer mentorship from previously endorsed founders. Advisory board introductions and exclusive industry events."],["03","Milestone Progress Tracking","Post-endorsement KPI monitoring. Revenue, hiring, capital-raise and expansion milestones are tracked and compared against sector benchmarks in real time."],["04","Investor Secure Messaging","Direct encrypted messaging with connected investors. Full conversation history retained. Administrator-monitored for quality assurance and platform integrity."]].map(([n,t,d])=>`<div class="rf"><div class="rn">${n}</div><div><div class="rtl">${t}</div><div class="rde">${d}</div></div></div>`).join("")}
     </div>
     <div class="rc" id="r-admins">
-      ${[["01","Registration Management","Initiate and manage all applicant registrations. Dispatch cryptographically-signed invitations. Monitor intake pipeline in real time."],["02","Assessment Score Review","Review and override preliminary assessment scores with documented rationale. A full audit trail is maintained for all review decisions."],["03","Reviewer Assignment Engine","Assign 2–3 independent expert reviewers per application. COI screening runs automatically. Track reviewer progress and turnaround times."],["04","Command Centre Analytics","Full portfolio dashboard: funnel health, approval rates, sector distribution, revenue tracking and compliance monitoring."]].map(([n,t,d])=>`<div class="rf"><div class="rn">${n}</div><div><div class="rtl">${t}</div><div class="rde">${d}</div></div></div>`).join("")}
+      ${[["01","Registration Management","Initiate and manage all applicant registrations. Dispatch cryptographically-signed invitations. Monitor intake pipeline in real time."],["02","Assessment Score Review","Review and override preliminary assessment scores with documented rationale. A full audit trail is maintained for all review decisions."],["03","Reviewer Assignment Engine","Assign 2–3 independent expert reviewers per application. COI screening runs automatically. Track reviewer progress and turnaround times."],["04","Command Centre Analytics","Full portfolio dashboard covering funnel health, approval rates, sector distribution and compliance monitoring."]].map(([n,t,d])=>`<div class="rf"><div class="rn">${n}</div><div><div class="rtl">${t}</div><div class="rde">${d}</div></div></div>`).join("")}
     </div>
     <div class="rc" id="r-reviewers">
-      ${[["01","Assigned Case Management","Access only your assigned applications. Full document vault access. Structured 5-dimension scoring rubric with guidance notes and benchmarks."],["02","COI Declaration System","Mandatory conflict-of-interest declaration before each review. Automatic reassignment on positive COI. Full audit logging."],["03","Panel Coordination","Multi-reviewer calibration tools. Discrepancy alerts trigger binding adjudication. Lead reviewer finalises with full documentation."],["04","Certificate Issuance","Approved cases instantly generate PDF certificates with cryptographic QR codes. Declined cases receive structured, auditable feedback."]].map(([n,t,d])=>`<div class="rf"><div class="rn">${n}</div><div><div class="rtl">${t}</div><div class="rde">${d}</div></div></div>`).join("")}
+      ${[["01","Assigned Case Management","Access only your assigned applications. Full document vault access. Structured 5-dimension scoring rubric with guidance notes and benchmarks."],["02","COI Declaration System","Mandatory conflict-of-interest declaration before each review. Automatic reassignment on positive COI. Full audit logging."],["03","Panel Coordination","Multi-reviewer calibration tools. Discrepancy alerts trigger binding adjudication. Lead reviewer finalises with full documentation."],["04","Certificate Issuance","Approved cases instantly generate PDF certificates with cryptographic QR codes. Cases not approved receive structured, documented feedback in accordance with review protocols."]].map(([n,t,d])=>`<div class="rf"><div class="rn">${n}</div><div><div class="rtl">${t}</div><div class="rde">${d}</div></div></div>`).join("")}
     </div>
   </div>
 </section>
@@ -475,24 +474,24 @@ function buildHTML():string{
 <!-- PROCESS -->
 <section class="ps" id="how-it-works">
   <div class="sei">
-    <div class="rv" style="text-align:center;margin-bottom:48px"><div class="ey" style="justify-content:center">Administrator-Led Registration Journey</div><h2 class="sh" style="text-align:center">From invitation to endorsement.</h2><p style="font-size:14px;color:var(--m2);text-align:center">Click each stage to explore the complete process.</p></div>
+    <div class="rv" style="text-align:center;margin-bottom:48px"><div class="ey" style="justify-content:center">The Endorsement Process</div><h2 class="sh" style="text-align:center">From invitation to endorsement</h2><p style="font-size:14px;color:var(--m2);text-align:center">Select each stage to explore the full process in detail.</p></div>
     <div class="pl2"><div class="pln"></div>${stagesHTML}</div>
     <div class="pf rv"><strong style="color:var(--g)">Total Timeline: Up to 90 Days</strong><br>From administrator-initiated invitation to final endorsement decision. AI acceleration available for high-scoring applications.</div>
   </div>
 </section>
 
 <!-- FEES -->
-<section class="sec" id="fees">
+<section class="sec" id="overview">
   <div class="sei">
-    <div class="rv" style="text-align:center;margin-bottom:40px"><div class="ey" style="justify-content:center">Transparent Pricing</div><h2 class="sh" style="text-align:center">Simple. Inclusive. No surprises.</h2></div>
+    <div class="rv" style="text-align:center;margin-bottom:40px"><div class="ey" style="justify-content:center">Programme Overview</div><h2 class="sh" style="text-align:center">What the Programme Includes</h2></div>
     <div class="fc2 rv">
-      <div style="font-size:10px;font-weight:600;color:var(--g);letter-spacing:.3em;text-transform:uppercase;margin-bottom:12px;font-family:'JetBrains Mono',monospace">Application Fee</div>
-      <div class="fa">£1,200</div>
-      <div class="fb">£1,000.00 service fee + £200.00 VAT</div>
+      <div style="font-size:10px;font-weight:500;color:var(--g);letter-spacing:.25em;text-transform:uppercase;margin-bottom:12px;font-family:'JetBrains Mono',monospace">Programme Includes</div>
+      <div class="fa" style="font-size:14px;letter-spacing:.15em">By Invitation Only</div>
+      <div class="fb">Programme fees are communicated at the point of invitation</div>
       <ul class="ff">
         ${["Structured pre-screening and initial assessment","Expert multi-reviewer panel evaluation","Encrypted document vault and document verification","Real-time application status tracking","QR-verified endorsement certificate (if approved)","Lifetime access to the post-endorsement ecosystem"].map(f=>`<li class="fi2"><span class="fck">✦</span><span>${f}</span></li>`).join("")}
       </ul>
-      <a href="/apply"><button class="cp" style="width:100%">Apply for Endorsement →</button></a>
+      <a href="mailto:admin@primeendorsement.com"><button class="cp" style="width:100%">Request an Invitation →</button></a>
     </div>
   </div>
 </section>
@@ -508,12 +507,12 @@ function buildHTML():string{
 <!-- CTA -->
 <section class="cs2">
   <div style="max-width:640px;margin:0 auto" class="rv">
-    <div class="ey" style="justify-content:center;margin-bottom:16px">Begin Your Journey</div>
-    <h2 class="ch">Ready to Begin Your Endorsement Journey?</h2>
+    <div class="ey" style="justify-content:center;margin-bottom:16px">Get Started</div>
+    <h2 class="ch">Begin Your Endorsement Journey</h2>
     <p class="csb">All registrations are administrator-initiated. Contact us to request a secure invitation to the platform.</p>
     <div class="cbs">
       <a href="mailto:admin@primeendorsement.com"><button class="cp">Request an Invitation →</button></a>
-      <a href="/apply"><button class="cg">Already Invited? Begin →</button></a>
+      <a href="/api/functions/peaStatusPage"><button class="cg">Track Your Application →</button></a>
     </div>
   </div>
 </section>
@@ -523,7 +522,7 @@ function buildHTML():string{
   <div class="fg">
     <div>
       <div class="nl" style="margin-bottom:14px"><div class="ni">P</div><div class="nt"><span class="na">Prime Endorsement</span><span class="nb">Authority</span></div></div>
-      <p class="ftg">Institutional-grade infrastructure for the UK Innovator Founder Visa endorsement ecosystem. Invitation-only. Zero compromise.</p>
+      <p class="ftg">Institutional-grade infrastructure for the UK Innovator Founder Visa endorsement ecosystem. Invitation-only. Professionally administered.</p>
       <div class="fcm">${["ISO 27001","FIPS 140-2","AES-256","TLS 1.3","UKVI Aligned","Est. 2025"].map(b=>`<span class="fbg">${b}</span>`).join("")}</div>
     </div>
     <div><div class="fc3">Platform</div><div class="fls"><a class="flk" href="/api/functions/peaHomePage">Home</a><a class="flk" href="/apply">Apply</a><a class="flk" href="/api/functions/peaStatusPage">Track Application</a><a class="flk" href="/portal">Member Portal</a></div></div>
