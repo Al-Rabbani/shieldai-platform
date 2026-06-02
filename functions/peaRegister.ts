@@ -123,8 +123,8 @@ function completionEmail(p: { name: string; ref: string; venture: string; score:
       ${p.strengths.length ? `<div style="color:#64748b;font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;margin-bottom:8px">Key Strengths</div>${p.strengths.map(s => `<div style="display:flex;gap:8px;margin-bottom:6px"><span style="color:#22c55e;font-weight:700">✓</span><span style="color:#94a3b8;font-size:12px">${s}</span></div>`).join("")}` : ""}
     </div>` : ""}
     <div style="background:#0d1a00;border:1px solid #365314;border-radius:10px;padding:18px;margin-bottom:20px">
-      <div style="color:#86efac;font-size:13px;font-weight:700;margin-bottom:6px">💳 Payment Invoice Dispatched</div>
-      <p style="color:#94a3b8;font-size:12px;line-height:1.7;margin:0">A formal Payment Invitation and Invoice for the programme fee of <strong style="color:#e2e8f0">£1,200.00</strong> has been sent to this email address. Please check your inbox to complete the activation of your application.</p>
+      <div style="color:#86efac;font-size:13px;font-weight:700;margin-bottom:6px">✉️ Programme Activation Notice Dispatched</div>
+      <p style="color:#94a3b8;font-size:12px;line-height:1.7;margin:0">A formal Programme Activation Notice has been sent to your email address. Please check your inbox for next steps and activation instructions.</p>
     </div>
     <div style="text-align:center;margin-bottom:20px">
       <a href="${p.statusUrl}" style="display:inline-block;background:#C9A84C;color:#0A0E1A;text-decoration:none;padding:14px 36px;border-radius:8px;font-weight:700;font-size:12px;letter-spacing:2px;text-transform:uppercase">Track My Application →</a>
@@ -537,10 +537,10 @@ main{max-width:740px;margin:0 auto;padding:32px 20px 80px}
     <div class="sec-sub">Please read and agree to the following before submitting your application.</div>
   </div>
   <div class="card">
-    <div class="card-title">Programme Fee Notice</div>
+    <div class="card-title">Programme Activation Notice</div>
     <div style="background:rgba(201,168,76,.06);border:1px solid rgba(201,168,76,.2);border-radius:8px;padding:16px;margin-bottom:4px">
-      <div style="color:var(--gold);font-size:13px;font-weight:700;margin-bottom:6px">Programme Fee: £1,200.00 (inc. VAT)</div>
-      <div style="color:var(--sub);font-size:12px;line-height:1.7">A formal Payment Invitation & Invoice will be sent to your email address immediately after registration. Payment activates your application for expert review. Submission today does not constitute a payment commitment.</div>
+      <div style="color:var(--gold);font-size:13px;font-weight:600;margin-bottom:6px">Invitation-Only Programme</div>
+      <div style="color:var(--sub);font-size:12px;line-height:1.7">A formal Programme Activation Notice will be sent to your email address immediately upon registration. Programme details and activation steps will be provided in that communication. Submission of this form does not constitute a financial commitment.</div>
     </div>
   </div>
   <div class="card">
@@ -548,7 +548,7 @@ main{max-width:740px;margin:0 auto;padding:32px 20px 80px}
     <div class="decl-box">
       <p>By submitting this application, you confirm that all information provided is accurate, complete, and truthful. You understand that false or misleading information will result in immediate disqualification.</p>
       <label class="check-row"><input type="checkbox" id="decl1"/><span><strong>I confirm</strong> that all information and documents submitted are accurate, complete, and genuinely represent my business and background.</span></label>
-      <label class="check-row"><input type="checkbox" id="decl2"/><span><strong>I understand</strong> that the programme fee of <strong>£1,200.00</strong> is non-refundable once the application is formally activated following payment.</span></label>
+      <label class="check-row"><input type="checkbox" id="decl2"/><span><strong>I understand</strong> that once the programme is formally activated, the programme fee is non-refundable in accordance with the terms communicated at the point of invitation.</span></label>
       <label class="check-row"><input type="checkbox" id="decl3"/><span><strong>I acknowledge</strong> that Prime Endorsement Authority's decision on endorsement is final, and payment does not guarantee approval.</span></label>
     </div>
     <div id="declError" style="color:var(--red);font-size:12px;margin-bottom:10px;display:none">⚠ Please agree to all declarations before submitting.</div>
@@ -808,8 +808,8 @@ function showCompletion(data) {
     '</div>' +
 
     '<div class="pay-notice">' +
-      '<div class="pay-notice-icon">💳</div>' +
-      '<div class="pay-notice-text"><strong>Payment Invoice Dispatched</strong><br>A formal Payment Invitation and Invoice for <strong>£1,200.00</strong> has been sent to your email address. Please check your inbox to complete activation. A registration confirmation email including your preliminary assessment score has also been dispatched.</div>' +
+      '<div class="pay-notice-icon">✉️</div>' +
+      '<div class="pay-notice-text"><strong>Programme Activation Notice Dispatched</strong><br>A formal Programme Activation Notice has been sent to your email address. Please check your inbox to review the next steps and complete your programme activation. A registration confirmation including your preliminary assessment has also been sent.</div>' +
     '</div>' +
 
     '<div class="comp-grid">' +
@@ -834,8 +834,8 @@ function showCompletion(data) {
     '<div class="comp-card" style="margin-bottom:20px">' +
       '<div class="comp-card-title">What Happens Next</div>' +
       '<div class="comp-steps">' +
-        '<div class="comp-step"><div class="comp-step-num">1</div><div class="comp-step-text"><strong>Check your inbox</strong>: Payment invoice (£1,200) has been sent to your email address</div></div>' +
-        '<div class="comp-step"><div class="comp-step-num">2</div><div class="comp-step-text"><strong>Complete your payment</strong>: Secure checkout via Stripe, which activates your 90-day review period</div></div>' +
+        '<div class="comp-step"><div class="comp-step-num">1</div><div class="comp-step-text"><strong>Check your inbox</strong>: Your Programme Activation Notice has been sent to your email address</div></div>' +
+        '<div class="comp-step"><div class="comp-step-num">2</div><div class="comp-step-text"><strong>Activate your programme</strong>: Follow the instructions in your activation notice to initiate your 90-day review period</div></div>' +
         '<div class="comp-step"><div class="comp-step-num">3</div><div class="comp-step-text"><strong>Structured Expert Review</strong>: Your application is assigned to a dedicated Reviewer and forwarded to an approved Assessor</div></div>' +
         '<div class="comp-step"><div class="comp-step-num">4</div><div class="comp-step-text"><strong>Weekly status updates</strong>: Progress digests delivered every Monday by email</div></div>' +
         '<div class="comp-step"><div class="comp-step-num">5</div><div class="comp-step-text"><strong>Endorsement decision</strong>: Your official endorsement letter is issued upon successful review</div></div>' +

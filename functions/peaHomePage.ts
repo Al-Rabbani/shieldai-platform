@@ -229,7 +229,7 @@ const STAGES=[
   ["Applicant Completes Registration","Day 1","Invited applicants activate their secure portal and commence their application.","Upon receiving the invitation, applicants activate their secure account and proceed through a structured onboarding process covering: founder profile, venture details, innovation case, market opportunity, financial outlook and strategic vision.","Structured onboarding with guided section completion throughout."],
   ["Document Submission and Verification","Day 1 to 2","Upload supporting documents for structured review and cross-validation.","Applicants upload pitch decks, business plans, financial models and identity documents. Each submission is reviewed for completeness, cross-referenced for consistency and logged within the secure document vault.","Full document review and structured completeness validation upon submission."],
   ["Structured Assessment and Scoring","Day 2 to 5","Applications are assessed and scored across five core evaluation dimensions.","Each application is evaluated for innovation depth, market opportunity, team capability, financial viability and global impact. The preliminary assessment score guides the expert review panel and identifies areas requiring enhanced due diligence.","Scored across Innovation, Viability, Team, Market and Global Impact."],
-  ["Programme Activation","Day 5","Programme fee confirmation activates full reviewer access and the formal assessment workflow.","Upon programme fee confirmation, an automated workflow is initiated: documents enter the secure review vault, reviewer assignment commences and the applicant receives real-time status updates.","Automated workflow activation upon programme confirmation."],
+  ["Programme Activation","Day 5","Formal programme activation initiates full reviewer access and the structured assessment workflow.","Upon programme activation, an automated workflow is initiated: documents enter the secure review vault, reviewer assignment commences and the applicant receives real-time status updates.","Structured workflow activation upon programme confirmation."],
   ["Expert Multi-Reviewer Panel","Day 5–60","2–3 independent experts evaluate across a structured 5-dimension rubric.","Assigned expert reviewers apply a rigorous scoring rubric. The Administrator Command Centre monitors progress in real time. COI protocols operate automatically. Discrepancies trigger a calibration review with binding adjudication.","Mandatory conflict-of-interest screening enforced across all reviewer assignments."],
   ["Decision & Certificate Issuance","Day 60–90","Final decision communicated. Official QR-verified certificate generated instantly.","The lead reviewer finalises the decision with full documentation. Approved applicants instantly receive a PDF endorsement certificate with cryptographic QR verification. Every action is logged to an immutable audit trail.","QR-verified endorsement certificate, immediately recognised by UKVI."],
   ["Post-Endorsement Business Journey","Ongoing","Investor network, advisory ecosystem and structured milestone tracking, permanently active.","Endorsed founders join our exclusive post-endorsement ecosystem: investor directory access, monthly advisory office hours, peer mentorship and structured milestone tracking. The Administration team monitors portfolio performance through dedicated oversight dashboards.","Lifetime access to the Prime Endorsement Authority post-endorsement ecosystem."]
@@ -481,17 +481,30 @@ function buildHTML():string{
 </section>
 
 <!-- FEES -->
-<section class="sec" id="overview">
+<section class="sec" id="overview" style="background:var(--bg2)">
   <div class="sei">
-    <div class="rv" style="text-align:center;margin-bottom:40px"><div class="ey" style="justify-content:center">Programme Overview</div><h2 class="sh" style="text-align:center">What the Programme Includes</h2></div>
-    <div class="fc2 rv">
-      <div style="font-size:10px;font-weight:500;color:var(--g);letter-spacing:.25em;text-transform:uppercase;margin-bottom:12px;font-family:'JetBrains Mono',monospace">Programme Includes</div>
-      <div class="fa" style="font-size:14px;letter-spacing:.15em">By Invitation Only</div>
-      <div class="fb">Programme fees are communicated at the point of invitation</div>
-      <ul class="ff">
-        ${["Structured pre-screening and initial assessment","Expert multi-reviewer panel evaluation","Encrypted document vault and document verification","Real-time application status tracking","QR-verified endorsement certificate (if approved)","Lifetime access to the post-endorsement ecosystem"].map(f=>`<li class="fi2"><span class="fck">✦</span><span>${f}</span></li>`).join("")}
-      </ul>
-      <a href="mailto:admin@primeendorsement.com"><button class="cp" style="width:100%">Request an Invitation →</button></a>
+    <div class="rv" style="text-align:center;margin-bottom:52px">
+      <div class="ey" style="justify-content:center">Programme Overview</div>
+      <h2 class="sh" style="text-align:center">What the Endorsement Programme Delivers</h2>
+      <p style="font-size:14px;color:var(--m2);text-align:center;max-width:600px;margin:12px auto 0;line-height:1.8">Every invited applicant receives full access to the Prime Endorsement Authority ecosystem, from initial assessment through to post-endorsement support.</p>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:24px;max-width:960px;margin:0 auto 40px">
+      ${[
+        ["🔍","Independent Expert Assessment","Applications are evaluated by an assigned panel of independent expert reviewers across five structured dimensions."],
+        ["🔐","Encrypted Document Vault","All submitted documentation is secured with AES-256 encryption. Access is restricted to assigned reviewers, with every view forensically logged."],
+        ["📊","Real-Time Status Tracking","Applicants and administrators receive live status updates at every stage of the process, from submission through to final decision."],
+        ["📜","QR-Verified Certificate","Approved founders receive an official endorsement certificate with cryptographic QR verification, immediately recognised by UKVI."],
+        ["🌐","Post-Endorsement Ecosystem","Endorsed founders gain lifetime access to our investor intelligence directory, strategic advisory network and structured milestone tracking."],
+        ["🛡️","Compliance-First Architecture","Built on zero-trust security principles, FIPS 140-2 cryptographic standards and an immutable forensic audit trail at every layer."]
+      ].map(([icon,title,desc])=>`<div class="hc2 rv"><div class="ht">${icon} ${title}</div><div class="hd2">${desc}</div></div>`).join("")}
+    </div>
+    <div style="text-align:center" class="rv">
+      <div style="background:rgba(201,168,76,.06);border:1px solid rgba(201,168,76,.18);border-radius:12px;padding:28px 36px;max-width:520px;margin:0 auto;display:inline-block">
+        <div style="font-size:9px;font-weight:600;color:var(--g);letter-spacing:.3em;text-transform:uppercase;margin-bottom:10px;font-family:'JetBrains Mono',monospace">Access Model</div>
+        <div style="font-size:20px;font-weight:600;color:var(--tx);letter-spacing:.05em;margin-bottom:8px">By Invitation Only</div>
+        <div style="font-size:13px;color:var(--m2);line-height:1.7;margin-bottom:20px">All registrations are administrator-initiated. Programme details are provided at the point of invitation.</div>
+        <a href="mailto:admin@primeendorsement.com"><button class="cp">Request an Invitation →</button></a>
+      </div>
     </div>
   </div>
 </section>
