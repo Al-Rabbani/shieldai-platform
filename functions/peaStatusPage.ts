@@ -381,12 +381,12 @@ async function handlePay(){
   const btn=document.getElementById('payBtn');
   btn.disabled=true;btn.textContent='Creating checkout…';
   try{
-    const r=await fetch('https://primeendorsement.com/api/functions/peaCreateStripeCheckout',{
+    const r=await fetch('https://primeendorsement.com/api/functions/peaSendPaymentLetter',{
       method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({reference_code:ref})
     });
     const d=await r.json();
-    if(d.url){window.location.href=d.url;}
+    if(d.checkout_url||d.url){window.location.href=d.checkout_url||d.url;}
     else{btn.disabled=false;btn.textContent='Complete Payment — £1,200.00';alert('Payment error. Please contact admin@primeendorsement.com');}
   }catch(e){
     btn.disabled=false;btn.textContent='Complete Payment — £1,200.00';

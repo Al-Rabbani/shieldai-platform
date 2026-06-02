@@ -898,10 +898,16 @@ async function handlePost(req: Request): Promise<Response> {
 
   // Validate token against DB
   const allApps = await dbList(BUILDER_APP, "Application", serviceToken);
-  const appRec  = allApps.find((a: any) =>
-    (a.session_token === token || a.invitation_token === token) &&
-    a.status !== "submitted" && a.status !== "paid" && a.status !== "approved"
-  );
+  const appRec  = allApps.find((a: any) => {
+    if (a.session_token !== token && a.invitation_token !== token) return false;
+    if (["submitted","paid","approved","under_review"].includes(a.status)) return false;
+    // Check token expiry if stored
+    if (a.token_expires_at) {
+      const exp = new Date(a.token_expires_at).getTime();
+      if (!isNaN(exp) && exp < Date.now()) return false;
+    }
+    return true;
+  });
 
   if (!appRec) {
     // Check if already submitted
@@ -1088,6 +1094,13 @@ export default async function handler(req: Request): Promise<Response> {
       const apps = await dbList(BUILDER_APP, "Application", serviceToken);
       const rec  = apps.find((a: any) => a.session_token === token || a.invitation_token === token);
       if (!rec) return errorPage("Link Invalid or Expired", "This registration link is no longer valid. It may have expired or already been used. Please contact admin@primeendorsement.com for a new invitation.");
+      // Check token expiry date
+      if (rec.token_expires_at) {
+        const exp = new Date(rec.token_expires_at).getTime();
+        if (!isNaN(exp) && exp < Date.now()) {
+          return errorPage("Registration Link Expired", "This registration link has expired. Registration links are valid for 72 hours. Please contact admin@primeendorsement.com to request a new invitation.");
+        }
+      }
       if (["submitted","paid","approved","under_review"].includes(rec.status)) {
         const statusUrl = `${DOMAIN}/api/functions/peaStatusPage?ref=${encodeURIComponent(rec.reference_code)}`;
         return new Response(`<!DOCTYPE html><html><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/><title>Already Submitted — PEA</title></head>

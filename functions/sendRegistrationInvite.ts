@@ -300,6 +300,7 @@ export default async function handler(req: Request): Promise<Response> {
         applicant_name:   applicantName,
         applicant_email:  email,
         session_token:    token,
+        token_expires_at: expiresISO,
         current_step:     0,
         founder_application_complete: false,
         auth_status:      "not_started",
