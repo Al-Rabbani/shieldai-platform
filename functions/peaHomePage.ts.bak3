@@ -225,34 +225,34 @@ a{color:inherit;text-decoration:none}
 @media(max-width:600px){.nv{display:none}.bl{display:none}.sg{grid-template-columns:1fr 1fr}.cg2{grid-template-columns:1fr}.fg{grid-template-columns:1fr}.cbs{flex-direction:column;align-items:center}}`;
 
 const STAGES=[
-  ["Administrator Sends Invitation","Day 0","Administrators create applicant profiles and dispatch secure onboarding invitations.","All registrations are initiated exclusively by the Prime Endorsement Authority. Applicants receive a secure, personalised registration link, ensuring full quality control from the first point of contact.","Administrator-controlled intake with invitation-only access."],
-  ["Applicant Completes Registration","Day 1","Invited applicants activate their secure portal and commence their application.","Upon receiving the invitation, applicants activate their secure account and proceed through a structured onboarding process covering: founder profile, venture details, innovation case, market opportunity, financial outlook and strategic vision.","Structured onboarding with guided section completion throughout."],
-  ["Document Submission and Verification","Day 1 to 2","Upload supporting documents for structured review and cross-validation.","Applicants upload pitch decks, business plans, financial models and identity documents. Each submission is reviewed for completeness, cross-referenced for consistency and logged within the secure document vault.","Full document review and structured completeness validation upon submission."],
-  ["Structured Assessment and Scoring","Day 2 to 5","Applications are assessed and scored across five core evaluation dimensions.","Each application is evaluated for innovation depth, market opportunity, team capability, financial viability and global impact. The preliminary assessment score guides the expert review panel and identifies areas requiring enhanced due diligence.","Scored across Innovation, Viability, Team, Market and Global Impact."],
-  ["Payment & Formal Intake","Day 5","Secure Stripe payment activates full reviewer access and formal workflow.","Payment is processed via Stripe enterprise-grade checkout. Confirmation triggers automated workflow: documents enter the review vault, reviewer assignment begins and the applicant receives real-time status updates.","Automated workflow activation upon payment confirmation."],
-  ["Expert Multi-Reviewer Panel","Day 5–60","2–3 independent experts evaluate across a structured 5-dimension rubric.","Assigned expert reviewers apply a rigorous scoring rubric. The Administrator Command Centre monitors progress in real time. COI protocols operate automatically. Discrepancies trigger a calibration review with binding adjudication.","Mandatory conflict-of-interest screening enforced across all reviewer assignments."],
-  ["Decision & Certificate Issuance","Day 60–90","Final decision communicated. Official QR-verified certificate generated instantly.","The lead reviewer finalises the decision with full documentation. Approved applicants instantly receive a PDF endorsement certificate with cryptographic QR verification. Every action is logged to an immutable audit trail.","QR-verified endorsement certificate, immediately recognised by UKVI."],
-  ["Post-Endorsement Business Journey","Ongoing","Investor network, advisory ecosystem and structured milestone tracking, permanently active.","Endorsed founders join our exclusive post-endorsement ecosystem: investor directory access, monthly advisory office hours, peer mentorship and structured milestone tracking. The Administration team monitors portfolio performance through dedicated oversight dashboards.","Lifetime access to the Prime Endorsement Authority post-endorsement ecosystem."]
+  ["Administrator Sends Invitation","Day 0","Administrators create applicant profiles and dispatch secure onboarding invitations.","All registrations are initiated exclusively by the Prime Endorsement Authority. Applicants receive a cryptographically-signed personalised link — ensuring full quality control from day one.","100% administrator-controlled intake — invitation-only access."],
+  ["Applicant Activates Membership","Day 1","Invited applicants activate their secure portal and commence their application.","Upon receiving the invitation, applicants activate their encrypted account. The AI-guided onboarding navigates them through: founder profile, venture details, innovation case, market opportunity, financial outlook and strategic vision.","AI onboarding assistant active — intelligent section guidance throughout."],
+  ["Document Submission & AI Verification","Day 1–2","Upload supporting documents. AI instantly scans, extracts and cross-validates.","Applicants upload pitch decks, business plans, financial models and identity documents. The AI engine extracts key data, flags inconsistencies and generates an initial risk profile with a confidence score.","Real-time AI document intelligence — full analysis in under 60 seconds."],
+  ["AI Pre-Screening & Scoring","Day 2–5","Machine learning scores the application across 5 innovation dimensions.","Our AI evaluates innovation depth, market opportunity, team capability, financial viability and global impact. The advisory score guides the expert review panel and flags risk indicators for enhanced due diligence.","Scored across Innovation, Viability, Team, Market & Global Impact."],
+  ["Payment & Formal Intake","Day 5","Secure Stripe payment activates full reviewer access and formal workflow.","Payment is processed via Stripe enterprise-grade checkout. Confirmation triggers automated workflow: documents enter the review vault, reviewer assignment begins and the applicant receives real-time status updates.","Automated workflow activation — payment to review in minutes."],
+  ["Expert Multi-Reviewer Panel","Day 5–60","2–3 independent experts evaluate across a structured 5-dimension rubric.","Assigned expert reviewers apply a rigorous scoring rubric. The Administrator Command Centre monitors progress in real time. COI protocols operate automatically. Discrepancies trigger a calibration review with binding adjudication.","Mandatory COI screening — zero tolerance for conflicted assessments."],
+  ["Decision & Certificate Issuance","Day 60–90","Final decision communicated. Official QR-verified certificate generated instantly.","The lead reviewer finalises the decision with full documentation. Approved applicants instantly receive a PDF endorsement certificate with cryptographic QR verification. Every action is logged to an immutable audit trail.","QR-verified certificate — immediately recognised by UKVI."],
+  ["Post-Endorsement Business Journey","Ongoing","Investor network, advisory ecosystem and live milestone tracking — permanently active.","Endorsed founders join our exclusive ecosystem: investor directory access, monthly advisory office hours, peer mentorship and AI-powered milestone tracking. The Administrator monitors portfolio performance through dedicated dashboards.","Lifetime access to the Prime Endorsement Authority ecosystem."]
 ];
 
 const CAPS=[
-  ["bl2","⚡","Assessment Framework","01","Applications evaluated across five core dimensions by assigned reviewers.","Our structured assessment framework evaluates innovation depth, market opportunity, team strength, financial viability and global impact. Documents are cross-referenced for completeness and consistency before any reviewer engages with the application."],
-  ["em","📡","Live Status Intelligence","02","Every action and status change propagates instantly across all portals.","Administrator and member dashboards reflect live data at all times. Status changes, reviewer assignments, payment confirmations and notifications are reflected immediately, with no page refresh required."],
+  ["bl2","⚡","Assessment Engine","01","Applications evaluated across 5 dimensions in real time.","Our system evaluates innovation depth, market opportunity, team strength, financial viability and global impact. It cross-references documents, flags risk indicators and generates advisory scores — all before any human reviewer sees the application."],
+  ["em","📡","Live Real-Time Intelligence","02","Every action, status change and alert propagates instantly across all portals.","Administrator and member dashboards subscribe to encrypted live data streams. Status changes, reviewer assignments, payment confirmations and alerts propagate within milliseconds — zero page refresh required."],
   ["go","🛡️","Zero-Trust Security Architecture","03","AES-256 encryption, FIPS 140-2 compliance and forensic audit on every layer.","Military-grade encryption at rest and in transit. Every access event is logged to an immutable audit trail. HMAC signature chains validate document authenticity. Role-based access controls with automatic session revocation on anomaly detection."],
-  ["pu","🔒","Secure Document Vault","04","Encrypted document storage with authenticity verification on upload.","Documents are encrypted with AES-256. Each upload is reviewed for authenticity, with structured data extracted and any inconsistencies flagged. Only assigned reviewers can access documents, and every view is logged forensically."],
+  ["pu","🔒","Secure Document Vault","04","Encrypted document storage with authenticity verification on upload.","Documents are encrypted with AES-256. The system scans each upload for authenticity — extracting structured data and flagging potential issues. Only assigned reviewers can access documents, with every view logged forensically."],
   ["ro","🌐","Investor Intelligence Network","05","Endorsed founders connect with vetted angels, family offices and institutional VCs.","Approved founders opt into an anonymised investor-facing directory. Vetted investors browse profiles and request introductions via the matching engine. All connections are founder-controlled with administrator oversight."],
-  ["am","📊","Executive Analytics Suite","06","Portfolio compliance intelligence and performance metrics at a glance.","The Command Centre provides real-time executive analytics covering application pipeline health, reviewer turnaround metrics, conflict-of-interest monitoring, sector concentration analysis, geographic distribution and decision outcome metrics."]
+  ["am","📊","Executive Analytics Suite","06","Portfolio risk profiling, compliance intelligence and performance metrics.","The Command Centre provides real-time executive analytics: application funnel health, reviewer turnaround metrics, COI risk monitoring, sector concentration analysis, geographic risk heatmaps and approval probability metrics."]
 ];
 
 const FAQS=[
-  ["What is the UK Innovator Founder visa?","The UK Innovator Founder visa is a route for global entrepreneurs seeking to establish an innovative business in the United Kingdom. Endorsement from an approved endorsing body is a mandatory prerequisite. Prime Endorsement Authority provides the technology infrastructure and compliance framework for that assessment process."],
-  ["How does Prime Endorsement Authority work?","We provide the technology infrastructure, structured assessment framework and compliance systems used by Home Office Approved Endorsement Bodies. All registrations are administrator-initiated. Applicants receive a personalised, secure invitation to complete their application through the encrypted member portal."],
+  ["What is the UK Innovator Founder visa?","The UK Innovator Founder visa is a route for global entrepreneurs seeking to establish an innovative business in the United Kingdom. Endorsement from an approved endorsing body is a mandatory prerequisite — Prime Endorsement Authority provides the technology infrastructure for that assessment process."],
+  ["How does Prime Endorsement Authority work?","We provide the technology infrastructure, AI assessment engine and compliance framework used by Home Office Approved Endorsement Bodies. All registrations are administrator-initiated — applicants receive personalised secure invitations to complete their application through the encrypted member portal."],
   ["Who can register? Can anyone apply directly?","All registrations are initiated exclusively by the Prime Endorsement Authority administration team. No self-registration is permitted. Applicants receive a secure cryptographically-signed invitation link. This ensures quality control from the first step."],
-  ["How does the initial assessment process work?","Applications are evaluated across five innovation dimensions. Uploaded documents are reviewed for completeness and cross-referenced for consistency. An advisory assessment score is generated to guide the expert review panel and identify areas requiring closer examination."],
-  ["How long does the endorsement process take?","The full process takes up to 90 days from registration activation to final decision. Stages 1–4 (registration through initial assessment): 5 days. Stage 5 (payment): 1 day. Stage 6 (expert panel): 55 days. Stage 7 (decision): up to 30 days from panel completion."],
-  ["What is the application fee?","The programme fee is £1,200 (£1,000 plus £200 VAT). This includes structured assessment, expert panel evaluation, encrypted document management, real-time status tracking and, if approved, a QR-verified endorsement certificate and lifetime post-endorsement ecosystem access."],
+  ["How does the AI pre-screening system work?","Our system analyses applications across 5 innovation dimensions, extracting data from uploaded documents, cross-referencing market benchmarks and generating an advisory score. The AI flags risk indicators and routes high-priority applications for expedited expert review."],
+  ["How long does the endorsement process take?","The full process takes up to 90 days from registration activation to final decision. Stage 1–4 (registration to AI scoring): 5 days. Stage 5 (payment): 1 day. Stage 6 (expert panel): 55 days. Stage 7 (decision): up to 30 days from panel completion."],
+  ["What is the application fee?","The application fee is £1,200 (£1,000 + £200 VAT). This includes AI pre-screening, expert panel evaluation, encrypted document management, real-time status tracking, and — if approved — a QR-verified endorsement certificate and lifetime ecosystem access."],
   ["Is my personal data and documentation secure?","All data is encrypted with AES-256-GCM at rest and in transit. Documents are stored in an encrypted vault. All access is logged to an immutable forensic audit trail. We are ISO 27001 aligned and FIPS 140-2 compliant. Only assigned reviewers can access your documents."],
-  ["What happens after endorsement is granted?","Endorsed founders receive a QR-verified PDF certificate immediately. You gain access to our investor intelligence directory, monthly advisory office hours, peer mentorship programme and structured milestone tracking. All post-endorsement benefits remain permanently active."]
+  ["What happens after endorsement is granted?","Endorsed founders receive a QR-verified PDF certificate immediately. You gain access to our investor intelligence directory, monthly advisory office hours, peer mentorship programme, and AI-powered milestone tracking — all permanently active."]
 ];
 
 function buildHTML():string{
@@ -286,10 +286,10 @@ function buildHTML():string{
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Prime Endorsement Authority | Global Digital Endorsement Infrastructure</title>
-<meta name="description" content="Institutional endorsement infrastructure for the UK Innovator Founder Visa ecosystem. Invitation-only. Professionally administered. Globally recognised."/>
+<title>Prime Endorsement Authority — Global Digital Endorsement Infrastructure</title>
+<meta name="description" content="Sovereign AI-powered platform for the UK Innovator Founder Visa endorsement ecosystem. Invitation-only. Zero compromise."/>
 <meta property="og:title" content="Prime Endorsement Authority"/>
-<meta property="og:description" content="Institutional infrastructure for global innovation endorsement."/>
+<meta property="og:description" content="Sovereign infrastructure for global innovation endorsement."/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
 <style>${CSS}</style>
@@ -316,7 +316,7 @@ function buildHTML():string{
   <div class="tb">
     <div class="tl"><div class="dr"></div><span class="tt">THREAT: MINIMAL</span></div>
     <div class="td"></div>
-    <span class="tm" id="tmsg">Assessment Framework · v3.2 · All review dimensions operational</span>
+    <span class="tm" id="tmsg">AI Assessment Engine · v3.2 · All dimensions operational</span>
     <div class="tr2"><span class="tbd">ISO 27001</span><span class="tbd">ENCRYPTED</span><span id="clk" style="color:rgba(201,168,76,.45);letter-spacing:.12em;font-size:9px;font-family:'JetBrains Mono',monospace">00:00:00 UTC</span></div>
   </div>
 </div>
@@ -353,8 +353,8 @@ function buildHTML():string{
         <div><span class="hw gd">Authority</span></div>
       </div>
       <div class="hsl">Global Digital Endorsement Infrastructure</div>
-      <p class="hd">A proprietary digital endorsement infrastructure platform designed to support the UK innovation and business endorsement ecosystem through advanced technology, compliance automation, secure digital workflows, and institutional-grade assessment support systems.</p>
-      <p class="hdi">Prime Endorsement Authority is not a UK Home Office Approved Endorsing Body. We provide advanced technology infrastructure, compliance systems, and institutional workflow support to officially designated Home Office Approved Endorsing Bodies and regulated partner institutions.</p>
+      <p class="hd">A proprietary AI-powered digital endorsement infrastructure platform designed to support the UK innovation and business endorsement ecosystem through advanced technology, compliance automation, secure digital workflows, and institutional-grade assessment support systems.</p>
+      <p class="hdi">Prime Endorsement Authority is not a UK Home Office Approved Endorsing Body. We provide advanced AI infrastructure, compliance technology, and institutional workflow support to officially designated Home Office Approved Endorsing Bodies and regulated partner institutions.</p>
       <div class="hca">
         <a href="/api/functions/peaStatusPage" target="_self"><button class="cp">Track My Application →</button></a>
         <a href="/apply"><button class="cg">Apply for Endorsement</button></a>
@@ -362,7 +362,7 @@ function buildHTML():string{
       <div class="htr">
         <div class="trb"><span class="trt">🏛 Home Office Approved</span><span class="trs">Fully accredited · UKVI aligned</span></div>
         <div class="trb"><span class="trt">🔐 AES-256 Encrypted</span><span class="trs">Military-grade cryptography</span></div>
-        <div class="trb"><span class="trt">⚡ Assessment Engine v3.2</span><span class="trs">94% precision · Real-time</span></div>
+        <div class="trb"><span class="trt">⚡ AI/ML Engine v3.2</span><span class="trs">94% precision · Real-time</span></div>
       </div>
     </div>
     <div style="display:flex;justify-content:center;align-items:center">
@@ -382,7 +382,7 @@ function buildHTML():string{
             <div class="dlh"><div class="ld"></div><span class="ll">LIVE</span><span class="lv" id="lv">· Milestone verified · TechNova Ltd ·</span></div>
             <div class="dss">
               <div class="dsc"><span class="dsv">184</span><span class="dsl">Founders</span></div>
-              <div class="dsc"><span class="dsv">94%</span><span class="dsl">Score Avg</span></div>
+              <div class="dsc"><span class="dsv">94%</span><span class="dsl">AI Score</span></div>
               <div class="dsc"><span class="dsv">68%</span><span class="dsl">Endorsed</span></div>
               <div class="dsc"><span class="dsv">12</span><span class="dsl">In Review</span></div>
             </div>
@@ -419,7 +419,7 @@ function buildHTML():string{
     <div class="si rv"><span class="sn"><span class="cu" data-t="2000">0</span><span class="sf">+</span></span><span class="sl">Global Founders Served</span><span class="su">From 42 Countries</span></div>
     <div class="si rv rv1"><span class="sn"><span class="cu" data-t="90">0</span></span><span class="sl">Day Decision Timeline</span><span class="su">End-to-End</span></div>
     <div class="si rv rv2"><span class="sn"><span class="cu" data-t="94">0</span><span class="sf">%</span></span><span class="sl">Endorsement Success Rate</span><span class="su">Among Submitted Cases</span></div>
-    <div class="si rv rv3"><span class="sn"><span class="cu" data-t="94">0</span><span class="sf">%</span></span><span class="sl">Assessment Precision</span><span class="su">Reviewer Accuracy Rating</span></div>
+    <div class="si rv rv3"><span class="sn"><span class="cu" data-t="94">0</span><span class="sf">%</span></span><span class="sl">AI Assessment Precision</span><span class="su">ML Engine Accuracy</span></div>
   </div>
   <div class="syb">
     ${[["AES-256","ACTIVE","g"],["TLS 1.3","SECURE","g"],["FIPS 140-2","VALID","go"],["HMAC-SHA3","ONLINE","go"],["AUDIT TRAIL","100%","g"],["COI CHECK","CLEAR","g"],["ASSESSMENT","ONLINE","g"],["CERT REGISTRY","SYNCED","g"]].map(([l,s,c])=>`<div class="syc"><div class="syd ${c==="g"?"sydg":"sydgo"}"></div><span style="color:var(--mu)">${l}</span>&nbsp;<span style="color:#22c55e;font-weight:600">${s}</span></div>`).join("")}
@@ -432,13 +432,13 @@ function buildHTML():string{
     <div class="rv">
       <div class="ey">Institutional Mission & Legal Positioning</div>
       <h2 class="sh">Infrastructure for modern UK innovation endorsement.</h2>
-      <p style="font-size:13px;color:var(--m2);line-height:1.8;margin-bottom:16px">Prime Endorsement Authority is not a UK Home Office Approved Endorsing Body and does not issue immigration endorsements. Our role is to provide advanced technology infrastructure, compliance systems, and institutional workflow support utilised by approved endorsing bodies and regulated partner institutions.</p>
+      <p style="font-size:13px;color:var(--m2);line-height:1.8;margin-bottom:16px">Prime Endorsement Authority is not a UK Home Office Approved Endorsing Body and does not issue immigration endorsements. Our role is to provide advanced AI-powered infrastructure, compliance technology, and institutional workflow support utilised by approved endorsing bodies and regulated partner institutions.</p>
       <div class="ml">
         ${["UK Innovator Founder Visa Route","Home Office Approved Framework","UKVI Compliant Certificate Issuance","Independent Expert Review Panels","FCA-Aligned Compliance Standards","ISO 27001 Data Security Practices","FIPS 140-2 Cryptographic Standards","Immutable Forensic Audit Trails"].map(i=>`<div class="mi"><span class="mc">✦</span><span class="mx">${i}</span></div>`).join("")}
       </div>
     </div>
     <div class="rv rv1">
-      ${[["🌍 Multi-Body Collaboration","Working with all Home Office Approved Endorsement Bodies for maximum reach and institutional credibility."],["🔐 Institutional Grade Security","Enterprise encryption, forensic audit trails and zero-trust compliance frameworks at every layer."],["📜 Verifiable Certificates","Official endorsement documents with cryptographic QR codes, immediately recognised by UKVI worldwide."],["⚡ Global Accessibility","Founders from any jurisdiction. Multi-currency. 24/7 platform availability. Real-time status tracking."]].map(([t,d])=>`<div class="hc2"><div class="ht">${t}</div><div class="hd2">${d}</div></div>`).join("")}
+      ${[["🌍 Multi-Body Collaboration","Working with all Home Office Approved Endorsement Bodies for maximum reach and institutional credibility."],["🔐 Institutional Grade Security","Enterprise encryption, forensic audit trails and zero-trust compliance frameworks at every layer."],["📜 Verifiable Certificates","Official endorsement documents with cryptographic QR codes — immediately recognised by UKVI worldwide."],["⚡ Global Accessibility","Founders from any jurisdiction. Multi-currency. 24/7 platform availability. Real-time status tracking."]].map(([t,d])=>`<div class="hc2"><div class="ht">${t}</div><div class="hd2">${d}</div></div>`).join("")}
     </div>
   </div>
 </div>
@@ -464,7 +464,7 @@ function buildHTML():string{
       ${[["01","Investor Intelligence Directory","Anonymised listing in our curated investor-facing directory. Vetted angels, family offices and institutional VCs. Controlled introduction system with full founder consent."],["02","Strategic Advisory Network","Monthly office hours with sector experts. Peer mentorship from previously endorsed founders. Advisory board introductions and exclusive industry events."],["03","AI Milestone Progress Tracking","Post-endorsement KPI monitoring. Revenue, hiring, capital-raise and expansion milestones tracked and compared against sector benchmarks in real time."],["04","Investor Secure Messaging","Direct encrypted messaging with connected investors. Full conversation history retained. Administrator-monitored for quality assurance and platform integrity."]].map(([n,t,d])=>`<div class="rf"><div class="rn">${n}</div><div><div class="rtl">${t}</div><div class="rde">${d}</div></div></div>`).join("")}
     </div>
     <div class="rc" id="r-admins">
-      ${[["01","Registration Management","Initiate and manage all applicant registrations. Dispatch cryptographically-signed invitations. Monitor intake pipeline in real time."],["02","Assessment Score Review","Review and override preliminary assessment scores with documented rationale. A full audit trail is maintained for all review decisions."],["03","Reviewer Assignment Engine","Assign 2–3 independent expert reviewers per application. COI screening runs automatically. Track reviewer progress and turnaround times."],["04","Command Centre Analytics","Full portfolio dashboard: funnel health, approval rates, sector distribution, revenue tracking and compliance monitoring."]].map(([n,t,d])=>`<div class="rf"><div class="rn">${n}</div><div><div class="rtl">${t}</div><div class="rde">${d}</div></div></div>`).join("")}
+      ${[["01","Registration Management","Initiate and manage all applicant registrations. Dispatch cryptographically-signed invitations. Monitor intake pipeline in real time."],["02","AI Scoring Override","Review and override AI pre-screening scores with documented rationale. Full audit trail maintained for all override decisions."],["03","Reviewer Assignment Engine","Assign 2–3 independent expert reviewers per application. COI screening runs automatically. Track reviewer progress and turnaround times."],["04","Command Centre Analytics","Full portfolio dashboard: funnel health, approval rates, sector distribution, revenue tracking and compliance monitoring."]].map(([n,t,d])=>`<div class="rf"><div class="rn">${n}</div><div><div class="rtl">${t}</div><div class="rde">${d}</div></div></div>`).join("")}
     </div>
     <div class="rc" id="r-reviewers">
       ${[["01","Assigned Case Management","Access only your assigned applications. Full document vault access. Structured 5-dimension scoring rubric with guidance notes and benchmarks."],["02","COI Declaration System","Mandatory conflict-of-interest declaration before each review. Automatic reassignment on positive COI. Full audit logging."],["03","Panel Coordination","Multi-reviewer calibration tools. Discrepancy alerts trigger binding adjudication. Lead reviewer finalises with full documentation."],["04","Certificate Issuance","Approved cases instantly generate PDF certificates with cryptographic QR codes. Declined cases receive structured, auditable feedback."]].map(([n,t,d])=>`<div class="rf"><div class="rn">${n}</div><div><div class="rtl">${t}</div><div class="rde">${d}</div></div></div>`).join("")}
@@ -490,7 +490,7 @@ function buildHTML():string{
       <div class="fa">£1,200</div>
       <div class="fb">£1,000.00 service fee + £200.00 VAT</div>
       <ul class="ff">
-        ${["Structured pre-screening and initial assessment","Expert multi-reviewer panel evaluation","Encrypted document vault and document verification","Real-time application status tracking","QR-verified endorsement certificate (if approved)","Lifetime access to the post-endorsement ecosystem"].map(f=>`<li class="fi2"><span class="fck">✦</span><span>${f}</span></li>`).join("")}
+        ${["Full AI-powered pre-screening assessment","Expert multi-reviewer panel evaluation","Encrypted document vault & AI verification","Real-time application status tracking","QR-verified endorsement certificate (if approved)","Lifetime access to post-endorsement ecosystem"].map(f=>`<li class="fi2"><span class="fck">✦</span><span>${f}</span></li>`).join("")}
       </ul>
       <a href="/apply"><button class="cp" style="width:100%">Apply for Endorsement →</button></a>
     </div>
@@ -523,14 +523,14 @@ function buildHTML():string{
   <div class="fg">
     <div>
       <div class="nl" style="margin-bottom:14px"><div class="ni">P</div><div class="nt"><span class="na">Prime Endorsement</span><span class="nb">Authority</span></div></div>
-      <p class="ftg">Institutional-grade infrastructure for the UK Innovator Founder Visa endorsement ecosystem. Invitation-only. Zero compromise.</p>
+      <p class="ftg">Sovereign AI-powered infrastructure for the UK Innovator Founder Visa endorsement ecosystem. Invitation-only. Zero compromise.</p>
       <div class="fcm">${["ISO 27001","FIPS 140-2","AES-256","TLS 1.3","UKVI Aligned","Est. 2025"].map(b=>`<span class="fbg">${b}</span>`).join("")}</div>
     </div>
     <div><div class="fc3">Platform</div><div class="fls"><a class="flk" href="/api/functions/peaHomePage">Home</a><a class="flk" href="/apply">Apply</a><a class="flk" href="/api/functions/peaStatusPage">Track Application</a><a class="flk" href="/portal">Member Portal</a></div></div>
     <div><div class="fc3">Authority</div><div class="fls"><a class="flk" href="#">Privacy Policy</a><a class="flk" href="#">Terms of Service</a><a class="flk" href="#">Cookie Policy</a><a class="flk" href="#">Security Standards</a></div></div>
     <div><div class="fc3">Contact</div><div class="fls"><a class="flk" href="mailto:admin@primeendorsement.com">admin@primeendorsement.com</a><a class="flk" href="/api/functions/peaHomePage">primeendorsement.com</a><a class="flk" href="/admin-login">Admin Login</a></div></div>
   </div>
-  <div class="fbt"><span class="fcp">© 2026 Prime Endorsement Authority. All rights reserved. Regulated infrastructure. Invitation-only platform.</span><span class="fcp">UKVI aligned · ISO 27001 · Institutional Infrastructure</span></div>
+  <div class="fbt"><span class="fcp">© 2026 Prime Endorsement Authority. All rights reserved. Regulated infrastructure. Invitation-only platform.</span><span class="fcp">Powered by sovereign AI · UKVI aligned · ISO 27001</span></div>
 </footer>
 
 <script>
@@ -538,10 +538,10 @@ function buildHTML():string{
 function uc(){const n=new Date(),pad=x=>x.toString().padStart(2,'0');const el=document.getElementById('clk');if(el)el.textContent=pad(n.getUTCHours())+':'+pad(n.getUTCMinutes())+':'+pad(n.getUTCSeconds())+' UTC';}
 setInterval(uc,1000);uc();
 // THREAT
-const thrs=["Assessment Framework · v3.2 · All review dimensions operational","AES-256-GCM encryption layer · 100% integrity confirmed","Zero-trust perimeter · Active · 0 anomalies detected","COI Protocol · All reviewers cleared · No conflicts","Forensic audit trail · HMAC chain validated · Intact","TLS 1.3 mutual authentication · Session verified","FIPS 140-2 cryptographic module · Validated"];
+const thrs=["AI Assessment Engine · v3.2 · All dimensions operational","AES-256-GCM encryption layer · 100% integrity confirmed","Zero-trust perimeter · Active · 0 anomalies detected","COI Protocol · All reviewers cleared · No conflicts","Forensic audit trail · HMAC chain validated · Intact","TLS 1.3 mutual authentication · Session verified","FIPS 140-2 cryptographic module · Validated"];
 let ti=0;setInterval(()=>{ti=(ti+1)%thrs.length;const e=document.getElementById('tmsg');if(e){e.style.opacity='0';setTimeout(()=>{e.textContent=thrs[ti];e.style.opacity='1';},400);}},4000);
 // ANNOUNCEMENTS
-const anns=[{tag:"MILESTONE",text:"Prime Endorsement Authority surpasses 180+ endorsed founders from 42 countries across the UK innovation ecosystem.",date:"Apr 2026"},{tag:"REGULATORY",text:"UKVI confirms continued recognition of Prime Endorsement Authority certificates for the Innovator Founder Visa route.",date:"Mar 2026"},{tag:"TECHNOLOGY",text:"Assessment Framework v3.2 deployed. 94% precision achieved across all evaluation dimensions.",date:"Feb 2026"}];
+const anns=[{tag:"MILESTONE",text:"Prime Endorsement Authority surpasses 180+ endorsed founders from 42 countries across the UK innovation ecosystem.",date:"Apr 2026"},{tag:"REGULATORY",text:"UKVI confirms continued recognition of Prime Endorsement Authority certificates for the Innovator Founder Visa route.",date:"Mar 2026"},{tag:"TECHNOLOGY",text:"New AI engine v3.2 deployed — 94% pre-screening precision achieved across all assessment dimensions.",date:"Feb 2026"}];
 let ai=0;setInterval(()=>{ai=(ai+1)%3;const a=anns[ai];const t=document.getElementById('atx');if(t){t.style.opacity='0';setTimeout(()=>{t.textContent=a.text;t.style.opacity='1';},300);}const tg=document.getElementById('atg');if(tg)tg.textContent=a.tag;const dt=document.getElementById('adt');if(dt)dt.textContent=a.date;[0,1,2].forEach(i=>{const d=document.getElementById('ad'+i);if(d)d.style.background=i===ai?'var(--g)':'rgba(201,168,76,.25)';});},6000);
 // LIVE VENTURE
 const vens=["· Milestone verified · TechNova Ltd ·","· Reviewer assigned · BioSynth Diagnostics ·","· Endorsed · QuantumPay Solutions ·","· Document verified · GreenGrid Systems ·"];

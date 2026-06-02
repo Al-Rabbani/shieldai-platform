@@ -1,14 +1,14 @@
 /**
- * peaRegister — v8 CINEMATIC AI REGISTRATION 2026-05-30
+ * peaRegister — v8 PEA REGISTRATION FORM 2026-05-30
  *
  * KEY FIX: Form uses fetch() AJAX — token is preserved in JS, never lost.
  * Full pipeline on POST:
  *   1. Token validation
  *   2. Duplicate detection
  *   3. Field validation
- *   4. AI scoring (GPT-4o-mini)
+ *   4. Preliminary assessment scoring
  *   5. DB save (builder + agent)
- *   6. Registration completion email (with AI score + summary)
+ *   6. Registration completion email (with assessment score and summary)
  *   7. Admin alert email
  *   8. Auto-trigger peaSendPaymentLetter (payment invoice)
  *   9. Return JSON → frontend renders cinematic completion screen
@@ -105,26 +105,26 @@ function completionEmail(p: { name: string; ref: string; venture: string; score:
   </div>
   <div style="padding:28px 32px">
     <p style="color:#e2e8f0;font-size:15px;font-weight:600;margin:0 0 8px">Dear ${firstName},</p>
-    <p style="color:#94a3b8;font-size:13px;line-height:1.8;margin:0 0 24px">Your registration with the Prime Endorsement Authority has been successfully received and processed. Your application is now on record and your AI assessment has been completed.</p>
+    <p style="color:#94a3b8;font-size:13px;line-height:1.8;margin:0 0 24px">Your registration with the Prime Endorsement Authority has been successfully received and processed. Your application is now on record and your preliminary assessment has been completed.</p>
     <div style="background:#0d1220;border:1px solid #1e293b;border-radius:10px;padding:20px;margin-bottom:20px">
       <div style="color:#64748b;font-size:10px;font-weight:700;letter-spacing:3px;text-transform:uppercase;margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid #1e293b">Application Reference</div>
       <div style="color:#C9A84C;font-size:24px;font-weight:700;letter-spacing:4px;margin-bottom:12px">${p.ref}</div>
       <table style="width:100%;font-size:13px"><tr><td style="color:#64748b;padding:3px 0;width:120px">Venture:</td><td style="color:#e2e8f0">${p.venture}</td></tr></table>
     </div>
     ${sc > 0 ? `<div style="background:#0d1220;border:1px solid #1e293b;border-radius:10px;padding:20px;margin-bottom:20px">
-      <div style="color:#64748b;font-size:10px;font-weight:700;letter-spacing:3px;text-transform:uppercase;margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid #1e293b">AI Assessment Score</div>
+      <div style="color:#64748b;font-size:10px;font-weight:700;letter-spacing:3px;text-transform:uppercase;margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid #1e293b">Preliminary Assessment Score</div>
       <div style="display:flex;align-items:center;gap:20px;margin-bottom:14px">
         <div style="width:64px;height:64px;border-radius:50%;border:3px solid ${scColor};display:flex;align-items:center;justify-content:center;flex-shrink:0">
           <span style="color:${scColor};font-size:18px;font-weight:700">${sc}</span>
         </div>
-        <div><div style="color:${scColor};font-weight:700;font-size:14px">${scLabel}</div><div style="color:#64748b;font-size:12px;margin-top:2px">Out of 100 — AI Evaluation</div></div>
+        <div><div style="color:${scColor};font-weight:700;font-size:14px">${scLabel}</div><div style="color:#64748b;font-size:12px;margin-top:2px">Out of 100 — Reviewer Assessment</div></div>
       </div>
       ${p.summary ? `<p style="color:#94a3b8;font-size:13px;line-height:1.7;margin:0 0 12px;padding:12px;background:#060c18;border-radius:6px;border-left:3px solid #C9A84C">${p.summary}</p>` : ""}
       ${p.strengths.length ? `<div style="color:#64748b;font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;margin-bottom:8px">Key Strengths</div>${p.strengths.map(s => `<div style="display:flex;gap:8px;margin-bottom:6px"><span style="color:#22c55e;font-weight:700">✓</span><span style="color:#94a3b8;font-size:12px">${s}</span></div>`).join("")}` : ""}
     </div>` : ""}
     <div style="background:#0d1a00;border:1px solid #365314;border-radius:10px;padding:18px;margin-bottom:20px">
       <div style="color:#86efac;font-size:13px;font-weight:700;margin-bottom:6px">💳 Payment Invoice Dispatched</div>
-      <p style="color:#94a3b8;font-size:12px;line-height:1.7;margin:0">A formal Payment Invitation & Invoice for the programme fee of <strong style="color:#e2e8f0">£1,200.00</strong> has been sent to this email address. Please check your inbox to complete the activation of your application.</p>
+      <p style="color:#94a3b8;font-size:12px;line-height:1.7;margin:0">A formal Payment Invitation and Invoice for the programme fee of <strong style="color:#e2e8f0">£1,200.00</strong> has been sent to this email address. Please check your inbox to complete the activation of your application.</p>
     </div>
     <div style="text-align:center;margin-bottom:20px">
       <a href="${p.statusUrl}" style="display:inline-block;background:#C9A84C;color:#0A0E1A;text-decoration:none;padding:14px 36px;border-radius:8px;font-weight:700;font-size:12px;letter-spacing:2px;text-transform:uppercase">Track My Application →</a>
@@ -168,7 +168,7 @@ function adminAlertEmail(p: { name: string; email: string; ref: string; venture:
 
 // ── Error page ────────────────────────────────────────────────────────────────
 function errorPage(title: string, msg: string): Response {
-  return new Response(`<!DOCTYPE html><html><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/><title>${title} — PEA</title></head>
+  return new Response(`<!DOCTYPE html><html><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/><title>${title} | PEA</title></head>
 <body style="margin:0;background:#0A0E1A;font-family:Arial,sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center">
 <div style="max-width:460px;background:#111827;border-radius:12px;overflow:hidden;text-align:center">
   <div style="background:#0d1220;border-bottom:3px solid #ef4444;padding:28px">
@@ -183,7 +183,7 @@ function errorPage(title: string, msg: string): Response {
 </div></body></html>`, { status: 400, headers: HTML_H });
 }
 
-// ── REGISTRATION FORM (v8 — AJAX, cinematic, no native submit) ────────────────
+// ── REGISTRATION FORM (v8 — AJAX, structured multi-step) ────────────────
 function registrationForm(token: string, ref: string, applicantName: string): string {
   const postUrl = `${DOMAIN}/api/functions/peaRegister`;
   return `<!DOCTYPE html>
@@ -191,7 +191,7 @@ function registrationForm(token: string, ref: string, applicantName: string): st
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>🏛️ AI-Powered Registration — Prime Endorsement Authority</title>
+<title>🏛️ Official Registration | Prime Endorsement Authority</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{--gold:#C9A84C;--gold2:#e8c96a;--dark:#0A0E1A;--card:#111827;--card2:#0d1220;--border:#1e293b;--muted:#64748b;--text:#e2e8f0;--sub:#94a3b8;--green:#22c55e;--red:#ef4444;--amber:#f59e0b}
@@ -333,7 +333,7 @@ main{max-width:740px;margin:0 auto;padding:32px 20px 80px}
 <!-- TOP BAR -->
 <div class="topbar">
   <div class="topbar-brand">Prime Endorsement Authority</div>
-  <div class="topbar-ai">⚡ AI-Powered</div>
+  <div class="topbar-ai">⚡ Secure Registration</div>
   <div class="topbar-ref" id="topRef">${ref ? `Ref: ${ref}` : ""}</div>
 </div>
 
@@ -357,14 +357,14 @@ main{max-width:740px;margin:0 auto;padding:32px 20px 80px}
   <div class="sec-head">
     <div class="sec-num">Section 1 of 5</div>
     <div class="sec-title">Personal Information</div>
-    <div class="sec-sub">Tell us about yourself — the individual applying for endorsement.</div>
+    <div class="sec-sub">Please provide your personal details as they appear on your official documents.</div>
   </div>
   <div class="ai-badge">
     <div class="ai-pulse"></div>
     <div><div style="color:var(--gold);font-size:12px;font-weight:700;margin-bottom:2px;letter-spacing:1px;text-transform:uppercase">Independent Expert Review</div><div style="color:var(--muted);font-size:11px;line-height:1.6">Your profile will be assessed by an assigned Reviewer and will be passed on to an approved Assessor upon submission</div></div>
   </div>
   <div class="card">
-    <div class="card-title">Full Legal Name & Contact</div>
+    <div class="card-title">Full Legal Name and Contact Details</div>
     <div class="grid2">
       <div class="field"><label>Full Name <span class="req">*</span></label><input type="text" name="applicant_name" id="f_name" value="${applicantName}" placeholder="As on passport"/></div>
       <div class="field"><label>Email Address <span class="req">*</span></label><input type="email" name="applicant_email" id="f_email" placeholder="your@email.com"/></div>
@@ -401,7 +401,7 @@ main{max-width:740px;margin:0 auto;padding:32px 20px 80px}
   <div class="sec-head">
     <div class="sec-num">Section 2 of 5</div>
     <div class="sec-title">Venture Details</div>
-    <div class="sec-sub">Describe your business — this is the core of your AI assessment.</div>
+    <div class="sec-sub">Provide details of your business venture and its core innovation proposition.</div>
   </div>
   <div class="card">
     <div class="card-title">Company Information</div>
@@ -473,7 +473,7 @@ main{max-width:740px;margin:0 auto;padding:32px 20px 80px}
   <div class="sec-head">
     <div class="sec-num">Section 4 of 5</div>
     <div class="sec-title">Supporting Documents</div>
-    <div class="sec-sub">Upload supporting documentation. Passport is mandatory — all others strengthen your application.</div>
+    <div class="sec-sub">Upload supporting documentation. A valid passport is mandatory. Additional documents strengthen your application.</div>
   </div>
   <div class="card">
     <div class="card-title">Identity & Business Documents</div>
@@ -572,10 +572,10 @@ main{max-width:740px;margin:0 auto;padding:32px 20px 80px}
 <div id="overlay">
   <div class="spin-ring"></div>
   <div class="spin-msg">Processing Application</div>
-  <div class="spin-sub">Please wait — do not close this page</div>
+  <div class="spin-sub">Please wait. Do not close this page.</div>
   <div class="spin-steps">
     <div class="spin-step" id="sp1"><span class="sicon">○</span> Validating your information</div>
-    <div class="spin-step" id="sp2"><span class="sicon">○</span> Running AI assessment</div>
+    <div class="spin-step" id="sp2"><span class="sicon">○</span> Processing preliminary assessment</div>
     <div class="spin-step" id="sp3"><span class="sicon">○</span> Saving your application</div>
     <div class="spin-step" id="sp4"><span class="sicon">○</span> Sending confirmation emails</div>
     <div class="spin-step" id="sp5"><span class="sicon">○</span> Dispatching payment invoice</div>
@@ -809,12 +809,12 @@ function showCompletion(data) {
 
     '<div class="pay-notice">' +
       '<div class="pay-notice-icon">💳</div>' +
-      '<div class="pay-notice-text"><strong>Payment Invoice Dispatched</strong><br>A formal Payment Invitation &amp; Invoice for <strong>£1,200.00</strong> has been sent to your email. Check your inbox to activate your application. A second email with your registration summary and AI assessment score has also been sent.</div>' +
+      '<div class="pay-notice-text"><strong>Payment Invoice Dispatched</strong><br>A formal Payment Invitation and Invoice for <strong>£1,200.00</strong> has been sent to your email address. Please check your inbox to complete activation. A registration confirmation email including your preliminary assessment score has also been dispatched.</div>' +
     '</div>' +
 
     '<div class="comp-grid">' +
       (score > 0 ? '<div class="comp-card">' +
-        '<div class="comp-card-title">AI Assessment</div>' +
+        '<div class="comp-card-title">Preliminary Assessment</div>' +
         '<div class="score-ring-wrap">' +
           '<div class="score-ring">' +
             '<svg width="64" height="64" viewBox="0 0 64 64"><circle cx="32" cy="32" r="' + radius + '" fill="none" stroke="rgba(201,168,76,.15)" stroke-width="5"/><circle cx="32" cy="32" r="' + radius + '" fill="none" stroke="' + scColor + '" stroke-width="5" stroke-dasharray="' + dash.toFixed(1) + ' ' + circ.toFixed(1) + '" stroke-linecap="round"/></svg>' +
@@ -823,7 +823,7 @@ function showCompletion(data) {
           '<div><div style="color:' + scColor + ';font-weight:700;font-size:13px">' + scLabel + '</div><div style="color:var(--muted);font-size:11px;margin-top:2px">Reviewer Assessment · ' + score + '/100</div></div>' +
         '</div>' +
         (summary ? '<p style="color:var(--sub);font-size:12px;line-height:1.7;margin-top:12px;padding:10px;background:#060c18;border-radius:6px;border-left:3px solid var(--gold)">' + summary + '</p>' : '') +
-      '</div>' : '<div class="comp-card"><div class="comp-card-title">AI Assessment</div><div style="color:var(--muted);font-size:12px;line-height:1.6">AI scoring will be completed by our review team. Score not available yet.</div></div>') +
+      '</div>' : '<div class="comp-card"><div class="comp-card-title">Preliminary Assessment</div><div style="color:var(--muted);font-size:12px;line-height:1.6">Assessment scoring will be completed by an assigned Reviewer. Score not yet available.</div></div>') +
 
       '<div class="comp-card">' +
         '<div class="comp-card-title">Key Strengths</div>' +
@@ -834,11 +834,11 @@ function showCompletion(data) {
     '<div class="comp-card" style="margin-bottom:20px">' +
       '<div class="comp-card-title">What Happens Next</div>' +
       '<div class="comp-steps">' +
-        '<div class="comp-step"><div class="comp-step-num">1</div><div class="comp-step-text"><strong>Check your inbox</strong> — Payment invoice (£1,200) sent to your email</div></div>' +
-        '<div class="comp-step"><div class="comp-step-num">2</div><div class="comp-step-text"><strong>Complete payment</strong> — Secure Stripe checkout · activates 90-day review</div></div>' +
-        '<div class="comp-step"><div class="comp-step-num">3</div><div class="comp-step-text"><strong>Structured Expert Review</strong> — Your application is assigned to a dedicated Reviewer and forwarded to an approved Assessor</div></div>' +
-        '<div class="comp-step"><div class="comp-step-num">4</div><div class="comp-step-text"><strong>Weekly updates</strong> — Status digests every Monday via email</div></div>' +
-        '<div class="comp-step"><div class="comp-step-num">5</div><div class="comp-step-text"><strong>Endorsement decision</strong> — Official letter issued upon successful review</div></div>' +
+        '<div class="comp-step"><div class="comp-step-num">1</div><div class="comp-step-text"><strong>Check your inbox</strong>: Payment invoice (£1,200) has been sent to your email address</div></div>' +
+        '<div class="comp-step"><div class="comp-step-num">2</div><div class="comp-step-text"><strong>Complete your payment</strong>: Secure checkout via Stripe, which activates your 90-day review period</div></div>' +
+        '<div class="comp-step"><div class="comp-step-num">3</div><div class="comp-step-text"><strong>Structured Expert Review</strong>: Your application is assigned to a dedicated Reviewer and forwarded to an approved Assessor</div></div>' +
+        '<div class="comp-step"><div class="comp-step-num">4</div><div class="comp-step-text"><strong>Weekly status updates</strong>: Progress digests delivered every Monday by email</div></div>' +
+        '<div class="comp-step"><div class="comp-step-num">5</div><div class="comp-step-text"><strong>Endorsement decision</strong>: Your official endorsement letter is issued upon successful review</div></div>' +
       '</div>' +
     '</div>' +
 
@@ -1037,11 +1037,11 @@ async function handlePost(req: Request): Promise<Response> {
 
   // Send registration completion email
   const compHtml = completionEmail({ name: applicantName, ref, venture, score: aiResult.score, summary: aiResult.summary, strengths: aiResult.strengths, statusUrl });
-  const compSent = await sendEmail(resendKey, email, `✅ Registration Complete — ${ref} | Prime Endorsement Authority`, compHtml);
+  const compSent = await sendEmail(resendKey, email, `✅ Registration Complete: ${ref} | Prime Endorsement Authority`, compHtml);
 
   // Send admin alert
   sendEmail(resendKey, ADMIN_EMAIL,
-    `🆕 New Application — ${ref} | ${applicantName} | Score: ${aiResult.score}/100`,
+    `🆕 New Application: ${ref} | ${applicantName} | Score: ${aiResult.score}/100`,
     adminAlertEmail({ name: applicantName, email, ref, venture, sector: fields.venture_sector, stage: fields.venture_stage, nationality: fields.nationality, role: fields.applicant_role, score: aiResult.score, recommendation: aiResult.recommendation, docsCount })
   ).catch(() => {});
 
