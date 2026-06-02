@@ -361,7 +361,7 @@ main{max-width:740px;margin:0 auto;padding:32px 20px 80px}
   </div>
   <div class="ai-badge">
     <div class="ai-pulse"></div>
-    <div><div style="color:var(--gold);font-size:12px;font-weight:700;margin-bottom:2px;letter-spacing:1px;text-transform:uppercase">Independent Expert Review</div><div style="color:var(--muted);font-size:11px;line-height:1.6">Your profile will be assessed by an assigned Reviewer and will be passed on to an approved Assessor upon submission</div></div>
+    <div><div style="color:var(--gold);font-size:12px;font-weight:700;margin-bottom:2px">AI-Assisted Review Active</div><div style="color:var(--muted);font-size:11px">Your profile will be assessed by GPT-4o-mini upon submission</div></div>
   </div>
   <div class="card">
     <div class="card-title">Full Legal Name & Contact</div>
@@ -820,7 +820,7 @@ function showCompletion(data) {
             '<svg width="64" height="64" viewBox="0 0 64 64"><circle cx="32" cy="32" r="' + radius + '" fill="none" stroke="rgba(201,168,76,.15)" stroke-width="5"/><circle cx="32" cy="32" r="' + radius + '" fill="none" stroke="' + scColor + '" stroke-width="5" stroke-dasharray="' + dash.toFixed(1) + ' ' + circ.toFixed(1) + '" stroke-linecap="round"/></svg>' +
             '<div class="score-ring-val" style="color:' + scColor + '">' + score + '</div>' +
           '</div>' +
-          '<div><div style="color:' + scColor + ';font-weight:700;font-size:13px">' + scLabel + '</div><div style="color:var(--muted);font-size:11px;margin-top:2px">Reviewer Assessment · ' + score + '/100</div></div>' +
+          '<div><div style="color:' + scColor + ';font-weight:700;font-size:13px">' + scLabel + '</div><div style="color:var(--muted);font-size:11px;margin-top:2px">GPT-4o-mini · ' + score + '/100</div></div>' +
         '</div>' +
         (summary ? '<p style="color:var(--sub);font-size:12px;line-height:1.7;margin-top:12px;padding:10px;background:#060c18;border-radius:6px;border-left:3px solid var(--gold)">' + summary + '</p>' : '') +
       '</div>' : '<div class="comp-card"><div class="comp-card-title">AI Assessment</div><div style="color:var(--muted);font-size:12px;line-height:1.6">AI scoring will be completed by our review team. Score not available yet.</div></div>') +
@@ -836,7 +836,7 @@ function showCompletion(data) {
       '<div class="comp-steps">' +
         '<div class="comp-step"><div class="comp-step-num">1</div><div class="comp-step-text"><strong>Check your inbox</strong> — Payment invoice (£1,200) sent to your email</div></div>' +
         '<div class="comp-step"><div class="comp-step-num">2</div><div class="comp-step-text"><strong>Complete payment</strong> — Secure Stripe checkout · activates 90-day review</div></div>' +
-        '<div class="comp-step"><div class="comp-step-num">3</div><div class="comp-step-text"><strong>Structured Expert Review</strong> — Your application is assigned to a dedicated Reviewer and forwarded to an approved Assessor</div></div>' +
+        '<div class="comp-step"><div class="comp-step-num">3</div><div class="comp-step-text"><strong>Expert review begins</strong> — Your application is assessed by our panel</div></div>' +
         '<div class="comp-step"><div class="comp-step-num">4</div><div class="comp-step-text"><strong>Weekly updates</strong> — Status digests every Monday via email</div></div>' +
         '<div class="comp-step"><div class="comp-step-num">5</div><div class="comp-step-text"><strong>Endorsement decision</strong> — Official letter issued upon successful review</div></div>' +
       '</div>' +
