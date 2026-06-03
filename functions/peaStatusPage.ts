@@ -69,7 +69,7 @@ export default async function handler(req: Request): Promise<Response> {
     invited:      { label: "Invitation Sent",      color: "#818cf8", bg: "#1e1b4b", step: 1 },
     submitted:    { label: "Submitted",             color: "#C9A84C", bg: "#1c1500", step: 2 },
     under_review: { label: "Under Review",          color: "#38bdf8", bg: "#0c1a2e", step: 3 },
-    ai_screening: { label: "AI Screening",          color: "#a78bfa", bg: "#1a1030", step: 3 },
+    ai_screening: { label: "Initial Screening",          color: "#a78bfa", bg: "#1a1030", step: 3 },
     payment_due:  { label: "Payment Required",      color: "#fb923c", bg: "#1c0f00", step: 3 },
     in_review:    { label: "Expert Review",         color: "#38bdf8", bg: "#0c1a2e", step: 4 },
     approved:     { label: "Endorsed ✓",            color: "#4ade80", bg: "#052e16", step: 5 },
@@ -117,7 +117,7 @@ export default async function handler(req: Request): Promise<Response> {
     <div class="info-cell"><div class="lbl">Role</div><div class="val">${appData.applicant_role}</div></div>
     <div class="info-cell"><div class="lbl">Venture</div><div class="val">${appData.venture_name}</div></div>
     <div class="info-cell"><div class="lbl">Payment</div><div class="val" style="color:${appData.payment_status === "paid" ? "#4ade80" : "#fb923c"}">${appData.payment_status === "paid" ? "Paid ✓" : "Pending"}</div></div>
-    ${appData.ai_score ? `<div class="info-cell"><div class="lbl">AI Score</div><div class="val" style="color:#C9A84C">${appData.ai_score}/100</div></div>` : ""}
+    ${appData.ai_score ? `<div class="info-cell"><div class="lbl">Assessment Score</div><div class="val" style="color:#C9A84C">${appData.ai_score}/100</div></div>` : ""}
   ` : "";
 
   // Pre-render server-side result if ref was provided
@@ -289,7 +289,7 @@ const STATUS_MAP={
   invited:{label:"Invitation Sent",color:"#818cf8",bg:"#1e1b4b",step:1},
   submitted:{label:"Submitted",color:"#C9A84C",bg:"#1c1500",step:2},
   under_review:{label:"Under Review",color:"#38bdf8",bg:"#0c1a2e",step:3},
-  ai_screening:{label:"AI Screening",color:"#a78bfa",bg:"#1a1030",step:3},
+  ai_screening:{label:"Initial Screening",color:"#a78bfa",bg:"#1a1030",step:3},
   payment_due:{label:"Payment Required",color:"#fb923c",bg:"#1c0f00",step:3},
   in_review:{label:"Expert Review",color:"#38bdf8",bg:"#0c1a2e",step:4},
   approved:{label:"Endorsed ✓",color:"#4ade80",bg:"#052e16",step:5},
@@ -318,7 +318,7 @@ function renderResult(d){
     ['Venture',d.venture_name||'—'],
     ['Payment',d.payment_status==='paid'?'Paid ✓':'Pending']
   ].map(([l,v])=>'<div class="info-cell"><div class="lbl">'+l+'</div><div class="val" style="'+(l==='Payment'?(d.payment_status==='paid'?'color:#4ade80':'color:#fb923c'):'')+'">'+v+'</div></div>').join('');
-  document.getElementById('infoGrid').innerHTML=infoHTML+(d.ai_score?'<div class="info-cell"><div class="lbl">AI Score</div><div class="val" style="color:#C9A84C">'+d.ai_score+'/100</div></div>':'');
+  document.getElementById('infoGrid').innerHTML=infoHTML+(d.ai_score?'<div class="info-cell"><div class="lbl">Assessment Score</div><div class="val" style="color:#C9A84C">'+d.ai_score+'/100</div></div>':'');
 
   const stepsHTML=STEPS.map((s,i)=>{
     const done=i<sd.step,active=i===sd.step;
