@@ -98,16 +98,16 @@ function normalise(a: any) {
 export default async function handler(req: Request): Promise<Response> {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: H });
 
-  const url  = new URL(req.url);
-  const key  = req.headers.get("X-Admin-Token") || url.searchParams.get("adminKey") || "";
-  const path = url.pathname.replace(/.*\/peaAdminDashboard/, "") || "/";
+  const url   = new URL(req.url);
+  const key   = req.headers.get("X-Admin-Token") || url.searchParams.get("adminKey") || "";
+  const route = url.searchParams.get("_route") || "";
 
   // ── API routes (JSON) ─────────────────────────────────────────────────────
-  if (path.startsWith("/api/")) {
+  if (route) {
     if (key !== _admin) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: HJSON });
 
-    // GET /api/applications
-    if (req.method === "GET" && path === "/api/applications") {
+    // GET ?_route=applications
+    if (req.method === "GET" && route === "applications") {
       try {
         const records = await fetchDB();
         return new Response(JSON.stringify({ ok: true, records: records.map(normalise), ts: Date.now() }), { headers: HJSON });
@@ -116,8 +116,8 @@ export default async function handler(req: Request): Promise<Response> {
       }
     }
 
-    // POST /api/action
-    if (req.method === "POST" && path === "/api/action") {
+    // POST ?_route=action
+    if (req.method === "POST" && route === "action") {
       try {
         const body = await req.json();
         const { action, id, ref, email, name, venture, notes, reason } = body;
@@ -802,7 +802,7 @@ async function loadData(manual=false){
   const btn=document.getElementById("refreshBtn");
   btn.classList.add("spinning");
   try{
-    const r = await fetch(API_BASE+"/api/applications",{
+    const r = await fetch(API_BASE+"?_route=applications",{
       headers:{"X-Admin-Token":ADMIN_KEY}
     });
     if(r.status===401){
@@ -1151,7 +1151,7 @@ async function quickEndorse(id){
 
 async function apiCall(body){
   try{
-    const r=await fetch(API_BASE+"/api/action",{
+    const r=await fetch(API_BASE+"?_route=action",{
       method:"POST",
       headers:{"Content-Type":"application/json","X-Admin-Token":ADMIN_KEY},
       body:JSON.stringify(body)

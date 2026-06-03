@@ -154,12 +154,27 @@ export default async function handler(req: Request): Promise<Response> {
   if (req.method === "OPTIONS") return new Response(null, { headers: CORS });
 
   try {
+    const reqUrl      = new URL(req.url);
     const body        = await req.json().catch(() => ({})) as Record<string, any>;
-    const session_id  = (body.session_id || body.sessionId || "").trim();
-    const ref_param   = (body.ref || body.reference_code || "").trim();
+
+    let session_id  = (body.session_id || body.sessionId || reqUrl.searchParams.get("session_id") || "").trim();
+    let ref_param   = (body.ref || body.reference_code || reqUrl.searchParams.get("ref") || "").trim();
+
+    // If only ref provided, resolve stripe_session_id from DB
+    if (!session_id && ref_param) {
+      const svcTok = Deno.env.get("BASE44_SERVICE_TOKEN") || "";
+      const dbR = await fetch(`https://app.base44.com/api/apps/${BUILDER_APP}/entities/Application`, {
+        headers: { Authorization: `Bearer ${svcTok}` },
+      });
+      if (dbR.ok) {
+        const all = await dbR.json() as any[];
+        const match = all.find((r: any) => r.reference_code === ref_param.toUpperCase());
+        if (match) session_id = (match.stripe_session_id || "").trim();
+      }
+    }
 
     if (!session_id) {
-      return new Response(JSON.stringify({ success: false, error: "session_id is required" }), { status: 400, headers: CORS });
+      return new Response(JSON.stringify({ success: false, error: "session_id or ref required" }), { status: 400, headers: CORS });
     }
 
     const stripeKey    = Deno.env.get("STRIPE_SECRET_KEY") || "";
