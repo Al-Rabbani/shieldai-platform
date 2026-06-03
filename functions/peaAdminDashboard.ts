@@ -141,7 +141,7 @@ export default async function handler(req: Request): Promise<Response> {
                 <p style="color:#e2e8f0;margin-bottom:16px">Dear ${ap.name},</p>
                 <p style="color:#94a3b8;line-height:1.7;margin-bottom:16px">We are pleased to inform you that the Prime Endorsement Authority has reviewed your application (Reference: <strong style="color:#C9A84C">${ap.ref}</strong>) and your venture <strong>${ap.venture}</strong> has been formally <strong style="color:#4ade80">ENDORSED</strong>.</p>
                 <p style="color:#94a3b8;line-height:1.7;margin-bottom:16px">Your 90-day expert assessment period has now commenced. Your digitally signed endorsement certificate will be issued within 5 business days.</p>
-                ${notes ? `<div style="background:rgba(201,168,76,0.06);border-left:3px solid #C9A84C;padding:12px 16px;border-radius:0 4px 4px 0;margin-bottom:16px"><p style="color:#C9A84C;font-size:12px;margin-bottom:4px">REVIEWER NOTES</p><p style="color:#94a3b8;font-size:13px">${notes}</p></div>` : ""}
+                ${notes ? '<div style="background:rgba(201,168,76,0.06);border-left:3px solid #C9A84C;padding:12px 16px;border-radius:0 4px 4px 0;margin-bottom:16px"><p style="color:#C9A84C;font-size:12px;margin-bottom:4px">REVIEWER NOTES</p><p style="color:#94a3b8;font-size:13px">'+notes+'</p></div>' : ""}
                 <p style="color:#64748b;font-size:12px;margin-top:24px">Prime Endorsement Authority · admin@primeendorsement.com</p>
               </div>
             </div>`);
@@ -159,7 +159,7 @@ export default async function handler(req: Request): Promise<Response> {
                 </div>
                 <p style="color:#e2e8f0;margin-bottom:16px">Dear ${ap.name},</p>
                 <p style="color:#94a3b8;line-height:1.7;margin-bottom:16px">Following a thorough review of your application (Reference: <strong style="color:#C9A84C">${ap.ref}</strong>), we regret to inform you that your application for Prime Endorsement has not been successful at this time.</p>
-                ${reason ? `<div style="background:rgba(239,68,68,0.06);border-left:3px solid #ef4444;padding:12px 16px;border-radius:0 4px 4px 0;margin-bottom:16px"><p style="color:#ef4444;font-size:12px;margin-bottom:4px">DECISION RATIONALE</p><p style="color:#94a3b8;font-size:13px">${reason}</p></div>` : ""}
+                ${reason ? '<div style="background:rgba(239,68,68,0.06);border-left:3px solid #ef4444;padding:12px 16px;border-radius:0 4px 4px 0;margin-bottom:16px"><p style="color:#ef4444;font-size:12px;margin-bottom:4px">DECISION RATIONALE</p><p style="color:#94a3b8;font-size:13px">'+reason+'</p></div>' : ""}
                 <p style="color:#94a3b8;line-height:1.7;margin-bottom:16px">A formal decision letter with detailed feedback will be sent separately. You may appeal this decision within 28 days.</p>
                 <p style="color:#64748b;font-size:12px;margin-top:24px">Prime Endorsement Authority · admin@primeendorsement.com</p>
               </div>
@@ -178,7 +178,7 @@ export default async function handler(req: Request): Promise<Response> {
                 </div>
                 <p style="color:#e2e8f0;margin-bottom:16px">Dear ${ap.name},</p>
                 <p style="color:#94a3b8;line-height:1.7;margin-bottom:16px">The review panel for your application (Reference: <strong style="color:#C9A84C">${ap.ref}</strong>) requires additional information before proceeding.</p>
-                ${notes ? `<div style="background:rgba(251,191,36,0.06);border-left:3px solid #fbbf24;padding:12px 16px;border-radius:0 4px 4px 0;margin-bottom:16px"><p style="color:#fbbf24;font-size:12px;margin-bottom:4px">INFORMATION REQUIRED</p><p style="color:#94a3b8;font-size:13px">${notes}</p></div>` : ""}
+                ${notes ? '<div style="background:rgba(251,191,36,0.06);border-left:3px solid #fbbf24;padding:12px 16px;border-radius:0 4px 4px 0;margin-bottom:16px"><p style="color:#fbbf24;font-size:12px;margin-bottom:4px">INFORMATION REQUIRED</p><p style="color:#94a3b8;font-size:13px">'+notes+'</p></div>' : ""}
                 <p style="color:#94a3b8;line-height:1.7;margin-bottom:16px">Please respond within <strong>14 days</strong> to avoid delays to your assessment. Reply directly to this email or contact admin@primeendorsement.com.</p>
                 <p style="color:#64748b;font-size:12px;margin-top:24px">Prime Endorsement Authority · admin@primeendorsement.com</p>
               </div>
