@@ -1045,6 +1045,12 @@ async function handlePost(req: Request): Promise<Response> {
   const compHtml = completionEmail({ name: applicantName, ref, venture, score: aiResult.score, summary: aiResult.summary, strengths: aiResult.strengths, statusUrl });
   const compSent = await sendEmail(resendKey, email, `✅ Registration Complete: ${ref} | Prime Endorsement Authority`, compHtml);
 
+  // Update DB with actual email send result (initial record had registration_email_sent: false)
+  await dbUpdate(BUILDER_APP, "Application", appRec.id, serviceToken, { registration_email_sent: compSent });
+  if (agentRec) {
+    await dbUpdate(AGENT_APP, "Application", agentRec.id, serviceToken, { registration_email_sent: compSent });
+  }
+
   // Send admin alert
   sendEmail(resendKey, ADMIN_EMAIL,
     `🆕 New Application: ${ref} | ${applicantName} | Score: ${aiResult.score}/100`,
