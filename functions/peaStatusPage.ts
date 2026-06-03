@@ -10,13 +10,15 @@ const BASE44_API    = "https://app.base44.com/api";
 async function dbFindByRef(appId: string, entity: string, ref: string): Promise<any | null> {
   if (!SERVICE_TOKEN) return null;
   try {
+    // Fetch ALL records and filter in-memory (query param filtering is unreliable in Deno runtime)
     const r = await fetch(
-      `${BASE44_API}/apps/${appId}/entities/${entity}?reference_code=${encodeURIComponent(ref)}`,
+      `${BASE44_API}/apps/${appId}/entities/${entity}`,
       { headers: { Authorization: `Bearer ${SERVICE_TOKEN}` }, signal: AbortSignal.timeout(8000) }
     );
     if (!r.ok) return null;
     const rows = await r.json();
-    return Array.isArray(rows) ? (rows[0] || null) : null;
+    const all = Array.isArray(rows) ? rows : (rows.records || []);
+    return all.find((a: any) => a.reference_code === ref) || null;
   } catch { return null; }
 }
 
@@ -109,7 +111,7 @@ export default async function handler(req: Request): Promise<Response> {
     return `<div class="step-node">
       <div class="step-circle" style="background:${bg};color:${tc}">${done ? "✓" : i + 1}</div>
       <div class="step-lbl" style="color:${lc}">${s}</div>
-    </div>${!isLast ? `<div class="step-connector" style="background:${done ? "#C9A84C" : "#1e293b"}"></div>` : ""}`;
+    </div>${!isLast ? '<div class="step-connector" style="background:' + (done ? "#C9A84C" : "#1e293b") + '"></div>' : ""}`;
   }).join("");
 
   const infoHTML = appData ? `
@@ -117,7 +119,7 @@ export default async function handler(req: Request): Promise<Response> {
     <div class="info-cell"><div class="lbl">Role</div><div class="val">${appData.applicant_role}</div></div>
     <div class="info-cell"><div class="lbl">Venture</div><div class="val">${appData.venture_name}</div></div>
     <div class="info-cell"><div class="lbl">Payment</div><div class="val" style="color:${appData.payment_status === "paid" ? "#4ade80" : "#fb923c"}">${appData.payment_status === "paid" ? "Paid ✓" : "Pending"}</div></div>
-    ${appData.ai_score ? `<div class="info-cell"><div class="lbl">Assessment Score</div><div class="val" style="color:#C9A84C">${appData.ai_score}/100</div></div>` : ""}
+    ${appData.ai_score ? '<div class="info-cell"><div class="lbl">Assessment Score</div><div class="val" style="color:#C9A84C">' + appData.ai_score + '/100</div></div>' : ""}
   ` : "";
 
   // Pre-render server-side result if ref was provided
