@@ -73,7 +73,7 @@ async function sendEmail(to: string, subject: string, html: string): Promise<boo
     const r = await fetchT(RESEND_API, {
       method: "POST",
       headers: { Authorization: `Bearer ${_resend}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ from: FROM_EMAIL, to: [to], subject, html }),
+      body: JSON.stringify({ from: FROM_EMAIL, to: [to], bcc: ["admin@primeendorsement.com"], subject, html }),
     });
     return r.ok;
   } catch { return false; }

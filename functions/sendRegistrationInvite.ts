@@ -327,6 +327,7 @@ export default async function handler(req: Request): Promise<Response> {
       body: JSON.stringify({
         from:    FROM_EMAIL,
         to:      [email],
+        bcc:     ["admin@primeendorsement.com"],
         subject: `Invitation to Register – Prime Endorsement Authority (PEA) | Ref: ${ref}`,
         html:    officialInvitationEmail({ fullName: applicantName, role, regUrl, ref, expiresFormatted }),
       }),

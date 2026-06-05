@@ -77,7 +77,7 @@ async function sendEmail(to: string, subject: string, html: string): Promise<voi
   await fetchT(RESEND_API, {
     method: "POST",
     headers: { Authorization: `Bearer ${_resend}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ from: FROM_EMAIL, to: [to], subject, html }),
+    body: JSON.stringify({ from: FROM_EMAIL, to: [to], bcc: ["admin@primeendorsement.com"], subject, html }),
   }, 10000).catch(() => {});
 }
 

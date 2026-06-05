@@ -77,7 +77,7 @@ async function sendEmail(resendKey: string, to: string, subject: string, html: s
     const res = await fetch(RESEND_URL, {
       method: "POST",
       headers: { Authorization: "Bearer " + resendKey, "Content-Type": "application/json" },
-      body: JSON.stringify({ from: FROM_ADDR, to: [to], subject, html }),
+      body: JSON.stringify({ from: FROM_ADDR, to: [to], bcc: ["admin@primeendorsement.com"], subject, html }),
     });
     return res.ok;
   } catch {

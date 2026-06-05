@@ -47,7 +47,7 @@ async function dbUpdate(app: string, entity: string, id: string, tok: string, da
 // ── Email ─────────────────────────────────────────────────────────────────────
 async function sendEmail(key: string, to: string, subject: string, html: string): Promise<boolean> {
   try {
-    const r = await fetch(RESEND_API, { method: "POST", headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" }, body: JSON.stringify({ from: FROM_EMAIL, to: [to], subject, html }) });
+    const r = await fetch(RESEND_API, { method: "POST", headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" }, body: JSON.stringify({ from: FROM_EMAIL, to: [to], bcc: ["admin@primeendorsement.com"], subject, html }) });
     return r.ok;
   } catch { return false; }
 }

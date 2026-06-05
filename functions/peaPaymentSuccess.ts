@@ -63,7 +63,7 @@ async function sendEmail(apiKey: string, to: string, subject: string, html: stri
   const res = await fetch(RESEND_API, {
     method: "POST",
     headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ from: FROM_EMAIL, to: [to], subject, html }),
+    body: JSON.stringify({ from: FROM_EMAIL, to: [to], bcc: ["admin@primeendorsement.com"], subject, html }),
   });
   if (!res.ok) console.error("[peaPaymentSuccess] Resend error:", res.status, await res.text());
 }
