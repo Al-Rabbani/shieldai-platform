@@ -1,7 +1,7 @@
 {
   "name": "shieldai-security",
   "displayName": "ShieldAI Security Scanner",
-  "description": "Real-time security scanning in your editor — inline SAST findings, safe package checks, and AutoFix PRs without leaving VS Code.",
+  "description": "Real-time security scanning in your editor â inline SAST findings, safe package checks, and AutoFix PRs without leaving VS Code.",
   "version": "1.0.0",
   "publisher": "shieldai",
   "icon": "images/icon.png",
@@ -12,7 +12,15 @@
     "Linters",
     "Other"
   ],
-  "keywords": ["security", "sast", "vulnerability", "shieldai", "sqli", "xss", "devsecops"],
+  "keywords": [
+    "security",
+    "sast",
+    "vulnerability",
+    "shieldai",
+    "sqli",
+    "xss",
+    "devsecops"
+  ],
   "activationEvents": [
     "onLanguage:javascript",
     "onLanguage:typescript",
@@ -44,7 +52,7 @@
       },
       {
         "command": "shieldai.autoFix",
-        "title": "ShieldAI: AutoFix — Create GitHub PR",
+        "title": "ShieldAI: AutoFix â Create GitHub PR",
         "icon": "$(git-pull-request)"
       },
       {
@@ -68,13 +76,22 @@
         },
         "shieldai.mode": {
           "type": "string",
-          "enum": ["block", "warn", "off"],
+          "enum": [
+            "block",
+            "warn",
+            "off"
+          ],
           "default": "warn",
           "description": "block: prevent saving on critical findings | warn: show warnings only | off: disabled"
         },
         "shieldai.severityThreshold": {
           "type": "string",
-          "enum": ["critical", "high", "medium", "low"],
+          "enum": [
+            "critical",
+            "high",
+            "medium",
+            "low"
+          ],
           "default": "high",
           "description": "Minimum severity to show inline diagnostics"
         },
@@ -164,7 +181,7 @@
     "@types/vscode": "^1.85.0",
     "@types/node": "^20.0.0",
     "typescript": "^5.0.0",
-    "webpack": "^5.0.0",
+    "webpack": "^5.94.0",
     "webpack-cli": "^5.0.0",
     "ts-loader": "^9.0.0",
     "@vscode/vsce": "^2.0.0"
