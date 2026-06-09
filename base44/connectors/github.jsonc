@@ -2,8 +2,6 @@
   "type": "github",
   "scopes": [
     "repo",
-    "read:org",
-    "read:user",
-    "security_events"
+    "workflow"
   ]
 }
