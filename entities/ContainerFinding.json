@@ -8,14 +8,7 @@
       "type": "string"
     },
     "category": {
-      "type": "string",
-      "enum": [
-        "CVE",
-        "Misconfiguration",
-        "Secret",
-        "Malware",
-        "License"
-      ]
+      "type": "string"
     },
     "title": {
       "type": "string"
@@ -34,9 +27,10 @@
       "type": "string",
       "enum": [
         "open",
+        "in_remediation",
         "fixed",
-        "suppressed",
-        "false_positive"
+        "accepted_risk",
+        "suppressed"
       ]
     },
     "package": {
@@ -62,6 +56,21 @@
     },
     "detected_at": {
       "type": "string"
+    },
+    "is_reachable": {
+      "type": "boolean"
+    },
+    "reachability_path": {
+      "type": "string"
+    },
+    "internet_exposed": {
+      "type": "boolean"
+    },
+    "exposure_reason": {
+      "type": "string"
+    },
+    "risk_adjusted_score": {
+      "type": "number"
     }
   },
   "required": [],

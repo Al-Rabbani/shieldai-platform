@@ -1,0 +1,73 @@
+{
+  "type": "object",
+  "properties": {
+    "asset": {
+      "type": "string"
+    },
+    "asset_type": {
+      "type": "string",
+      "enum": [
+        "subdomain",
+        "ip_address",
+        "api_endpoint",
+        "open_port",
+        "exposed_service",
+        "cloud_storage",
+        "login_page",
+        "admin_panel",
+        "legacy_endpoint"
+      ]
+    },
+    "url": {
+      "type": "string"
+    },
+    "ip": {
+      "type": "string"
+    },
+    "port": {
+      "type": "number"
+    },
+    "protocol": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "inactive",
+        "unknown",
+        "taken_down"
+      ]
+    },
+    "risk_level": {
+      "type": "string",
+      "enum": [
+        "critical",
+        "high",
+        "medium",
+        "low",
+        "info"
+      ]
+    },
+    "is_internet_facing": {
+      "type": "boolean"
+    },
+    "technologies": {
+      "type": "string"
+    },
+    "last_seen": {
+      "type": "string"
+    },
+    "first_seen": {
+      "type": "string"
+    },
+    "finding_count": {
+      "type": "number"
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": [],
+  "name": "AttackSurface"
+}
