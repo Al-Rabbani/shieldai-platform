@@ -364,7 +364,7 @@ Deno.serve(async (req) => {
         safeFetch(testUrl, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ username: "test@test.com", password: "wrongpassword123" }),
+          body: JSON.stringify({ username: Deno.env.get("DAST_TEST_USERNAME") || "probe@shieldai.internal", password: Deno.env.get("DAST_TEST_PASSWORD") || "probe-only-no-access" }),
         })
       );
       const responses = await Promise.allSettled(promises);
