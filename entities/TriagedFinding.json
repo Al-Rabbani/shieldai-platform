@@ -21,7 +21,8 @@
         "in_remediation",
         "fixed",
         "accepted_risk",
-        "false_positive"
+        "false_positive",
+        "ignored"
       ]
     },
     "source_scanners": {
@@ -44,6 +45,9 @@
     "exploitability": {
       "type": "string",
       "enum": [
+        "high",
+        "medium",
+        "low",
         "exploited_in_wild",
         "poc_available",
         "theoretical",
@@ -73,7 +77,10 @@
         "container",
         "vm",
         "api_endpoint",
-        "domain"
+        "domain",
+        "web_application",
+        "kubernetes",
+        "virtual_machine"
       ]
     },
     "owner_team": {
