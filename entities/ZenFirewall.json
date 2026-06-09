@@ -1,0 +1,95 @@
+{
+  "type": "object",
+  "properties": {
+    "app_name": {
+      "type": "string"
+    },
+    "language": {
+      "type": "string",
+      "enum": [
+        "nodejs",
+        "python",
+        "java",
+        "php",
+        "dotnet",
+        "ruby",
+        "go"
+      ]
+    },
+    "framework": {
+      "type": "string"
+    },
+    "install_status": {
+      "type": "string",
+      "enum": [
+        "installed",
+        "dry_run",
+        "not_installed",
+        "error"
+      ]
+    },
+    "mode": {
+      "type": "string",
+      "enum": [
+        "blocking",
+        "dry_run",
+        "monitoring"
+      ]
+    },
+    "version": {
+      "type": "string"
+    },
+    "environment": {
+      "type": "string",
+      "enum": [
+        "production",
+        "staging",
+        "development"
+      ]
+    },
+    "attacks_blocked_today": {
+      "type": "number"
+    },
+    "attacks_blocked_total": {
+      "type": "number"
+    },
+    "rate_limit_triggers": {
+      "type": "number"
+    },
+    "false_positives": {
+      "type": "number"
+    },
+    "uptime_pct": {
+      "type": "number"
+    },
+    "avg_overhead_ms": {
+      "type": "number"
+    },
+    "protected_endpoints": {
+      "type": "number"
+    },
+    "openapi_endpoints_discovered": {
+      "type": "number"
+    },
+    "bot_requests_blocked": {
+      "type": "number"
+    },
+    "country_blocks_active": {
+      "type": "number"
+    },
+    "last_attack_at": {
+      "type": "string"
+    },
+    "installed_at": {
+      "type": "string"
+    },
+    "repo_url": {
+      "type": "string"
+    },
+    "install_command": {
+      "type": "string"
+    }
+  },
+  "required": [],
+  "name": "ZenFirewall"
+}

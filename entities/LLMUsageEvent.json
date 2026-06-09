@@ -1,0 +1,75 @@
+{
+  "type": "object",
+  "properties": {
+    "app_name": {
+      "type": "string"
+    },
+    "model": {
+      "type": "string"
+    },
+    "provider": {
+      "type": "string",
+      "enum": [
+        "openai",
+        "anthropic",
+        "google",
+        "mistral",
+        "cohere",
+        "huggingface",
+        "azure_openai",
+        "aws_bedrock",
+        "self_hosted"
+      ]
+    },
+    "endpoint_called": {
+      "type": "string"
+    },
+    "tokens_in": {
+      "type": "number"
+    },
+    "tokens_out": {
+      "type": "number"
+    },
+    "cost_usd": {
+      "type": "number"
+    },
+    "latency_ms": {
+      "type": "number"
+    },
+    "data_destination": {
+      "type": "string"
+    },
+    "data_destination_region": {
+      "type": "string"
+    },
+    "user_id": {
+      "type": "string"
+    },
+    "prompt_injection_detected": {
+      "type": "boolean"
+    },
+    "pii_detected": {
+      "type": "boolean"
+    },
+    "pii_types": {
+      "type": "string"
+    },
+    "compliance_flag": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "allowed",
+        "blocked",
+        "flagged",
+        "logged"
+      ]
+    },
+    "called_at": {
+      "type": "string"
+    }
+  },
+  "required": [],
+  "name": "LLMUsageEvent"
+}
