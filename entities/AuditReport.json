@@ -1,0 +1,65 @@
+{
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string"
+    },
+    "report_type": {
+      "type": "string",
+      "enum": [
+        "executive_summary",
+        "technical_detail",
+        "compliance_report",
+        "pentest_report",
+        "vulnerability_report"
+      ]
+    },
+    "framework": {
+      "type": "string"
+    },
+    "overall_score": {
+      "type": "number"
+    },
+    "critical_count": {
+      "type": "number"
+    },
+    "high_count": {
+      "type": "number"
+    },
+    "medium_count": {
+      "type": "number"
+    },
+    "low_count": {
+      "type": "number"
+    },
+    "pillars_covered": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "draft",
+        "review",
+        "final",
+        "published"
+      ]
+    },
+    "generated_at": {
+      "type": "string"
+    },
+    "period_start": {
+      "type": "string"
+    },
+    "period_end": {
+      "type": "string"
+    },
+    "summary": {
+      "type": "string"
+    },
+    "share_token": {
+      "type": "string"
+    }
+  },
+  "required": [],
+  "name": "AuditReport"
+}

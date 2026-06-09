@@ -1,0 +1,57 @@
+{
+  "type": "object",
+  "properties": {
+    "framework": {
+      "type": "string"
+    },
+    "control_id": {
+      "type": "string"
+    },
+    "control_title": {
+      "type": "string"
+    },
+    "evidence_type": {
+      "type": "string",
+      "enum": [
+        "scan_report",
+        "policy_doc",
+        "audit_log",
+        "screenshot",
+        "config_export",
+        "attestation",
+        "test_result"
+      ]
+    },
+    "title": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "source": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "valid",
+        "expired",
+        "pending_review"
+      ]
+    },
+    "collected_at": {
+      "type": "string"
+    },
+    "expires_at": {
+      "type": "string"
+    },
+    "file_url": {
+      "type": "string"
+    },
+    "auto_generated": {
+      "type": "boolean"
+    }
+  },
+  "required": [],
+  "name": "EvidencePack"
+}

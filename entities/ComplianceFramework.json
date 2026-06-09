@@ -1,0 +1,58 @@
+{
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "enum": [
+        "SOC2",
+        "ISO27001",
+        "GDPR",
+        "HIPAA",
+        "PCI_DSS",
+        "NIST_CSF",
+        "CIS_Benchmark"
+      ]
+    },
+    "version": {
+      "type": "string"
+    },
+    "total_controls": {
+      "type": "number"
+    },
+    "passing": {
+      "type": "number"
+    },
+    "failing": {
+      "type": "number"
+    },
+    "not_tested": {
+      "type": "number"
+    },
+    "score": {
+      "type": "number"
+    },
+    "last_assessed": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "compliant",
+        "partial",
+        "non_compliant",
+        "not_started"
+      ]
+    },
+    "owner": {
+      "type": "string"
+    },
+    "next_audit": {
+      "type": "string"
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": [],
+  "name": "ComplianceFramework"
+}

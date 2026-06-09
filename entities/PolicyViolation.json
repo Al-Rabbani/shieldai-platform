@@ -1,0 +1,66 @@
+{
+  "type": "object",
+  "properties": {
+    "policy_name": {
+      "type": "string"
+    },
+    "framework": {
+      "type": "string"
+    },
+    "control_id": {
+      "type": "string"
+    },
+    "resource": {
+      "type": "string"
+    },
+    "resource_type": {
+      "type": "string"
+    },
+    "severity": {
+      "type": "string",
+      "enum": [
+        "critical",
+        "high",
+        "medium",
+        "low"
+      ]
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "open",
+        "in_remediation",
+        "resolved",
+        "accepted_risk"
+      ]
+    },
+    "description": {
+      "type": "string"
+    },
+    "remediation": {
+      "type": "string"
+    },
+    "detected_at": {
+      "type": "string"
+    },
+    "resolved_at": {
+      "type": "string"
+    },
+    "assignee": {
+      "type": "string"
+    },
+    "source": {
+      "type": "string",
+      "enum": [
+        "cloud_scan",
+        "code_scan",
+        "dast",
+        "k8s_scan",
+        "container_scan",
+        "manual"
+      ]
+    }
+  },
+  "required": [],
+  "name": "PolicyViolation"
+}
