@@ -80,7 +80,7 @@ Deno.serve(async (req) => {
       headers: H,
       body: JSON.stringify({
         repo_full_name: "company/" + agent.repo,
-        github_token: Deno.env.get("GITHUB_TOKEN") || "mock_token",
+        github_token: Deno.env.get("GITHUB_TOKEN") || "",
         ai_review: true,
       }),
     }).catch(() => null);
