@@ -23,40 +23,37 @@ Deno.serve(async (req) => {
   const BASE = `https://app.base44.com/api/apps/${APP_ID}`;
   const H = { Authorization: `Bearer ${TOKEN}`, "Content-Type": "application/json" };
 
-  // Agent configuration — each agent targets a different app/service
+  // Agent configuration — REAL targets only (no fictional repos)
   const AGENTS = [
     {
       type: "sast",
       name: "SAST Engine",
-      target: "api-gateway-service",
-      description: "Scans API Gateway code for vulnerabilities",
-      repo: "internal/api-gateway-service",
-      languages: ["typescript", "python"],
-    },
-    {
-      type: "cloud",
-      name: "Cloud Scanner",
-      target: "aws-production",
-      description: "Checks AWS production environment for misconfigurations",
-      provider: "aws",
-      region: "us-east-1",
-    },
-    {
-      type: "runtime",
-      name: "Runtime Protector",
-      target: "payment-api",
-      description: "Monitors payment API for attacks and anomalies",
-      endpoint: "https://api.internal.company/payments",
-      services: ["payment-processor", "fraud-detection"],
+      target: "shieldai-platform",
+      description: "Scans Al-Rabbani/shieldai-platform for SAST vulnerabilities",
+      repo: "Al-Rabbani/shieldai-platform",
+      languages: ["typescript"],
     },
     {
       type: "sca",
       name: "Dependency Scout",
-      target: "ml-inference-engine",
-      description: "Scans ML inference dependencies for supply chain risks",
-      repo: "internal/ml-inference-engine",
-      language: "python",
-      package_manager: "pip",
+      target: "shieldai-platform-sca",
+      description: "Scans shieldai-platform for SCA/supply chain risks via OSV.dev",
+      repo: "Al-Rabbani/shieldai-platform",
+      language: "typescript",
+      package_manager: "npm",
+    },
+    {
+      type: "dast",
+      name: "DAST Scanner",
+      target: "primeendorsement.com",
+      description: "Passive DAST scan of primeendorsement.com for live web vulnerabilities",
+      endpoint: "https://primeendorsement.com",
+    },
+    {
+      type: "threat_intel",
+      name: "Threat Intel Fetcher",
+      target: "global-feeds",
+      description: "Fetches latest CVEs from CISA KEV, NVD NIST, OSV.dev, GitHub Advisory",
     },
   ];
 
