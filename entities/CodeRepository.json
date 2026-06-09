@@ -1,0 +1,94 @@
+{
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string"
+    },
+    "full_name": {
+      "type": "string"
+    },
+    "provider": {
+      "type": "string",
+      "enum": [
+        "github",
+        "gitlab",
+        "bitbucket",
+        "azure_devops"
+      ]
+    },
+    "url": {
+      "type": "string"
+    },
+    "default_branch": {
+      "type": "string"
+    },
+    "language": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "connected",
+        "scanning",
+        "error",
+        "disconnected"
+      ]
+    },
+    "last_scanned": {
+      "type": "string"
+    },
+    "total_findings": {
+      "type": "number"
+    },
+    "critical_count": {
+      "type": "number"
+    },
+    "high_count": {
+      "type": "number"
+    },
+    "medium_count": {
+      "type": "number"
+    },
+    "low_count": {
+      "type": "number"
+    },
+    "risk_score": {
+      "type": "number"
+    },
+    "outdated_deps": {
+      "type": "number"
+    },
+    "eol_packages": {
+      "type": "number"
+    },
+    "license_violations": {
+      "type": "number"
+    },
+    "code_quality_score": {
+      "type": "number"
+    },
+    "tech_debt_hours": {
+      "type": "number"
+    },
+    "duplicated_lines_pct": {
+      "type": "number"
+    },
+    "test_coverage_pct": {
+      "type": "number"
+    },
+    "is_private": {
+      "type": "boolean"
+    },
+    "team": {
+      "type": "string"
+    },
+    "stars": {
+      "type": "number"
+    },
+    "open_prs": {
+      "type": "number"
+    }
+  },
+  "required": [],
+  "name": "CodeRepository"
+}

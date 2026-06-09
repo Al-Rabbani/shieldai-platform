@@ -1,0 +1,77 @@
+{
+  "type": "object",
+  "properties": {
+    "repo_id": {
+      "type": "string"
+    },
+    "repo_name": {
+      "type": "string"
+    },
+    "package_name": {
+      "type": "string"
+    },
+    "version": {
+      "type": "string"
+    },
+    "registry": {
+      "type": "string",
+      "enum": [
+        "npm",
+        "pypi",
+        "rubygems",
+        "maven",
+        "nuget",
+        "cargo",
+        "go"
+      ]
+    },
+    "license": {
+      "type": "string"
+    },
+    "risk_level": {
+      "type": "string",
+      "enum": [
+        "critical",
+        "high",
+        "medium",
+        "low",
+        "safe"
+      ]
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "open",
+        "reviewed",
+        "approved",
+        "rejected"
+      ]
+    },
+    "risk_reason": {
+      "type": "string"
+    },
+    "is_direct": {
+      "type": "boolean"
+    },
+    "is_transitive": {
+      "type": "boolean"
+    },
+    "used_in": {
+      "type": "string"
+    },
+    "eol_date": {
+      "type": "string"
+    },
+    "is_eol": {
+      "type": "boolean"
+    },
+    "replacement": {
+      "type": "string"
+    },
+    "detected_at": {
+      "type": "string"
+    }
+  },
+  "required": [],
+  "name": "LicenseRisk"
+}
