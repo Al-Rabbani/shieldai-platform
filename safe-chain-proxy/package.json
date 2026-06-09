@@ -1,43 +1,53 @@
 {
   "name": "@shieldai/safe-chain",
   "version": "1.0.0",
-  "description": "ShieldAI Safe Chain — npm/PyPI proxy that blocks malicious packages at install time",
-  "main": "dist/cli.js",
+  "description": "ShieldAI Safe Chain — Block malicious npm packages before install. Typosquatting detection, malware scanning, CVE checks. Works as a pre-install hook or CI/CD gate.",
+  "main": "dist/index.js",
   "bin": {
-    "safe-chain": "dist/cli.js"
+    "safe-chain": "./dist/cli.js",
+    "shieldai-safe-chain": "./dist/cli.js"
   },
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist/",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "tsc",
-    "test": "jest",
-    "dev": "tsc --watch",
-    "start": "node dist/cli.js"
+    "prepublishOnly": "npm run build",
+    "test": "node test/index.test.js"
   },
   "keywords": [
     "security",
     "supply-chain",
-    "npm-proxy",
-    "package-manager",
-    "malware-detection",
+    "malware",
+    "npm-audit",
     "typosquatting",
-    "dependency-security"
+    "safe-install",
+    "shieldai",
+    "devsec",
+    "devsecops"
   ],
-  "author": "ShieldAI <security@shieldai.com>",
+  "author": "ShieldAI Security <security@shieldai.dev>",
   "license": "MIT",
+  "homepage": "https://shieldai.dev",
   "repository": {
     "type": "git",
     "url": "https://github.com/shieldai/safe-chain.git"
   },
-  "dependencies": {
-    "express": "^4.18.0",
-    "node-fetch": "^3.0.0",
-    "sqlite3": "^5.1.0"
-  },
-  "devDependencies": {
-    "@types/node": "^20.0.0",
-    "typescript": "^5.0.0",
-    "jest": "^29.0.0"
+  "bugs": {
+    "url": "https://github.com/shieldai/safe-chain/issues"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=16.0.0"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "typescript": "^5.0.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
   }
 }

@@ -1,0 +1,65 @@
+{
+  "type": "object",
+  "properties": {
+    "device_id": {
+      "type": "string"
+    },
+    "device_name": {
+      "type": "string"
+    },
+    "os": {
+      "type": "string",
+      "enum": [
+        "macos",
+        "windows",
+        "linux"
+      ]
+    },
+    "username": {
+      "type": "string"
+    },
+    "team": {
+      "type": "string"
+    },
+    "registration_token": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "inactive",
+        "blocked"
+      ]
+    },
+    "last_scan": {
+      "type": "string"
+    },
+    "packages_monitored": {
+      "type": "number"
+    },
+    "blocked_packages": {
+      "type": "number"
+    },
+    "risky_packages": {
+      "type": "number"
+    },
+    "risk_score": {
+      "type": "number"
+    },
+    "ecosystems": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "agent_version": {
+      "type": "string"
+    },
+    "registered_at": {
+      "type": "string"
+    }
+  },
+  "required": [],
+  "name": "DeviceAgent"
+}

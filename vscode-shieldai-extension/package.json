@@ -1,33 +1,19 @@
 {
   "name": "shieldai-security",
   "displayName": "ShieldAI Security Scanner",
-  "description": "Real-time security findings in VS Code — SAST, secrets, vulnerabilities",
+  "description": "Real-time security scanning in your editor — inline SAST findings, safe package checks, and AutoFix PRs without leaving VS Code.",
   "version": "1.0.0",
-  "publisher": "ShieldAI",
-  "license": "MIT",
+  "publisher": "shieldai",
+  "icon": "images/icon.png",
   "engines": {
-    "vscode": "^1.60.0"
+    "vscode": "^1.85.0"
   },
   "categories": [
-    "Other",
-    "Security",
-    "Linters"
+    "Linters",
+    "Other"
   ],
-  "keywords": [
-    "security",
-    "sast",
-    "code-analysis",
-    "vulnerabilities",
-    "secrets",
-    "threat-detection"
-  ],
-  "icon": "media/icon.png",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/shieldai/vscode-extension.git"
-  },
+  "keywords": ["security", "sast", "vulnerability", "shieldai", "sqli", "xss", "devsecops"],
   "activationEvents": [
-    "onStartupFinished",
     "onLanguage:javascript",
     "onLanguage:typescript",
     "onLanguage:python",
@@ -35,96 +21,158 @@
     "onLanguage:go",
     "onLanguage:php",
     "onLanguage:ruby",
-    "onLanguage:csharp"
+    "workspaceContains:**/package.json",
+    "workspaceContains:**/requirements.txt"
   ],
   "main": "./dist/extension.js",
   "contributes": {
     "commands": [
       {
-        "command": "shieldai.scanFolder",
-        "title": "ShieldAI: Scan Folder",
-        "description": "Scan the current folder for security vulnerabilities"
+        "command": "shieldai.scanFile",
+        "title": "ShieldAI: Scan Current File",
+        "icon": "$(shield)"
       },
       {
-        "command": "shieldai.scanFile",
-        "title": "ShieldAI: Scan File",
-        "description": "Scan the current file for security issues"
+        "command": "shieldai.scanWorkspace",
+        "title": "ShieldAI: Scan Entire Workspace",
+        "icon": "$(shield)"
+      },
+      {
+        "command": "shieldai.checkPackage",
+        "title": "ShieldAI: Check Package Safety",
+        "icon": "$(package)"
+      },
+      {
+        "command": "shieldai.autoFix",
+        "title": "ShieldAI: AutoFix — Create GitHub PR",
+        "icon": "$(git-pull-request)"
       },
       {
         "command": "shieldai.showFindings",
-        "title": "ShieldAI: Show Findings Panel",
-        "description": "Open the ShieldAI findings panel"
+        "title": "ShieldAI: Show All Findings",
+        "icon": "$(list-unordered)"
       },
       {
-        "command": "shieldai.toggleEnabled",
-        "title": "ShieldAI: Toggle Extension",
-        "description": "Enable/disable ShieldAI scanning"
+        "command": "shieldai.configure",
+        "title": "ShieldAI: Configure API Token",
+        "icon": "$(gear)"
       }
     ],
     "configuration": {
-      "title": "ShieldAI Security Scanner",
+      "title": "ShieldAI",
       "properties": {
-        "shieldai.enabled": {
-          "type": "boolean",
-          "default": true,
-          "description": "Enable ShieldAI security scanning"
-        },
-        "shieldai.enableOnSave": {
-          "type": "boolean",
-          "default": true,
-          "description": "Scan file on save"
-        },
-        "shieldai.enableOnChange": {
-          "type": "boolean",
-          "default": false,
-          "description": "Scan file as you type (may impact performance)"
-        },
-        "shieldai.severityLevel": {
-          "type": "string",
-          "default": "medium",
-          "enum": ["low", "medium", "high", "critical"],
-          "description": "Minimum severity level to show"
-        },
-        "shieldai.apiKey": {
+        "shieldai.apiToken": {
           "type": "string",
           "default": "",
-          "description": "ShieldAI API key for backend integration (optional)",
-          "scope": "machine"
+          "description": "Your ShieldAI API token (get one at shieldai.dev)"
         },
-        "shieldai.backendUrl": {
+        "shieldai.mode": {
           "type": "string",
-          "default": "https://api.shieldai.com",
-          "description": "ShieldAI backend URL for cloud scanning"
+          "enum": ["block", "warn", "off"],
+          "default": "warn",
+          "description": "block: prevent saving on critical findings | warn: show warnings only | off: disabled"
         },
-        "shieldai.autoFixEnabled": {
+        "shieldai.severityThreshold": {
+          "type": "string",
+          "enum": ["critical", "high", "medium", "low"],
+          "default": "high",
+          "description": "Minimum severity to show inline diagnostics"
+        },
+        "shieldai.enableSafeChain": {
           "type": "boolean",
           "default": true,
-          "description": "Show auto-fix suggestions where available"
+          "description": "Check npm/PyPI packages for malware when editing package.json / requirements.txt"
+        },
+        "shieldai.enableAutoFix": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show AutoFix code action to create GitHub PRs for findings"
+        },
+        "shieldai.scanOnSave": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically scan files when saved"
+        },
+        "shieldai.githubToken": {
+          "type": "string",
+          "default": "",
+          "description": "GitHub personal access token (for AutoFix PR creation)"
+        },
+        "shieldai.endpoint": {
+          "type": "string",
+          "default": "https://app.base44.com/api/functions",
+          "description": "ShieldAI API endpoint (advanced)"
         }
       }
     },
-    "keybindings": [
+    "menus": {
+      "editor/context": [
+        {
+          "command": "shieldai.scanFile",
+          "group": "shieldai@1",
+          "when": "editorLangId =~ /javascript|typescript|python|java|go|php|ruby/"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "shieldai.scanFile",
+          "group": "navigation",
+          "when": "editorLangId =~ /javascript|typescript|python|java|go|php|ruby/"
+        }
+      ]
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "shieldai-explorer",
+          "title": "ShieldAI Security",
+          "icon": "images/sidebar-icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "shieldai-explorer": [
+        {
+          "id": "shieldai.findingsView",
+          "name": "Security Findings",
+          "icon": "$(shield)"
+        },
+        {
+          "id": "shieldai.safeChainView",
+          "name": "Package Safety",
+          "icon": "$(package)"
+        }
+      ]
+    },
+    "statusBar": [
       {
-        "command": "shieldai.scanFolder",
-        "key": "ctrl+shift+s",
-        "mac": "cmd+shift+s",
-        "when": "editorFocus"
+        "id": "shieldai.status",
+        "name": "ShieldAI Status",
+        "alignment": "right",
+        "priority": 100
       }
     ]
   },
   "scripts": {
-    "build": "tsc",
-    "watch": "tsc -w",
-    "package": "vsce package",
-    "publish": "vsce publish"
+    "vscode:prepublish": "npm run package",
+    "compile": "webpack",
+    "watch": "webpack --watch",
+    "package": "webpack --mode production --devtool hidden-source-map",
+    "lint": "eslint src --ext ts"
   },
   "devDependencies": {
-    "@types/vscode": "^1.60.0",
+    "@types/vscode": "^1.85.0",
     "@types/node": "^20.0.0",
     "typescript": "^5.0.0",
-    "vsce": "^2.0.0"
+    "webpack": "^5.0.0",
+    "webpack-cli": "^5.0.0",
+    "ts-loader": "^9.0.0",
+    "@vscode/vsce": "^2.0.0"
   },
-  "dependencies": {
-    "node-fetch": "^3.0.0"
-  }
+  "homepage": "https://shieldai.dev",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/shieldai/vscode-extension.git"
+  },
+  "license": "MIT"
 }

@@ -1,269 +1,127 @@
-# 🛡️ ShieldAI Zen Firewall SDK
+# @shieldai/zen
 
-In-app runtime defense & real-time threat detection for Express, Fastify, and Hono.
+**In-app runtime protection for Node.js applications.**
 
-**Version:** 1.0.0  
-**License:** MIT  
-**Repository:** https://github.com/shieldai/zen-firewall-sdk
+Block SQL injection, XSS, path traversal, command injection, SSRF, and prototype pollution — with less than 1ms overhead. Reports all threats to your [ShieldAI](https://shieldai.dev) security dashboard in real time.
 
----
-
-## Features
-
-- ✅ **Real-Time Attack Detection** — Detects SQL injection, XSS, path traversal, SSRF, XXE, command injection
-- ✅ **Zero Latency** — Middleware-based, no external API calls (optional webhook for reporting)
-- ✅ **Block or Monitor Mode** — Choose to block attacks or just log them
-- ✅ **Rate Limiting** — Built-in per-IP request rate limiting
-- ✅ **Bot Detection** — Identifies scanning tools and suspicious user agents
-- ✅ **Custom Rules** — Add your own threat patterns
-- ✅ **Zero Dependencies** — Pure JavaScript/TypeScript, minimal overhead
-
----
-
-## Installation
-
-```bash
-npm install @shieldai/zen-firewall
-```
+[![npm version](https://badge.fury.io/js/%40shieldai%2Fzen.svg)](https://www.npmjs.com/package/@shieldai/zen)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ---
 
 ## Quick Start
 
-### Express
+```bash
+npm install @shieldai/zen
+```
+
+### Express / Connect
 
 ```javascript
 const express = require('express');
-const ZenFirewall = require('@shieldai/zen-firewall').default;
+const { zen } = require('@shieldai/zen');
 
 const app = express();
+app.use(express.json());
 
-// Initialize Zen Firewall
-const zen = new ZenFirewall({
-  mode: 'block', // 'block' = stop attacks, 'monitor' = log only
-  logLevel: 'info',
-  webhookUrl: 'https://api.shieldai.com/threats',
-  apiKey: 'sk_live_xxx',
-});
+// Add Zen — that's it.
+app.use(zen({ token: process.env.SHIELD_ZEN_TOKEN }));
 
-// Use as middleware (BEFORE your routes)
-app.use(zen.middleware());
-
-// Your routes
-app.post('/api/users', (req, res) => {
-  res.json({ message: 'User created' });
-});
-
-app.listen(3000, () => console.log('Server running on :3000'));
+app.get('/', (req, res) => res.json({ status: 'protected' }));
+app.listen(3000);
 ```
 
 ### Fastify
 
 ```javascript
-const Fastify = require('fastify');
-const ZenFirewall = require('@shieldai/zen-firewall').default;
+const fastify = require('fastify')();
+const { zenFastify } = require('@shieldai/zen');
 
-const fastify = Fastify();
-const zen = new ZenFirewall({ mode: 'block' });
-
-fastify.register((f, opts, next) => {
-  f.use(zen.middleware());
-  next();
-});
-
-fastify.post('/api/users', async (req, reply) => {
-  return { message: 'User created' };
-});
-
-fastify.listen({ port: 3000 }, () => console.log('Server running on :3000'));
+fastify.register(zenFastify({ token: process.env.SHIELD_ZEN_TOKEN }));
 ```
 
-### Hono
+### TypeScript
 
-```javascript
-import { Hono } from 'hono';
-import ZenFirewall from '@shieldai/zen-firewall';
+```typescript
+import express from 'express';
+import { zen } from '@shieldai/zen';
 
-const app = new Hono();
-const zen = new ZenFirewall({ mode: 'block' });
-
-app.use(zen.middleware());
-
-app.post('/api/users', async (c) => {
-  return c.json({ message: 'User created' });
-});
-
-export default app;
+const app = express();
+app.use(zen({ token: process.env.SHIELD_ZEN_TOKEN, mode: 'block' }));
 ```
+
+---
+
+## What It Blocks
+
+| Attack Type | Example Payload | Action |
+|---|---|---|
+| SQL Injection | `' OR 1=1--` | 🛑 Blocked |
+| XSS | `<script>alert(1)</script>` | 🛑 Blocked |
+| Path Traversal | `../../etc/passwd` | 🛑 Blocked |
+| Command Injection | `; bash -i >& /dev/tcp/...` | 🛑 Blocked |
+| SSRF | `http://169.254.169.254/latest/meta-data` | 🛑 Blocked |
+| Prototype Pollution | `{"__proto__":{"admin":true}}` | 🛑 Blocked |
 
 ---
 
 ## Configuration
 
 ```javascript
-const zen = new ZenFirewall({
-  // Enable/disable firewall
-  enabled: true,
+app.use(zen({
+  token: 'zen_your_token_here',  // from ShieldAI dashboard
+  mode: 'block',                 // 'block' (default) | 'monitor' (log only)
+  threshold: 60,                 // risk score to block (0-100, default: 60)
+  appName: 'my-api',             // shown in dashboard
+  rules: ['sqli', 'xss', 'path_traversal', 'cmd_injection', 'ssrf', 'proto_pollution'],
+  allowlist: ['/^safe-value-pattern/'],  // regex patterns to skip
+}));
+```
 
-  // 'block' = stop attacks, 'monitor' = log only
-  mode: 'block',
+### Environment Variables
 
-  // Log level
-  logLevel: 'info', // 'debug' | 'info' | 'warn' | 'error'
-
-  // Send threat events to backend (optional)
-  webhookUrl: 'https://api.shieldai.com/threats',
-  apiKey: 'sk_live_xxx', // ShieldAI API key
-
-  // Rate limiting config
-  rateLimit: {
-    enabled: true,
-    windowMs: 60000, // 1 minute window
-    maxRequests: 100, // max 100 requests per window
-    keyGenerator: (req) => req.ip, // custom key (default: IP)
-  },
-
-  // Skip protection on these paths
-  skipPaths: ['/health', '/metrics', '/status', '/docs'],
-
-  // Add custom threat patterns
-  customRules: [
-    {
-      id: 'custom_001',
-      name: 'Block /admin without API key header',
-      pattern: /^\/admin/,
-      severity: 'high',
-      action: 'block',
-      checkLocations: ['path', 'headers'],
-    },
-  ],
-});
+```bash
+SHIELD_ZEN_TOKEN=zen_xxxxxxxxxxxx  # Your ShieldAI token
+SHIELD_ZEN_ENDPOINT=https://...    # Override report endpoint (optional)
 ```
 
 ---
 
-## Threat Types Detected
+## How It Works
 
-| Threat Type | Severity | Example Payloads |
-|---|---|---|
-| SQL Injection | Critical | `1' OR '1'='1'--`, `UNION SELECT * FROM users` |
-| XSS (Cross-Site Scripting) | High | `<script>alert('xss')</script>`, `javascript:void(0)` |
-| Path Traversal | High | `../../../etc/passwd`, `..%2f..%2fetc%2fpasswd` |
-| SSRF (Server-Side Request Forgery) | Critical | `http://localhost:8080`, `http://169.254.169.254/metadata` |
-| Command Injection | Critical | `; rm -rf /`, `` `cat /etc/passwd` `` |
-| XXE (XML External Entity) | High | `<!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///etc/passwd">]>` |
-| Rate Limit Abuse | Medium | >100 requests per minute from same IP |
-| Bot Detection | Medium | Requests from scanners (sqlmap, nikto, nessus) |
+1. **Intercepts** every incoming request — body, query params, and route params
+2. **Scans** all user-controlled values against 25+ attack patterns across 6 categories
+3. **Blocks** (in `block` mode) or **logs** (in `monitor` mode) matching requests
+4. **Reports** threat telemetry to ShieldAI asynchronously — never blocks your response
+
+**Overhead:** < 1ms per request (pure regex, no I/O on the hot path)
 
 ---
 
-## Getting Threat Data
+## Get Your Token
 
-### In-Memory Log
+1. Sign up at [shieldai.dev](https://shieldai.dev)
+2. Go to **Protect → Zen Firewall → Add Protected App**
+3. Copy your install token
+4. Set `SHIELD_ZEN_TOKEN=zen_your_token`
 
-```javascript
-const zen = new ZenFirewall({ mode: 'monitor' });
+---
 
-// ... middleware initialized ...
+## Python
 
-// Get all detected threats
-const threats = zen.getThreatLog();
-threats.forEach(t => {
-  console.log(`${t.timestamp} — ${t.threat_type} from ${t.source_ip}`);
-});
+For Python/FastAPI/Django, install the Python companion:
 
-// Get statistics
-const stats = zen.getStats();
-console.log(`Total threats: ${stats.total_threats_detected}`);
-console.log(`Blocked: ${stats.threats_blocked}`);
-console.log(`Critical: ${stats.critical}`);
+```bash
+pip install shieldai-zen
 ```
 
-### Webhook Integration
-
-When `webhookUrl` is configured, threats are sent in real-time:
-
-```javascript
-// Zen Firewall will POST this to your webhook:
-{
-  "id": "zen_1717949877123_abc123xyz",
-  "timestamp": "2026-06-09T17:17:57Z",
-  "threat_type": "sqli_001",
-  "severity": "critical",
-  "endpoint": "/api/users",
-  "method": "POST",
-  "source_ip": "203.0.113.45",
-  "user_agent": "Mozilla/5.0...",
-  "payload": "{\"id\":\"1' OR '1'='1'--\"}",
-  "rule_triggered": "SQL Injection — OR Clause",
-  "action_taken": "blocked",
-  "response_time_ms": 3.2
-}
+```python
+from shieldai_zen import ZenFirewallMiddleware
+app.add_middleware(ZenFirewallMiddleware, token="zen_your_token")
 ```
-
-You can send these to ShieldAI's platform for visualization and trending:
-
-```javascript
-const zen = new ZenFirewall({
-  webhookUrl: 'https://api.shieldai.com/v1/threats/ingest',
-  apiKey: process.env.SHIELDAI_API_KEY,
-  mode: 'block',
-});
-```
-
----
-
-## Performance
-
-- **Latency overhead:** ~1-3ms per request (regex matching)
-- **Memory:** ~2MB base + threat log buffer
-- **CPU:** <1% on typical applications
-
-Zen Firewall is designed for production use with minimal performance impact.
-
----
-
-## Limitations
-
-- Pattern-based detection (not ML-based)
-- Local analysis only (no external API calls by default)
-- Regex patterns can have false positives/negatives
-- Not a replacement for WAF — use alongside cloud WAF (Cloudflare, AWS WAF)
-
----
-
-## Comparison to Alternatives
-
-| Feature | Zen Firewall | OWASP ModSecurity | Cloudflare WAF |
-|---|---|---|---|
-| Installation | npm install | Nginx/Apache module | Cloud-based |
-| Cost | Free (MIT) | Free (open source) | $20+/month |
-| Setup time | 2 minutes | 1 hour+ | 5 minutes |
-| False positives | Low | Medium | Very low |
-| Customization | Easy (JS) | Hard (ModSec rules) | Easy (UI) |
-| On-premise | ✅ | ✅ | ❌ |
-| Real-time reporting | Optional webhook | File-based logs | ✅ Dashboard |
-
----
-
-## Roadmap
-
-- [ ] ML-based anomaly detection
-- [ ] Integration with ShieldAI dashboard
-- [ ] OWASP ESAPI rule engine compatibility
-- [ ] WebSocket attack detection
-- [ ] Automatic rule updates via npm
 
 ---
 
 ## License
 
-MIT — Use freely in commercial projects.
-
----
-
-## Support
-
-- 📧 Email: security@shieldai.com
-- 🐛 Issues: https://github.com/shieldai/zen-firewall-sdk/issues
-- 📚 Docs: https://www.shieldai.com/docs/zen-firewall
+MIT © ShieldAI Security
