@@ -1,7 +1,7 @@
 name: Publish shieldai-zen to PyPI
 
 on:
-  workflow_dispatch:          # Manual trigger — no token needed, uses Trusted Publisher OIDC
+  workflow_dispatch:
   push:
     tags:
       - 'pypi-v*'
@@ -13,7 +13,6 @@ jobs:
       run:
         working-directory: shieldai-zen-python
 
-    # Required for PyPI Trusted Publishers (OIDC)
     permissions:
       id-token: write
       contents: read
@@ -27,15 +26,24 @@ jobs:
           python-version: '3.11'
 
       - name: Install build tools
-        run: pip install build
+        run: pip install build twine
 
       - name: Build package
         run: python -m build
 
-      - name: Verify build
-        run: ls dist/
+      - name: Verify build artifacts
+        run: ls -lh dist/
 
-      # No token needed — PyPI issues a short-lived OIDC token automatically
-      - name: Publish to PyPI via Trusted Publisher
+      # Primary: Trusted Publisher (OIDC) — no token needed if PyPI project is configured
+      - name: Publish via Trusted Publisher (OIDC)
         uses: pypa/gh-action-pypi-publish@release/v1
-        # No 'password' or 'token' needed here — that's the whole point
+        continue-on-error: true
+        id: oidc_publish
+
+      # Fallback: API token (if OIDC/Trusted Publisher not yet configured on PyPI)
+      - name: Publish via API token (fallback)
+        if: steps.oidc_publish.outcome == 'failure'
+        run: twine upload dist/*
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
