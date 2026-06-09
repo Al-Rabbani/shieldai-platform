@@ -1,0 +1,83 @@
+{
+  "type": "object",
+  "properties": {
+    "rule_id": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string"
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "sqli",
+        "xss",
+        "path_traversal",
+        "ssrf",
+        "rce",
+        "prompt_injection",
+        "bot",
+        "supply_chain",
+        "zero_day",
+        "rate_limit",
+        "geo_block",
+        "allowlist",
+        "denylist"
+      ]
+    },
+    "description": {
+      "type": "string"
+    },
+    "pattern": {
+      "type": "string"
+    },
+    "action": {
+      "type": "string",
+      "enum": [
+        "block",
+        "log",
+        "rate_limit",
+        "challenge",
+        "allow"
+      ]
+    },
+    "severity": {
+      "type": "string",
+      "enum": [
+        "critical",
+        "high",
+        "medium",
+        "low"
+      ]
+    },
+    "enabled": {
+      "type": "boolean"
+    },
+    "hits_total": {
+      "type": "number"
+    },
+    "hits_blocked": {
+      "type": "number"
+    },
+    "false_positives": {
+      "type": "number"
+    },
+    "last_triggered": {
+      "type": "string"
+    },
+    "created_at": {
+      "type": "string"
+    },
+    "source": {
+      "type": "string",
+      "enum": [
+        "builtin",
+        "custom",
+        "community",
+        "ai_generated"
+      ]
+    }
+  },
+  "required": [],
+  "name": "FirewallRule"
+}

@@ -1,0 +1,80 @@
+{
+  "type": "object",
+  "properties": {
+    "package_name": {
+      "type": "string"
+    },
+    "version": {
+      "type": "string"
+    },
+    "registry": {
+      "type": "string",
+      "enum": [
+        "npm",
+        "pypi",
+        "rubygems",
+        "maven",
+        "nuget",
+        "cargo",
+        "go",
+        "composer"
+      ]
+    },
+    "event_type": {
+      "type": "string",
+      "enum": [
+        "malware_detected",
+        "typosquat_detected",
+        "dependency_confusion",
+        "secret_leaked",
+        "suspicious_install",
+        "cve_published",
+        "license_violation"
+      ]
+    },
+    "severity": {
+      "type": "string",
+      "enum": [
+        "critical",
+        "high",
+        "medium",
+        "low"
+      ]
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "blocked",
+        "quarantined",
+        "allowed",
+        "investigating"
+      ]
+    },
+    "developer": {
+      "type": "string"
+    },
+    "machine": {
+      "type": "string"
+    },
+    "install_command": {
+      "type": "string"
+    },
+    "malware_family": {
+      "type": "string"
+    },
+    "cve_id": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "action_taken": {
+      "type": "string"
+    },
+    "detected_at": {
+      "type": "string"
+    }
+  },
+  "required": [],
+  "name": "SupplyChainEvent"
+}

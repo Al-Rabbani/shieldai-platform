@@ -1,0 +1,74 @@
+{
+  "type": "object",
+  "properties": {
+    "app_name": {
+      "type": "string"
+    },
+    "bot_type": {
+      "type": "string",
+      "enum": [
+        "scraper",
+        "credential_stuffing",
+        "brute_force",
+        "ddos",
+        "vulnerability_scanner",
+        "ai_scraper",
+        "spam_bot",
+        "fraud_bot"
+      ]
+    },
+    "severity": {
+      "type": "string",
+      "enum": [
+        "critical",
+        "high",
+        "medium",
+        "low"
+      ]
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "blocked",
+        "rate_limited",
+        "detected",
+        "allowed"
+      ]
+    },
+    "source_ip": {
+      "type": "string"
+    },
+    "ip_range": {
+      "type": "string"
+    },
+    "country": {
+      "type": "string"
+    },
+    "requests_per_minute": {
+      "type": "number"
+    },
+    "total_requests": {
+      "type": "number"
+    },
+    "endpoints_targeted": {
+      "type": "string"
+    },
+    "user_agent": {
+      "type": "string"
+    },
+    "fingerprint": {
+      "type": "string"
+    },
+    "action_taken": {
+      "type": "string"
+    },
+    "detected_at": {
+      "type": "string"
+    },
+    "blocked_until": {
+      "type": "string"
+    }
+  },
+  "required": [],
+  "name": "BotEvent"
+}
