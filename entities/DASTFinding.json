@@ -1,0 +1,83 @@
+{
+  "type": "object",
+  "properties": {
+    "scan_id": {
+      "type": "string"
+    },
+    "target_url": {
+      "type": "string"
+    },
+    "vulnerability_type": {
+      "type": "string",
+      "enum": [
+        "xss",
+        "sqli",
+        "ssrf",
+        "open_redirect",
+        "csrf",
+        "idor",
+        "xxe",
+        "rce",
+        "path_traversal",
+        "broken_auth",
+        "sensitive_data",
+        "security_misconfiguration",
+        "other"
+      ]
+    },
+    "title": {
+      "type": "string"
+    },
+    "severity": {
+      "type": "string",
+      "enum": [
+        "critical",
+        "high",
+        "medium",
+        "low",
+        "info"
+      ]
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "open",
+        "in_review",
+        "fixed",
+        "false_positive"
+      ]
+    },
+    "endpoint": {
+      "type": "string"
+    },
+    "method": {
+      "type": "string"
+    },
+    "parameter": {
+      "type": "string"
+    },
+    "payload": {
+      "type": "string"
+    },
+    "evidence": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "remediation": {
+      "type": "string"
+    },
+    "cwe": {
+      "type": "string"
+    },
+    "cvss_score": {
+      "type": "number"
+    },
+    "detected_at": {
+      "type": "string"
+    }
+  },
+  "required": [],
+  "name": "DASTFinding"
+}

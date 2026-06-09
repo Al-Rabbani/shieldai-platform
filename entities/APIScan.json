@@ -1,0 +1,61 @@
+{
+  "type": "object",
+  "properties": {
+    "nickname": {
+      "type": "string"
+    },
+    "spec_url": {
+      "type": "string"
+    },
+    "spec_format": {
+      "type": "string",
+      "enum": [
+        "openapi3",
+        "swagger2",
+        "graphql",
+        "postman"
+      ]
+    },
+    "base_url": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "running",
+        "completed",
+        "failed"
+      ]
+    },
+    "total_endpoints": {
+      "type": "number"
+    },
+    "tested_endpoints": {
+      "type": "number"
+    },
+    "total_findings": {
+      "type": "number"
+    },
+    "critical_count": {
+      "type": "number"
+    },
+    "high_count": {
+      "type": "number"
+    },
+    "medium_count": {
+      "type": "number"
+    },
+    "risk_score": {
+      "type": "number"
+    },
+    "started_at": {
+      "type": "string"
+    },
+    "completed_at": {
+      "type": "string"
+    }
+  },
+  "required": [],
+  "name": "APIScan"
+}

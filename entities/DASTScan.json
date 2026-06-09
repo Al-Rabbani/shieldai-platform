@@ -1,0 +1,64 @@
+{
+  "type": "object",
+  "properties": {
+    "target_url": {
+      "type": "string"
+    },
+    "nickname": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "running",
+        "completed",
+        "failed"
+      ]
+    },
+    "scan_type": {
+      "type": "string",
+      "enum": [
+        "full",
+        "quick",
+        "api",
+        "authenticated"
+      ]
+    },
+    "total_findings": {
+      "type": "number"
+    },
+    "critical_count": {
+      "type": "number"
+    },
+    "high_count": {
+      "type": "number"
+    },
+    "medium_count": {
+      "type": "number"
+    },
+    "low_count": {
+      "type": "number"
+    },
+    "risk_score": {
+      "type": "number"
+    },
+    "duration_seconds": {
+      "type": "number"
+    },
+    "started_at": {
+      "type": "string"
+    },
+    "completed_at": {
+      "type": "string"
+    },
+    "auth_type": {
+      "type": "string"
+    },
+    "auth_config": {
+      "type": "string"
+    }
+  },
+  "required": [],
+  "name": "DASTScan"
+}
