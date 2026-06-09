@@ -1,0 +1,64 @@
+{
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string"
+    },
+    "feed_type": {
+      "type": "string",
+      "enum": [
+        "malware_package",
+        "cve_published",
+        "zero_day",
+        "typosquat",
+        "ip_threat",
+        "supply_chain_compromise",
+        "exploit_released"
+      ]
+    },
+    "severity": {
+      "type": "string",
+      "enum": [
+        "critical",
+        "high",
+        "medium",
+        "low"
+      ]
+    },
+    "package_name": {
+      "type": "string"
+    },
+    "registry": {
+      "type": "string"
+    },
+    "cve_id": {
+      "type": "string"
+    },
+    "affected_versions": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "source": {
+      "type": "string"
+    },
+    "affects_you": {
+      "type": "boolean"
+    },
+    "affected_asset": {
+      "type": "string"
+    },
+    "action_required": {
+      "type": "string"
+    },
+    "published_at": {
+      "type": "string"
+    },
+    "detected_at": {
+      "type": "string"
+    }
+  },
+  "required": [],
+  "name": "ThreatIntelFeed"
+}

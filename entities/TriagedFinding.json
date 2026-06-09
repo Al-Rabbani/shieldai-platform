@@ -1,0 +1,124 @@
+{
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string"
+    },
+    "normalized_severity": {
+      "type": "string",
+      "enum": [
+        "critical",
+        "high",
+        "medium",
+        "low",
+        "info"
+      ]
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "open",
+        "in_remediation",
+        "fixed",
+        "accepted_risk",
+        "false_positive"
+      ]
+    },
+    "source_scanners": {
+      "type": "string"
+    },
+    "source_count": {
+      "type": "number"
+    },
+    "deduplication_key": {
+      "type": "string"
+    },
+    "reachability": {
+      "type": "string",
+      "enum": [
+        "reachable",
+        "not_reachable",
+        "unknown"
+      ]
+    },
+    "exploitability": {
+      "type": "string",
+      "enum": [
+        "exploited_in_wild",
+        "poc_available",
+        "theoretical",
+        "none"
+      ]
+    },
+    "noise_reduced": {
+      "type": "boolean"
+    },
+    "business_criticality": {
+      "type": "string",
+      "enum": [
+        "critical_service",
+        "internal_tool",
+        "staging",
+        "deprecated"
+      ]
+    },
+    "asset_name": {
+      "type": "string"
+    },
+    "asset_type": {
+      "type": "string",
+      "enum": [
+        "repository",
+        "cloud_account",
+        "container",
+        "vm",
+        "api_endpoint",
+        "domain"
+      ]
+    },
+    "owner_team": {
+      "type": "string"
+    },
+    "owner_email": {
+      "type": "string"
+    },
+    "autofix_available": {
+      "type": "boolean"
+    },
+    "autofix_pr_url": {
+      "type": "string"
+    },
+    "cve_id": {
+      "type": "string"
+    },
+    "cwe": {
+      "type": "string"
+    },
+    "cvss_score": {
+      "type": "number"
+    },
+    "epss_score": {
+      "type": "number"
+    },
+    "first_detected": {
+      "type": "string"
+    },
+    "last_seen": {
+      "type": "string"
+    },
+    "sla_deadline": {
+      "type": "string"
+    },
+    "sla_breached": {
+      "type": "boolean"
+    },
+    "jira_ticket": {
+      "type": "string"
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": [],
+  "name": "TriagedFinding"
+}

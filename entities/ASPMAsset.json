@@ -1,0 +1,82 @@
+{
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string"
+    },
+    "asset_type": {
+      "type": "string",
+      "enum": [
+        "repository",
+        "cloud_account",
+        "container_image",
+        "vm",
+        "api_endpoint",
+        "domain",
+        "package"
+      ]
+    },
+    "provider": {
+      "type": "string"
+    },
+    "team": {
+      "type": "string"
+    },
+    "owner_email": {
+      "type": "string"
+    },
+    "business_criticality": {
+      "type": "string",
+      "enum": [
+        "critical",
+        "high",
+        "medium",
+        "low"
+      ]
+    },
+    "is_internet_facing": {
+      "type": "boolean"
+    },
+    "environment": {
+      "type": "string",
+      "enum": [
+        "production",
+        "staging",
+        "development",
+        "deprecated"
+      ]
+    },
+    "total_findings": {
+      "type": "number"
+    },
+    "critical_count": {
+      "type": "number"
+    },
+    "high_count": {
+      "type": "number"
+    },
+    "risk_score": {
+      "type": "number"
+    },
+    "sla_breached_count": {
+      "type": "number"
+    },
+    "last_scanned": {
+      "type": "string"
+    },
+    "scanner_coverage": {
+      "type": "string"
+    },
+    "tags": {
+      "type": "string"
+    },
+    "linked_repo": {
+      "type": "string"
+    },
+    "linked_cloud_account": {
+      "type": "string"
+    }
+  },
+  "required": [],
+  "name": "ASPMAsset"
+}
