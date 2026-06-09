@@ -1,0 +1,66 @@
+{
+  "type": "object",
+  "properties": {
+    "cloud_account_id": {
+      "type": "string"
+    },
+    "provider": {
+      "type": "string",
+      "enum": [
+        "aws",
+        "gcp",
+        "azure"
+      ]
+    },
+    "service": {
+      "type": "string"
+    },
+    "title": {
+      "type": "string"
+    },
+    "severity": {
+      "type": "string",
+      "enum": [
+        "critical",
+        "high",
+        "medium",
+        "low"
+      ]
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "open",
+        "in_review",
+        "fixed",
+        "suppressed"
+      ]
+    },
+    "resource": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "remediation": {
+      "type": "string"
+    },
+    "cis_control": {
+      "type": "string"
+    },
+    "region": {
+      "type": "string"
+    },
+    "detected_at": {
+      "type": "string"
+    },
+    "fixed_at": {
+      "type": "string"
+    },
+    "assignee": {
+      "type": "string"
+    }
+  },
+  "required": [],
+  "name": "CloudFinding"
+}

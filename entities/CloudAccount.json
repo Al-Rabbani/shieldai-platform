@@ -1,0 +1,60 @@
+{
+  "type": "object",
+  "properties": {
+    "provider": {
+      "type": "string",
+      "enum": [
+        "aws",
+        "gcp",
+        "azure"
+      ]
+    },
+    "nickname": {
+      "type": "string"
+    },
+    "account_id": {
+      "type": "string"
+    },
+    "project_id": {
+      "type": "string"
+    },
+    "subscription_id": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "connected",
+        "scanning",
+        "error",
+        "disconnected"
+      ]
+    },
+    "last_scanned": {
+      "type": "string"
+    },
+    "total_findings": {
+      "type": "number"
+    },
+    "critical_count": {
+      "type": "number"
+    },
+    "high_count": {
+      "type": "number"
+    },
+    "medium_count": {
+      "type": "number"
+    },
+    "risk_score": {
+      "type": "number"
+    },
+    "regions_scanned": {
+      "type": "string"
+    },
+    "scan_services": {
+      "type": "string"
+    }
+  },
+  "required": [],
+  "name": "CloudAccount"
+}
