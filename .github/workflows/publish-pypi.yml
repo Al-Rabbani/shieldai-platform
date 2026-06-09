@@ -1,0 +1,41 @@
+name: Publish shieldai-zen to PyPI
+
+on:
+  workflow_dispatch:          # Manual trigger — no token needed, uses Trusted Publisher OIDC
+  push:
+    tags:
+      - 'pypi-v*'
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: shieldai-zen-python
+
+    # Required for PyPI Trusted Publishers (OIDC)
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install build tools
+        run: pip install build
+
+      - name: Build package
+        run: python -m build
+
+      - name: Verify build
+        run: ls dist/
+
+      # No token needed — PyPI issues a short-lived OIDC token automatically
+      - name: Publish to PyPI via Trusted Publisher
+        uses: pypa/gh-action-pypi-publish@release/v1
+        # No 'password' or 'token' needed here — that's the whole point
