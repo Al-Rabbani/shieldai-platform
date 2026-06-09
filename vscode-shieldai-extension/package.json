@@ -1,0 +1,130 @@
+{
+  "name": "shieldai-security",
+  "displayName": "ShieldAI Security Scanner",
+  "description": "Real-time security findings in VS Code — SAST, secrets, vulnerabilities",
+  "version": "1.0.0",
+  "publisher": "ShieldAI",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.60.0"
+  },
+  "categories": [
+    "Other",
+    "Security",
+    "Linters"
+  ],
+  "keywords": [
+    "security",
+    "sast",
+    "code-analysis",
+    "vulnerabilities",
+    "secrets",
+    "threat-detection"
+  ],
+  "icon": "media/icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/shieldai/vscode-extension.git"
+  },
+  "activationEvents": [
+    "onStartupFinished",
+    "onLanguage:javascript",
+    "onLanguage:typescript",
+    "onLanguage:python",
+    "onLanguage:java",
+    "onLanguage:go",
+    "onLanguage:php",
+    "onLanguage:ruby",
+    "onLanguage:csharp"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "shieldai.scanFolder",
+        "title": "ShieldAI: Scan Folder",
+        "description": "Scan the current folder for security vulnerabilities"
+      },
+      {
+        "command": "shieldai.scanFile",
+        "title": "ShieldAI: Scan File",
+        "description": "Scan the current file for security issues"
+      },
+      {
+        "command": "shieldai.showFindings",
+        "title": "ShieldAI: Show Findings Panel",
+        "description": "Open the ShieldAI findings panel"
+      },
+      {
+        "command": "shieldai.toggleEnabled",
+        "title": "ShieldAI: Toggle Extension",
+        "description": "Enable/disable ShieldAI scanning"
+      }
+    ],
+    "configuration": {
+      "title": "ShieldAI Security Scanner",
+      "properties": {
+        "shieldai.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable ShieldAI security scanning"
+        },
+        "shieldai.enableOnSave": {
+          "type": "boolean",
+          "default": true,
+          "description": "Scan file on save"
+        },
+        "shieldai.enableOnChange": {
+          "type": "boolean",
+          "default": false,
+          "description": "Scan file as you type (may impact performance)"
+        },
+        "shieldai.severityLevel": {
+          "type": "string",
+          "default": "medium",
+          "enum": ["low", "medium", "high", "critical"],
+          "description": "Minimum severity level to show"
+        },
+        "shieldai.apiKey": {
+          "type": "string",
+          "default": "",
+          "description": "ShieldAI API key for backend integration (optional)",
+          "scope": "machine"
+        },
+        "shieldai.backendUrl": {
+          "type": "string",
+          "default": "https://api.shieldai.com",
+          "description": "ShieldAI backend URL for cloud scanning"
+        },
+        "shieldai.autoFixEnabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show auto-fix suggestions where available"
+        }
+      }
+    },
+    "keybindings": [
+      {
+        "command": "shieldai.scanFolder",
+        "key": "ctrl+shift+s",
+        "mac": "cmd+shift+s",
+        "when": "editorFocus"
+      }
+    ]
+  },
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc -w",
+    "package": "vsce package",
+    "publish": "vsce publish"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.60.0",
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0",
+    "vsce": "^2.0.0"
+  },
+  "dependencies": {
+    "node-fetch": "^3.0.0"
+  }
+}
