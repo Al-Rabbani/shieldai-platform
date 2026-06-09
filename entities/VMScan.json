@@ -1,0 +1,82 @@
+{
+  "type": "object",
+  "properties": {
+    "nickname": {
+      "type": "string"
+    },
+    "provider": {
+      "type": "string",
+      "enum": [
+        "aws",
+        "azure",
+        "gcp",
+        "on_premise"
+      ]
+    },
+    "instance_id": {
+      "type": "string"
+    },
+    "instance_type": {
+      "type": "string"
+    },
+    "region": {
+      "type": "string"
+    },
+    "os_name": {
+      "type": "string"
+    },
+    "os_version": {
+      "type": "string"
+    },
+    "ip_address": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "scanning",
+        "completed",
+        "failed"
+      ]
+    },
+    "total_findings": {
+      "type": "number"
+    },
+    "critical_count": {
+      "type": "number"
+    },
+    "high_count": {
+      "type": "number"
+    },
+    "medium_count": {
+      "type": "number"
+    },
+    "low_count": {
+      "type": "number"
+    },
+    "risk_score": {
+      "type": "number"
+    },
+    "packages_scanned": {
+      "type": "number"
+    },
+    "kernel_version": {
+      "type": "string"
+    },
+    "last_patched": {
+      "type": "string"
+    },
+    "scanned_at": {
+      "type": "string"
+    },
+    "agent_version": {
+      "type": "string"
+    },
+    "tags": {
+      "type": "string"
+    }
+  },
+  "required": [],
+  "name": "VMScan"
+}

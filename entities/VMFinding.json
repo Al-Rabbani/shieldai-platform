@@ -1,0 +1,95 @@
+{
+  "type": "object",
+  "properties": {
+    "scan_id": {
+      "type": "string"
+    },
+    "instance_id": {
+      "type": "string"
+    },
+    "nickname": {
+      "type": "string"
+    },
+    "cve_id": {
+      "type": "string"
+    },
+    "title": {
+      "type": "string"
+    },
+    "severity": {
+      "type": "string",
+      "enum": [
+        "critical",
+        "high",
+        "medium",
+        "low",
+        "info"
+      ]
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "open",
+        "in_remediation",
+        "fixed",
+        "accepted_risk",
+        "suppressed"
+      ]
+    },
+    "package": {
+      "type": "string"
+    },
+    "installed_version": {
+      "type": "string"
+    },
+    "fixed_version": {
+      "type": "string"
+    },
+    "cvss_score": {
+      "type": "number"
+    },
+    "cvss_vector": {
+      "type": "string"
+    },
+    "epss_score": {
+      "type": "number"
+    },
+    "exploited_in_wild": {
+      "type": "boolean"
+    },
+    "description": {
+      "type": "string"
+    },
+    "remediation": {
+      "type": "string"
+    },
+    "patch_available": {
+      "type": "boolean"
+    },
+    "patch_command": {
+      "type": "string"
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "os_package",
+        "kernel",
+        "service",
+        "configuration",
+        "network",
+        "authentication"
+      ]
+    },
+    "detected_at": {
+      "type": "string"
+    },
+    "fixed_at": {
+      "type": "string"
+    },
+    "assignee": {
+      "type": "string"
+    }
+  },
+  "required": [],
+  "name": "VMFinding"
+}

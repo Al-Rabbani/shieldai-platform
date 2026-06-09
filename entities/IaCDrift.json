@@ -1,0 +1,92 @@
+{
+  "type": "object",
+  "properties": {
+    "resource_id": {
+      "type": "string"
+    },
+    "resource_type": {
+      "type": "string"
+    },
+    "resource_name": {
+      "type": "string"
+    },
+    "provider": {
+      "type": "string",
+      "enum": [
+        "aws",
+        "azure",
+        "gcp"
+      ]
+    },
+    "region": {
+      "type": "string"
+    },
+    "iac_tool": {
+      "type": "string",
+      "enum": [
+        "terraform",
+        "cloudformation",
+        "pulumi",
+        "cdk",
+        "helm",
+        "ansible"
+      ]
+    },
+    "repo_path": {
+      "type": "string"
+    },
+    "drift_type": {
+      "type": "string",
+      "enum": [
+        "added",
+        "removed",
+        "modified",
+        "destroyed"
+      ]
+    },
+    "severity": {
+      "type": "string",
+      "enum": [
+        "critical",
+        "high",
+        "medium",
+        "low"
+      ]
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "open",
+        "acknowledged",
+        "remediated",
+        "accepted"
+      ]
+    },
+    "declared_value": {
+      "type": "string"
+    },
+    "actual_value": {
+      "type": "string"
+    },
+    "field_changed": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "remediation": {
+      "type": "string"
+    },
+    "detected_at": {
+      "type": "string"
+    },
+    "remediated_at": {
+      "type": "string"
+    },
+    "assignee": {
+      "type": "string"
+    }
+  },
+  "required": [],
+  "name": "IaCDrift"
+}
