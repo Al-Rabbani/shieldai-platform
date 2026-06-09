@@ -1,0 +1,9 @@
+
+[django]
+django>=3.2
+
+[fastapi]
+starlette>=0.20.0
+
+[flask]
+flask>=2.0

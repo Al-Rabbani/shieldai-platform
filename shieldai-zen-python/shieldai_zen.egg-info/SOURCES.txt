@@ -1,0 +1,8 @@
+README.md
+setup.py
+shieldai_zen/__init__.py
+shieldai_zen.egg-info/PKG-INFO
+shieldai_zen.egg-info/SOURCES.txt
+shieldai_zen.egg-info/dependency_links.txt
+shieldai_zen.egg-info/requires.txt
+shieldai_zen.egg-info/top_level.txt
