@@ -1,0 +1,66 @@
+{
+  "type": "object",
+  "properties": {
+    "image": {
+      "type": "string"
+    },
+    "tag": {
+      "type": "string"
+    },
+    "nickname": {
+      "type": "string"
+    },
+    "registry": {
+      "type": "string",
+      "enum": [
+        "dockerhub",
+        "ecr",
+        "gcr",
+        "acr",
+        "ghcr",
+        "custom"
+      ]
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "scanning",
+        "completed",
+        "failed"
+      ]
+    },
+    "total_findings": {
+      "type": "number"
+    },
+    "critical_count": {
+      "type": "number"
+    },
+    "high_count": {
+      "type": "number"
+    },
+    "medium_count": {
+      "type": "number"
+    },
+    "low_count": {
+      "type": "number"
+    },
+    "risk_score": {
+      "type": "number"
+    },
+    "size_mb": {
+      "type": "number"
+    },
+    "layers": {
+      "type": "number"
+    },
+    "os_base": {
+      "type": "string"
+    },
+    "scanned_at": {
+      "type": "string"
+    }
+  },
+  "required": [],
+  "name": "ContainerScan"
+}

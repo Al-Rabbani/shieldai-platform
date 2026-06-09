@@ -1,0 +1,53 @@
+{
+  "type": "object",
+  "properties": {
+    "cluster_nickname": {
+      "type": "string"
+    },
+    "namespace": {
+      "type": "string"
+    },
+    "scan_mode": {
+      "type": "string",
+      "enum": [
+        "manifest",
+        "live_cluster"
+      ]
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "scanning",
+        "completed",
+        "failed"
+      ]
+    },
+    "total_findings": {
+      "type": "number"
+    },
+    "critical_count": {
+      "type": "number"
+    },
+    "high_count": {
+      "type": "number"
+    },
+    "medium_count": {
+      "type": "number"
+    },
+    "low_count": {
+      "type": "number"
+    },
+    "risk_score": {
+      "type": "number"
+    },
+    "scanned_at": {
+      "type": "string"
+    },
+    "categories_found": {
+      "type": "string"
+    }
+  },
+  "required": [],
+  "name": "K8sScan"
+}

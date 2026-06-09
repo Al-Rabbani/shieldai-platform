@@ -1,0 +1,69 @@
+{
+  "type": "object",
+  "properties": {
+    "scan_id": {
+      "type": "string"
+    },
+    "image": {
+      "type": "string"
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "CVE",
+        "Misconfiguration",
+        "Secret",
+        "Malware",
+        "License"
+      ]
+    },
+    "title": {
+      "type": "string"
+    },
+    "severity": {
+      "type": "string",
+      "enum": [
+        "critical",
+        "high",
+        "medium",
+        "low",
+        "info"
+      ]
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "open",
+        "fixed",
+        "suppressed",
+        "false_positive"
+      ]
+    },
+    "package": {
+      "type": "string"
+    },
+    "version": {
+      "type": "string"
+    },
+    "fixed_version": {
+      "type": "string"
+    },
+    "cve_id": {
+      "type": "string"
+    },
+    "cvss_score": {
+      "type": "number"
+    },
+    "description": {
+      "type": "string"
+    },
+    "remediation": {
+      "type": "string"
+    },
+    "detected_at": {
+      "type": "string"
+    }
+  },
+  "required": [],
+  "name": "ContainerFinding"
+}
