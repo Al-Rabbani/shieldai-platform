@@ -1,8 +1,10 @@
 // shieldIOCRadar.ts — Real-time IOC Lookup & Enrichment Engine
-// Aggregates: AbuseIPDB, URLScan.io, MalwareBazaar, OTX AlienVault, VirusTotal (if key present)
+// Aggregates: AbuseIPDB, URLScan.io, MalwareBazaar, OTX AlienVault, VirusTotal
 // Supports: IPv4, IPv6, Domain, URL, MD5/SHA1/SHA256 hash
 
-export default async function handler(req: Request): Promise<Response> {
+import { createClientFromRequest } from "npm:@base44/sdk@0.8.31";
+
+Deno.serve(async (req) => {
   const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
@@ -12,7 +14,7 @@ export default async function handler(req: Request): Promise<Response> {
 
   try {
     const body = await req.json().catch(() => ({}));
-    const { indicator, type } = body; // type: "ip" | "domain" | "url" | "hash" | "auto"
+    const { indicator, type } = body;
 
     if (!indicator) {
       return new Response(JSON.stringify({ error: "indicator is required" }), {
@@ -20,7 +22,6 @@ export default async function handler(req: Request): Promise<Response> {
       });
     }
 
-    // Auto-detect indicator type
     const detectedType = type || detectIndicatorType(indicator);
     console.log(`[IOC Radar] Analyzing ${detectedType}: ${indicator}`);
 
@@ -55,11 +56,9 @@ export default async function handler(req: Request): Promise<Response> {
       }
     });
 
-    // Deduplicate tags
     const uniqueTags = [...new Set(tags)];
     const uniqueRelated = [...new Set(relatedIndicators)].slice(0, 10);
 
-    // Calculate threat score
     const threatScore = calculateThreatScore(totalMalicious, totalSources, maxConfidence, uniqueTags);
     const verdict = getVerdict(threatScore);
     const signalStrength = getSignalStrength(totalSources, totalMalicious);
@@ -90,9 +89,8 @@ export default async function handler(req: Request): Promise<Response> {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" }
     });
   }
-}
+});
 
-// ─── TYPE DETECTION ──────────────────────────────────────────────
 function detectIndicatorType(indicator: string): string {
   if (/^(\d{1,3}\.){3}\d{1,3}$/.test(indicator)) return "ip";
   if (/^[a-fA-F0-9]{64}$/.test(indicator)) return "sha256";
@@ -103,14 +101,10 @@ function detectIndicatorType(indicator: string): string {
   return "unknown";
 }
 
-// ─── ABUSEIPDB ────────────────────────────────────────────────────
 async function enrichWithAbuseIPDB(indicator: string, type: string): Promise<any> {
   if (type !== "ip") return null;
   const apiKey = Deno.env.get("ABUSEIPDB_API_KEY");
-  if (!apiKey) {
-    // Free tier: use public endpoint with limited data
-    return { note: "API key not configured — add ABUSEIPDB_API_KEY for full data", limited: true };
-  }
+  if (!apiKey) return { note: "Add ABUSEIPDB_API_KEY for full IP abuse data", limited: true };
   const res = await fetch(`https://api.abuseipdb.com/api/v2/check?ipAddress=${encodeURIComponent(indicator)}&maxAgeInDays=90&verbose`, {
     headers: { "Key": apiKey, "Accept": "application/json" }
   });
@@ -128,42 +122,25 @@ async function enrichWithAbuseIPDB(indicator: string, type: string): Promise<any
     is_tor: d.isTor,
     is_proxy: d.isProxy,
     last_reported: d.lastReportedAt,
-    tags: d.abuseConfidenceScore > 75 ? ["high-abuse", "malicious-ip"] :
-          d.abuseConfidenceScore > 25 ? ["suspicious-ip"] : [],
+    tags: d.abuseConfidenceScore > 75 ? ["high-abuse", "malicious-ip"] : d.abuseConfidenceScore > 25 ? ["suspicious-ip"] : [],
     source: "abuseipdb",
   };
 }
 
-// ─── URLSCAN.IO ───────────────────────────────────────────────────
 async function enrichWithURLScan(indicator: string, type: string): Promise<any> {
   if (!["domain", "url", "ip"].includes(type)) return null;
-
-  const query = type === "url"
-    ? `page.url:"${indicator}"`
-    : type === "ip"
-    ? `page.ip:${indicator}`
-    : `domain:${indicator}`;
-
-  const res = await fetch(`https://urlscan.io/api/v1/search/?q=${encodeURIComponent(query)}&size=5`, {
-    headers: { "Accept": "application/json" }
-  });
+  const query = type === "url" ? `page.url:"${indicator}"` : type === "ip" ? `page.ip:${indicator}` : `domain:${indicator}`;
+  const res = await fetch(`https://urlscan.io/api/v1/search/?q=${encodeURIComponent(query)}&size=5`, { headers: { "Accept": "application/json" } });
   if (!res.ok) return { error: `URLScan HTTP ${res.status}` };
   const data = await res.json();
-
   const results = data.results || [];
-  const maliciousResults = results.filter((r: any) =>
-    r.verdicts?.overall?.malicious ||
-    r.verdicts?.urlscan?.score > 50
-  );
-
+  const maliciousResults = results.filter((r: any) => r.verdicts?.overall?.malicious || r.verdicts?.urlscan?.score > 50);
   const tags: string[] = [];
   const related: string[] = [];
-
   results.forEach((r: any) => {
     if (r.page?.domain && r.page.domain !== indicator) related.push(r.page.domain);
     if (r.verdicts?.urlscan?.categories) tags.push(...r.verdicts.urlscan.categories);
   });
-
   return {
     malicious: maliciousResults.length > 0,
     confidence: maliciousResults.length > 0 ? 70 : 10,
@@ -177,10 +154,8 @@ async function enrichWithURLScan(indicator: string, type: string): Promise<any> 
   };
 }
 
-// ─── MALWAREBAZAAR ────────────────────────────────────────────────
 async function enrichWithMalwareBazaar(indicator: string, type: string): Promise<any> {
   if (!["md5", "sha1", "sha256"].includes(type)) return null;
-
   const res = await fetch("https://mb-api.abuse.ch/api/v1/", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -188,119 +163,75 @@ async function enrichWithMalwareBazaar(indicator: string, type: string): Promise
   });
   if (!res.ok) return { error: `MalwareBazaar HTTP ${res.status}` };
   const data = await res.json();
-
-  if (data.query_status !== "ok" || !data.data?.[0]) {
-    return { malicious: false, found: false, source: "malwarebazaar" };
-  }
-
+  if (data.query_status !== "ok" || !data.data?.[0]) return { malicious: false, found: false, source: "malwarebazaar" };
   const sample = data.data[0];
   return {
-    malicious: true,
-    found: true,
-    confidence: 95,
-    file_name: sample.file_name,
-    file_type: sample.file_type,
-    file_size: sample.file_size,
-    mime_type: sample.mime_type,
-    signature: sample.signature,
-    malware_family: sample.tags?.join(", "),
-    first_seen: sample.first_seen,
-    last_seen: sample.last_seen,
-    delivery_method: sample.delivery_method,
-    origin_country: sample.origin_country,
-    tags: sample.tags || [],
+    malicious: true, found: true, confidence: 95,
+    file_name: sample.file_name, file_type: sample.file_type,
+    signature: sample.signature, malware_family: sample.tags?.join(", "),
+    first_seen: sample.first_seen, tags: sample.tags || [],
     source: "malwarebazaar",
   };
 }
 
-// ─── ALIENVAULT OTX ───────────────────────────────────────────────
 async function enrichWithOTX(indicator: string, type: string): Promise<any> {
-  const typeMap: Record<string, string> = {
-    ip: "IPv4", domain: "domain", url: "url",
-    md5: "file", sha1: "file", sha256: "file"
-  };
+  const typeMap: Record<string, string> = { ip: "IPv4", domain: "domain", url: "url", md5: "file", sha1: "file", sha256: "file" };
   const otxType = typeMap[type];
   if (!otxType) return null;
-
   const endpoint = type === "url"
     ? `https://otx.alienvault.com/api/v1/indicators/url/${encodeURIComponent(indicator)}/general`
     : `https://otx.alienvault.com/api/v1/indicators/${otxType}/${encodeURIComponent(indicator)}/general`;
-
   const headers: Record<string, string> = { "Accept": "application/json" };
   const apiKey = Deno.env.get("OTX_API_KEY");
   if (apiKey) headers["X-OTX-API-KEY"] = apiKey;
-
   const res = await fetch(endpoint, { headers });
   if (!res.ok) return { error: `OTX HTTP ${res.status}` };
   const data = await res.json();
-
   const pulseCount = data.pulse_info?.count || 0;
   const pulses = data.pulse_info?.pulses || [];
   const tags: string[] = [];
-  const related: string[] = [];
-
   pulses.slice(0, 5).forEach((p: any) => {
     if (p.tags) tags.push(...p.tags);
     if (p.malware_families) tags.push(...p.malware_families.map((m: any) => m.display_name));
-    if (p.industries) tags.push(...p.industries);
   });
-
   return {
     malicious: pulseCount > 0,
     confidence: Math.min(pulseCount * 15, 95),
     pulse_count: pulseCount,
     country: data.country_name,
     asn: data.asn,
-    reputation: data.reputation || 0,
     adversary: pulses[0]?.adversary || null,
     malware_families: [...new Set(pulses.flatMap((p: any) => p.malware_families?.map((m: any) => m.display_name) || []))].slice(0, 5),
     tags: [...new Set(tags)].slice(0, 8),
-    related,
     source: "alienvault-otx",
   };
 }
 
-// ─── VIRUSTOTAL ───────────────────────────────────────────────────
 async function enrichWithVirusTotal(indicator: string, type: string): Promise<any> {
   const apiKey = Deno.env.get("VIRUSTOTAL_API_KEY");
   if (!apiKey) return { note: "Add VIRUSTOTAL_API_KEY for VirusTotal enrichment", limited: true };
-
-  const typeMap: Record<string, string> = {
-    ip: "ip_addresses", domain: "domains", url: "urls",
-    md5: "files", sha1: "files", sha256: "files"
-  };
+  const typeMap: Record<string, string> = { ip: "ip_addresses", domain: "domains", url: "urls", md5: "files", sha1: "files", sha256: "files" };
   const vtType = typeMap[type];
   if (!vtType) return null;
-
   const endpoint = type === "url"
     ? `https://www.virustotal.com/api/v3/urls/${btoa(indicator).replace(/=/g, "")}`
     : `https://www.virustotal.com/api/v3/${vtType}/${indicator}`;
-
-  const res = await fetch(endpoint, {
-    headers: { "x-apikey": apiKey, "Accept": "application/json" }
-  });
+  const res = await fetch(endpoint, { headers: { "x-apikey": apiKey, "Accept": "application/json" } });
   if (!res.ok) return { error: `VirusTotal HTTP ${res.status}` };
   const data = await res.json();
-
   const stats = data.data?.attributes?.last_analysis_stats || {};
   const maliciousCount = stats.malicious || 0;
   const totalEngines = Object.values(stats).reduce((a: any, b: any) => a + b, 0) as number;
-
   return {
     malicious: maliciousCount > 3,
     confidence: totalEngines > 0 ? Math.round((maliciousCount / totalEngines) * 100) : 0,
     malicious_engines: maliciousCount,
-    suspicious_engines: stats.suspicious || 0,
     total_engines: totalEngines,
-    reputation: data.data?.attributes?.reputation || 0,
     tags: data.data?.attributes?.tags || [],
-    categories: data.data?.attributes?.categories ? Object.values(data.data.attributes.categories).slice(0, 3) : [],
-    last_analysis_date: data.data?.attributes?.last_analysis_date,
     source: "virustotal",
   };
 }
 
-// ─── SCORING ─────────────────────────────────────────────────────
 function calculateThreatScore(malicious: number, total: number, confidence: number, tags: string[]): number {
   if (total === 0) return 0;
   const baseScore = (malicious / Math.max(total, 1)) * 60;
@@ -341,9 +272,7 @@ function getRecommendedAction(verdict: string, type: string): string {
       hash: "Submit to sandbox for dynamic analysis before executing.",
       default: "Investigate further before taking action.",
     },
-    CLEAN: {
-      default: "No threat detected. Continue monitoring.",
-    },
+    CLEAN: { default: "No threat detected. Continue monitoring." },
   };
   return (actions[verdict]?.[type] || actions[verdict]?.default || actions["CLEAN"].default);
 }
