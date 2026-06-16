@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ShieldAI — One Pager</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Inter', sans-serif; background: #0A0E1A; color: #fff; width: 1200px; margin: 0 auto; }
+  .page { padding: 48px; }
+
+  /* HEADER */
+  .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 40px; padding-bottom: 24px; border-bottom: 1px solid #1f2937; }
+  .logo { display: flex; align-items: center; gap: 12px; }
+  .logo-icon { width: 48px; height: 48px; background: linear-gradient(135deg, #C9A84C, #f5d78e); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 24px; }
+  .logo-text { font-size: 28px; font-weight: 800; color: #fff; }
+  .logo-sub { font-size: 11px; color: #C9A84C; letter-spacing: 2px; text-transform: uppercase; }
+  .header-right { text-align: right; }
+  .header-right .tagline { font-size: 13px; color: #9ca3af; }
+  .header-right .url { font-size: 15px; color: #C9A84C; font-weight: 600; }
+
+  /* HERO */
+  .hero { background: linear-gradient(135deg, #111827 0%, #0d1220 100%); border: 1px solid #1f2937; border-radius: 16px; padding: 36px; margin-bottom: 28px; position: relative; overflow: hidden; }
+  .hero::before { content: ''; position: absolute; top: -50px; right: -50px; width: 200px; height: 200px; background: radial-gradient(circle, rgba(201,168,76,0.1) 0%, transparent 70%); }
+  .hero h1 { font-size: 36px; font-weight: 900; line-height: 1.15; margin-bottom: 12px; }
+  .hero h1 span { color: #C9A84C; }
+  .hero p { font-size: 15px; color: #9ca3af; max-width: 600px; line-height: 1.6; margin-bottom: 24px; }
+  .hero-stats { display: flex; gap: 32px; }
+  .hero-stat { }
+  .hero-stat .num { font-size: 28px; font-weight: 800; color: #C9A84C; }
+  .hero-stat .lbl { font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: 1px; }
+
+  /* PILLARS */
+  .section-title { font-size: 11px; font-weight: 700; color: #C9A84C; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 16px; }
+  .pillars { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; margin-bottom: 28px; }
+  .pillar { background: #111827; border: 1px solid #1f2937; border-radius: 12px; padding: 16px 12px; text-align: center; }
+  .pillar .icon { font-size: 22px; margin-bottom: 8px; }
+  .pillar .name { font-size: 11px; font-weight: 600; color: #fff; margin-bottom: 4px; }
+  .pillar .desc { font-size: 10px; color: #6b7280; line-height: 1.4; }
+
+  /* COMPARISON TABLE */
+  .comparison { margin-bottom: 28px; }
+  table { width: 100%; border-collapse: collapse; }
+  thead th { background: #111827; padding: 12px 14px; font-size: 12px; font-weight: 700; text-align: center; border: 1px solid #1f2937; }
+  thead th:first-child { text-align: left; }
+  thead th.shield { background: linear-gradient(135deg, #1a1200, #2a1e00); color: #C9A84C; border-color: #C9A84C; }
+  tbody tr:nth-child(even) { background: #0d1220; }
+  tbody tr:nth-child(odd) { background: #111827; }
+  tbody td { padding: 10px 14px; font-size: 12px; border: 1px solid #1f2937; text-align: center; color: #9ca3af; }
+  tbody td:first-child { text-align: left; color: #fff; font-weight: 500; }
+  tbody td.shield { color: #C9A84C; font-weight: 700; border-left: 2px solid #C9A84C; border-right: 2px solid #C9A84C; }
+  tbody tr:last-child td.shield { border-bottom: 2px solid #C9A84C; }
+  .check { color: #22c55e; font-size: 14px; }
+  .cross { color: #ef4444; font-size: 14px; }
+  .partial { color: #eab308; font-size: 14px; }
+
+  /* PRICING */
+  .pricing { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 28px; }
+  .plan { background: #111827; border: 1px solid #1f2937; border-radius: 12px; padding: 24px; }
+  .plan.featured { border-color: #C9A84C; background: linear-gradient(135deg, #1a1200 0%, #111827 100%); }
+  .plan-badge { font-size: 10px; font-weight: 700; color: #C9A84C; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+  .plan-name { font-size: 20px; font-weight: 800; margin-bottom: 4px; }
+  .plan-price { font-size: 32px; font-weight: 900; color: #C9A84C; margin-bottom: 4px; }
+  .plan-price span { font-size: 14px; color: #6b7280; font-weight: 400; }
+  .plan-desc { font-size: 12px; color: #6b7280; margin-bottom: 16px; }
+  .plan-features { list-style: none; }
+  .plan-features li { font-size: 11px; color: #9ca3af; padding: 4px 0; border-bottom: 1px solid #1f2937; display: flex; align-items: center; gap: 6px; }
+  .plan-features li::before { content: '✓'; color: #22c55e; font-weight: 700; font-size: 12px; }
+
+  /* ROI */
+  .roi { background: linear-gradient(135deg, #111827, #0d1220); border: 1px solid #1f2937; border-radius: 16px; padding: 28px; margin-bottom: 28px; display: grid; grid-template-columns: 1fr 1fr; gap: 32px; }
+  .roi-left h3 { font-size: 18px; font-weight: 800; margin-bottom: 12px; }
+  .roi-left p { font-size: 13px; color: #9ca3af; line-height: 1.6; }
+  .roi-metrics { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+  .roi-metric { background: #0A0E1A; border: 1px solid #1f2937; border-radius: 8px; padding: 14px; }
+  .roi-metric .val { font-size: 22px; font-weight: 800; color: #22c55e; }
+  .roi-metric .lbl { font-size: 11px; color: #6b7280; }
+
+  /* FOOTER */
+  .footer { border-top: 1px solid #1f2937; padding-top: 20px; display: flex; justify-content: space-between; align-items: center; }
+  .footer-left { font-size: 12px; color: #6b7280; }
+  .footer-right { display: flex; gap: 24px; }
+  .footer-link { font-size: 12px; color: #C9A84C; }
+  .cta-box { background: linear-gradient(135deg, #1a1200, #2a1e00); border: 2px solid #C9A84C; border-radius: 12px; padding: 20px 28px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 28px; }
+  .cta-box h3 { font-size: 18px; font-weight: 800; }
+  .cta-box p { font-size: 13px; color: #9ca3af; }
+  .cta-buttons { display: flex; gap: 12px; }
+  .btn-primary { background: #C9A84C; color: #000; font-weight: 700; font-size: 13px; padding: 10px 20px; border-radius: 8px; text-decoration: none; white-space: nowrap; }
+  .btn-secondary { border: 1px solid #C9A84C; color: #C9A84C; font-size: 13px; padding: 10px 20px; border-radius: 8px; text-decoration: none; white-space: nowrap; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- HEADER -->
+  <div class="header">
+    <div class="logo">
+      <div class="logo-icon">🛡️</div>
+      <div>
+        <div class="logo-text">ShieldAI</div>
+        <div class="logo-sub">Global Digital Security Ecosystem</div>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="tagline">The world's most complete security platform</div>
+      <div class="url">shieldai.dev &nbsp;·&nbsp; hello@shieldai.dev</div>
+    </div>
+  </div>
+
+  <!-- HERO -->
+  <div class="hero">
+    <h1>One Platform.<br><span>Total Digital Security.</span></h1>
+    <p>ShieldAI is the world's first sovereign security ecosystem protecting enterprises, governments, and homes — unifying Code, Cloud, Threat Intelligence, Runtime, AI Security, and Governance into one AI-powered command centre.</p>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="num">60+</div><div class="lbl">Security Modules</div></div>
+      <div class="hero-stat"><div class="num">94</div><div class="lbl">Countries Protected</div></div>
+      <div class="hero-stat"><div class="num">97%</div><div class="lbl">SOC Automation Rate</div></div>
+      <div class="hero-stat"><div class="num">$244B</div><div class="lbl">Market by 2026</div></div>
+    </div>
+  </div>
+
+  <!-- 6 PILLARS -->
+  <div class="section-title">6 Security Pillars — Complete Coverage</div>
+  <div class="pillars">
+    <div class="pillar"><div class="icon">💻</div><div class="name">Code Security</div><div class="desc">SAST · SCA · Secrets · IaC · CI/CD · Breaking Changes</div></div>
+    <div class="pillar"><div class="icon">☁️</div><div class="name">Cloud Security</div><div class="desc">CSPM · CIEM · DSPM · Security Graph · Attack Paths</div></div>
+    <div class="pillar"><div class="icon">⚔️</div><div class="name">Attack Surface</div><div class="desc">DAST · API Fuzzing · Pentest · Reachability · Zero-Day</div></div>
+    <div class="pillar"><div class="icon">🛡️</div><div class="name">Runtime Protect</div><div class="desc">Zen Firewall · Bot Defense · Supply Chain · Deception</div></div>
+    <div class="pillar"><div class="icon">🤖</div><div class="name">AI Security</div><div class="desc">AI-SPM · MCP Governance · LLM Monitor · Autonomous SOC</div></div>
+    <div class="pillar"><div class="icon">📋</div><div class="name">Governance</div><div class="desc">NIS2 · DORA · GDPR · PCI-DSS · Quantum Readiness</div></div>
+  </div>
+
+  <!-- COMPARISON -->
+  <div class="comparison">
+    <div class="section-title">ShieldAI vs The Competition</div>
+    <table>
+      <thead>
+        <tr>
+          <th>Capability</th>
+          <th class="shield">🛡️ ShieldAI</th>
+          <th>Wiz</th>
+          <th>Aikido</th>
+          <th>Snyk</th>
+          <th>CrowdStrike</th>
+          <th>SOCRadar</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>Code Security (SAST/SCA/Secrets)</td><td class="shield">✅</td><td class="check">✅</td><td class="check">✅</td><td class="check">✅</td><td class="cross">❌</td><td class="cross">❌</td></tr>
+        <tr><td>Cloud Security (CSPM/CIEM/DSPM)</td><td class="shield">✅</td><td class="check">✅</td><td class="partial">⚠️</td><td class="cross">❌</td><td class="check">✅</td><td class="cross">❌</td></tr>
+        <tr><td>Runtime Protection + Firewall</td><td class="shield">✅</td><td class="cross">❌</td><td class="partial">⚠️</td><td class="cross">❌</td><td class="check">✅</td><td class="cross">❌</td></tr>
+        <tr><td>AI/LLM Security (AI-SPM)</td><td class="shield">✅</td><td class="partial">⚠️</td><td class="check">✅</td><td class="cross">❌</td><td class="cross">❌</td><td class="cross">❌</td></tr>
+        <tr><td>Autonomous SOC Engine</td><td class="shield">✅</td><td class="cross">❌</td><td class="cross">❌</td><td class="cross">❌</td><td class="partial">⚠️</td><td class="cross">❌</td></tr>
+        <tr><td>Post-Quantum Cryptography Scanner</td><td class="shield">✅</td><td class="cross">❌</td><td class="cross">❌</td><td class="cross">❌</td><td class="cross">❌</td><td class="cross">❌</td></tr>
+        <tr><td>Predictive Attack Forecasting</td><td class="shield">✅</td><td class="cross">❌</td><td class="cross">❌</td><td class="cross">❌</td><td class="cross">❌</td><td class="cross">❌</td></tr>
+        <tr><td>Consumer (Home) Protection</td><td class="shield">✅</td><td class="cross">❌</td><td class="cross">❌</td><td class="cross">❌</td><td class="cross">❌</td><td class="cross">❌</td></tr>
+        <tr><td>Government / Critical Infrastructure</td><td class="shield">✅</td><td class="partial">⚠️</td><td class="cross">❌</td><td class="cross">❌</td><td class="check">✅</td><td class="partial">⚠️</td></tr>
+        <tr><td>Cyber Insurance Intelligence</td><td class="shield">✅</td><td class="cross">❌</td><td class="cross">❌</td><td class="cross">❌</td><td class="cross">❌</td><td class="cross">❌</td></tr>
+        <tr><td>Digital Twin / Cyber Range</td><td class="shield">✅</td><td class="cross">❌</td><td class="cross">❌</td><td class="cross">❌</td><td class="cross">❌</td><td class="cross">❌</td></tr>
+        <tr><td>Built-in Security Academy</td><td class="shield">✅</td><td class="cross">❌</td><td class="cross">❌</td><td class="check">✅</td><td class="cross">❌</td><td class="cross">❌</td></tr>
+        <tr><td>MSSP Multi-Tenant Portal</td><td class="shield">✅</td><td class="partial">⚠️</td><td class="cross">❌</td><td class="cross">❌</td><td class="check">✅</td><td class="partial">⚠️</td></tr>
+        <tr><td>Starting Price / Month</td><td class="shield" style="color:#22c55e;font-weight:800;">$299</td><td style="color:#ef4444;">$5,000+</td><td style="color:#f97316;">$999+</td><td style="color:#f97316;">$600+</td><td style="color:#ef4444;">$10,000+</td><td style="color:#f97316;">$1,500+</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- PRICING -->
+  <div class="section-title">Simple, Transparent Pricing</div>
+  <div class="pricing">
+    <div class="plan">
+      <div class="plan-badge">Free Forever</div>
+      <div class="plan-name">Starter</div>
+      <div class="plan-price">$0<span>/month</span></div>
+      <div class="plan-desc">For developers and curious teams</div>
+      <ul class="plan-features">
+        <li>10 repositories</li>
+        <li>2 cloud accounts</li>
+        <li>Basic SAST + SCA</li>
+        <li>10 AI AutoFixes/month</li>
+        <li>Community support</li>
+      </ul>
+    </div>
+    <div class="plan featured">
+      <div class="plan-badge">⭐ Most Popular</div>
+      <div class="plan-name">Pro</div>
+      <div class="plan-price">$299<span>/month</span></div>
+      <div class="plan-desc">For growing security teams</div>
+      <ul class="plan-features">
+        <li>200 repositories + 10 cloud accounts</li>
+        <li>Full SAST · SCA · Secrets · IaC</li>
+        <li>CSPM · CIEM · DSPM · Security Graph</li>
+        <li>AI-SPM + MCP Governance</li>
+        <li>5 Pentests/month</li>
+        <li>SOC2 · ISO27001 · PCI-DSS</li>
+        <li>400 AI AutoFixes/month</li>
+        <li>Slack + Jira + Linear integrations</li>
+      </ul>
+    </div>
+    <div class="plan">
+      <div class="plan-badge">Enterprise</div>
+      <div class="plan-name">Sovereign</div>
+      <div class="plan-price">Custom<span> pricing</span></div>
+      <div class="plan-desc">For organisations that demand the best</div>
+      <ul class="plan-features">
+        <li>Unlimited repos + cloud accounts</li>
+        <li>MSSP multi-tenant mode</li>
+        <li>Autonomous SOC Engine</li>
+        <li>Quantum Readiness Scanner</li>
+        <li>Regulatory Intel (NIS2/DORA/CRA)</li>
+        <li>ShieldAI Gov + Edge modules</li>
+        <li>Dedicated Slack + 99.9% SLA</li>
+        <li>Custom data residency (EU/US/APAC)</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ROI -->
+  <div class="roi">
+    <div class="roi-left">
+      <h3>Proven ROI — Security That Pays for Itself</h3>
+      <p>ShieldAI's AI-powered automation eliminates tool sprawl, reduces analyst workload by 97%, and cuts mean time to detect from hours to minutes. The average enterprise replaces 12 security tools with ShieldAI — saving $180,000+ per year.</p>
+      <br/>
+      <p style="font-size:12px; color:#6b7280;">Gartner: Global security spending reaches $244.2B in 2026. Cloud security is the fastest-growing segment at 28.8%. AI-amplified security market reaches $160B by 2029.</p>
+    </div>
+    <div class="roi-metrics">
+      <div class="roi-metric"><div class="val">97%</div><div class="lbl">SOC automation rate</div></div>
+      <div class="roi-metric"><div class="val">4.2min</div><div class="lbl">Mean time to detect</div></div>
+      <div class="roi-metric"><div class="val">85%</div><div class="lbl">Noise reduction via AI triage</div></div>
+      <div class="roi-metric"><div class="val">$180K</div><div class="lbl">Avg annual tool savings</div></div>
+    </div>
+  </div>
+
+  <!-- CTA -->
+  <div class="cta-box">
+    <div>
+      <h3>Ready to unify your security stack?</h3>
+      <p>Start free — no credit card required. Pro trial available. Enterprise pilots on request.</p>
+    </div>
+    <div class="cta-buttons">
+      <a href="https://shieldai.dev" class="btn-primary">Start Free Today</a>
+      <a href="mailto:hello@shieldai.dev" class="btn-secondary">Talk to Sales</a>
+    </div>
+  </div>
+
+  <!-- FOOTER -->
+  <div class="footer">
+    <div class="footer-left">© 2026 ShieldAI · The World's #1 Global Digital Security Ecosystem · Built Sovereign. Built Different.</div>
+    <div class="footer-right">
+      <span class="footer-link">shieldai.dev</span>
+      <span class="footer-link">hello@shieldai.dev</span>
+      <span class="footer-link">linkedin.com/company/shieldai</span>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>
