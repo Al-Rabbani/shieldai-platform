@@ -1,0 +1,40 @@
+{
+  "type": "object",
+  "properties": {
+    "webhook_url": {
+      "type": "string"
+    },
+    "event_type": {
+      "type": "string"
+    },
+    "payload": {
+      "type": "object"
+    },
+    "status_code": {
+      "type": "number"
+    },
+    "response_body": {
+      "type": "string"
+    },
+    "latency_ms": {
+      "type": "number"
+    },
+    "success": {
+      "type": "boolean"
+    },
+    "attempt_number": {
+      "type": "number"
+    },
+    "next_retry_at": {
+      "type": "string"
+    },
+    "delivered_at": {
+      "type": "string"
+    },
+    "error_message": {
+      "type": "string"
+    }
+  },
+  "required": [],
+  "name": "WebhookDelivery"
+}

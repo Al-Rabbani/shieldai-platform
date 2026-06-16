@@ -1,0 +1,66 @@
+{
+  "type": "object",
+  "properties": {
+    "user_id": {
+      "type": "string"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "critical_finding",
+        "scan_complete",
+        "autofix_created",
+        "autofix_merged",
+        "sla_breach",
+        "threat_intel",
+        "compliance_change",
+        "team_invite",
+        "billing",
+        "system"
+      ]
+    },
+    "title": {
+      "type": "string"
+    },
+    "message": {
+      "type": "string"
+    },
+    "severity": {
+      "type": "string",
+      "enum": [
+        "critical",
+        "high",
+        "medium",
+        "low",
+        "info"
+      ]
+    },
+    "resource_type": {
+      "type": "string"
+    },
+    "resource_id": {
+      "type": "string"
+    },
+    "action_url": {
+      "type": "string"
+    },
+    "is_read": {
+      "type": "boolean"
+    },
+    "is_dismissed": {
+      "type": "boolean"
+    },
+    "channel": {
+      "type": "string",
+      "enum": [
+        "in_app",
+        "email",
+        "slack",
+        "teams",
+        "all"
+      ]
+    }
+  },
+  "required": [],
+  "name": "Notification"
+}

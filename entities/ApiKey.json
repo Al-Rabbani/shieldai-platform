@@ -1,0 +1,51 @@
+{
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string"
+    },
+    "key_prefix": {
+      "type": "string"
+    },
+    "key_hash": {
+      "type": "string"
+    },
+    "permissions": {
+      "type": "string",
+      "enum": [
+        "read",
+        "read_write",
+        "admin"
+      ]
+    },
+    "scopes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "last_used_at": {
+      "type": "string"
+    },
+    "expires_at": {
+      "type": "string"
+    },
+    "is_active": {
+      "type": "boolean"
+    },
+    "usage_count": {
+      "type": "number"
+    },
+    "ip_allowlist": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "description": {
+      "type": "string"
+    }
+  },
+  "required": [],
+  "name": "ApiKey"
+}

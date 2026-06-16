@@ -1,0 +1,62 @@
+{
+  "type": "object",
+  "properties": {
+    "actor_id": {
+      "type": "string"
+    },
+    "actor_email": {
+      "type": "string"
+    },
+    "actor_type": {
+      "type": "string",
+      "enum": [
+        "user",
+        "system",
+        "api",
+        "automation"
+      ]
+    },
+    "action": {
+      "type": "string"
+    },
+    "resource_type": {
+      "type": "string"
+    },
+    "resource_id": {
+      "type": "string"
+    },
+    "resource_name": {
+      "type": "string"
+    },
+    "details": {
+      "type": "string"
+    },
+    "ip_address": {
+      "type": "string"
+    },
+    "session_id": {
+      "type": "string"
+    },
+    "tenant_id": {
+      "type": "string"
+    },
+    "severity": {
+      "type": "string",
+      "enum": [
+        "info",
+        "warning",
+        "critical"
+      ]
+    },
+    "outcome": {
+      "type": "string",
+      "enum": [
+        "success",
+        "failure",
+        "blocked"
+      ]
+    }
+  },
+  "required": [],
+  "name": "AuditLog"
+}

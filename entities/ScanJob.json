@@ -1,0 +1,101 @@
+{
+  "type": "object",
+  "properties": {
+    "job_type": {
+      "type": "string",
+      "enum": [
+        "sast",
+        "sca",
+        "secrets",
+        "dast",
+        "container",
+        "cloud_aws",
+        "cloud_azure",
+        "cloud_gcp",
+        "k8s",
+        "vm",
+        "pentest",
+        "api_fuzz",
+        "supply_chain",
+        "threat_intel",
+        "brand",
+        "dark_web",
+        "full"
+      ]
+    },
+    "target": {
+      "type": "string"
+    },
+    "target_id": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "queued",
+        "running",
+        "completed",
+        "failed",
+        "cancelled"
+      ]
+    },
+    "triggered_by": {
+      "type": "string"
+    },
+    "trigger_type": {
+      "type": "string",
+      "enum": [
+        "manual",
+        "scheduled",
+        "commit",
+        "pr",
+        "webhook",
+        "api"
+      ]
+    },
+    "progress_pct": {
+      "type": "number"
+    },
+    "current_step": {
+      "type": "string"
+    },
+    "total_findings": {
+      "type": "number"
+    },
+    "critical_count": {
+      "type": "number"
+    },
+    "high_count": {
+      "type": "number"
+    },
+    "medium_count": {
+      "type": "number"
+    },
+    "low_count": {
+      "type": "number"
+    },
+    "duration_seconds": {
+      "type": "number"
+    },
+    "started_at": {
+      "type": "string"
+    },
+    "completed_at": {
+      "type": "string"
+    },
+    "error_message": {
+      "type": "string"
+    },
+    "result_summary": {
+      "type": "object"
+    },
+    "branch": {
+      "type": "string"
+    },
+    "commit_sha": {
+      "type": "string"
+    }
+  },
+  "required": [],
+  "name": "ScanJob"
+}

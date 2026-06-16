@@ -1,0 +1,71 @@
+{
+  "type": "object",
+  "properties": {
+    "integration_type": {
+      "type": "string",
+      "enum": [
+        "github",
+        "gitlab",
+        "bitbucket",
+        "jira",
+        "linear",
+        "slack",
+        "teams",
+        "pagerduty",
+        "opsgenie",
+        "splunk",
+        "datadog",
+        "elastic",
+        "servicenow",
+        "aws_security_hub",
+        "vscode",
+        "jetbrains",
+        "semgrep",
+        "virustotal",
+        "shodan",
+        "censys",
+        "drata",
+        "vanta",
+        "stripe"
+      ]
+    },
+    "nickname": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "connected",
+        "disconnected",
+        "error",
+        "pending"
+      ]
+    },
+    "config": {
+      "type": "object"
+    },
+    "scopes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "last_sync": {
+      "type": "string"
+    },
+    "error_message": {
+      "type": "string"
+    },
+    "tenant_id": {
+      "type": "string"
+    },
+    "webhook_url": {
+      "type": "string"
+    },
+    "webhook_secret": {
+      "type": "string"
+    }
+  },
+  "required": [],
+  "name": "IntegrationConfig"
+}

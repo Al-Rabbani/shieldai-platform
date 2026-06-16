@@ -1,0 +1,70 @@
+{
+  "type": "object",
+  "properties": {
+    "node_id": {
+      "type": "string"
+    },
+    "node_type": {
+      "type": "string",
+      "enum": [
+        "internet",
+        "exposed_service",
+        "vm",
+        "container",
+        "database",
+        "iam_role",
+        "code_repo",
+        "storage",
+        "api_endpoint",
+        "network",
+        "user",
+        "function"
+      ]
+    },
+    "label": {
+      "type": "string"
+    },
+    "asset_id": {
+      "type": "string"
+    },
+    "provider": {
+      "type": "string"
+    },
+    "risk_level": {
+      "type": "string",
+      "enum": [
+        "critical",
+        "high",
+        "medium",
+        "low",
+        "none"
+      ]
+    },
+    "findings_count": {
+      "type": "number"
+    },
+    "is_internet_facing": {
+      "type": "boolean"
+    },
+    "connected_to": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "attack_paths": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "metadata": {
+      "type": "object"
+    },
+    "last_updated": {
+      "type": "string"
+    }
+  },
+  "required": [],
+  "name": "SecurityGraph"
+}

@@ -1,0 +1,98 @@
+{
+  "type": "object",
+  "properties": {
+    "org_name": {
+      "type": "string"
+    },
+    "org_domain": {
+      "type": "string"
+    },
+    "plan": {
+      "type": "string",
+      "enum": [
+        "free",
+        "starter",
+        "professional",
+        "enterprise",
+        "sovereign"
+      ]
+    },
+    "plan_expires_at": {
+      "type": "string"
+    },
+    "stripe_customer_id": {
+      "type": "string"
+    },
+    "stripe_subscription_id": {
+      "type": "string"
+    },
+    "sla_critical_hours": {
+      "type": "number"
+    },
+    "sla_high_hours": {
+      "type": "number"
+    },
+    "sla_medium_hours": {
+      "type": "number"
+    },
+    "slack_webhook_url": {
+      "type": "string"
+    },
+    "teams_webhook_url": {
+      "type": "string"
+    },
+    "pagerduty_integration_key": {
+      "type": "string"
+    },
+    "default_assignee": {
+      "type": "string"
+    },
+    "auto_triage_enabled": {
+      "type": "boolean"
+    },
+    "auto_fix_enabled": {
+      "type": "boolean"
+    },
+    "ci_gate_enabled": {
+      "type": "boolean"
+    },
+    "ci_gate_block_severity": {
+      "type": "string"
+    },
+    "data_residency": {
+      "type": "string",
+      "enum": [
+        "eu",
+        "us",
+        "au",
+        "byoc"
+      ]
+    },
+    "ss\u043e_enabled": {
+      "type": "boolean"
+    },
+    "sso_provider": {
+      "type": "string"
+    },
+    "sso_metadata_url": {
+      "type": "string"
+    },
+    "risk_score_baseline": {
+      "type": "number"
+    },
+    "industry": {
+      "type": "string"
+    },
+    "tenant_id": {
+      "type": "string"
+    },
+    "mssp_managed": {
+      "type": "boolean"
+    },
+    "mssp_provider_id": {
+      "type": "string"
+    }
+  },
+  "required": [],
+  "name": "OrgSettings"
+}
