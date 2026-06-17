@@ -451,7 +451,31 @@ Deno.serve(async (req) => {
     data_sources: ["GitHub API", "OSV.dev", "NVD NIST", "CISA KEV", "endoflife.date"],
   };
 
-  return Response.json({ success: true, ...results }, {
+  // ── AUTO-TRIGGER POST-SCAN PIPELINE (Stage 7)
+  // Fire-and-forget: scan → AutoTriage → PR Decoration → Tickets → Notify
+  const pipelinePayload = {
+    scan_type: "repo",
+    scan_results: allFindings,
+    repo_full_name,
+    pr_number:   body.pr_number   || null,
+    commit_sha:  body.commit_sha  || null,
+    scan_job_id: body.scan_job_id || null,
+    skip_steps: allFindings.length === 0 ? ["notify", "ticket", "pr_decoration"] : [],
+  };
+
+  const APP_BASE = `https://app.base44.com/api/apps/${Deno.env.get("BASE44_APP_ID") || ""}`;
+  const SVC_TOK  = Deno.env.get("BASE44_SERVICE_TOKEN") || "";
+
+  // Non-blocking — don't await, scan response returns immediately
+  fetch(`${APP_BASE}/functions/shieldPostScanPipeline`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${SVC_TOK}`, "Content-Type": "application/json" },
+    body: JSON.stringify(pipelinePayload),
+  }).catch((e: any) => console.warn("[ScanRepo] Pipeline trigger failed:", e.message));
+
+  console.log(`[ScanRepo] Pipeline triggered for ${repo_full_name} — ${allFindings.length} findings, pr=${body.pr_number || "none"}`);
+
+  return Response.json({ success: true, ...results, pipeline_triggered: true }, {
     headers: { "Access-Control-Allow-Origin": "*", "Content-Type": "application/json" }
   });
 });
