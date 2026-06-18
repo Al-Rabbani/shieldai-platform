@@ -1,0 +1,79 @@
+{
+  "type": "object",
+  "properties": {
+    "overall_score": {
+      "type": "number"
+    },
+    "grade": {
+      "type": "string",
+      "enum": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "F"
+      ]
+    },
+    "trend": {
+      "type": "string",
+      "enum": [
+        "improving",
+        "stable",
+        "degrading"
+      ]
+    },
+    "score_delta": {
+      "type": "number"
+    },
+    "code_score": {
+      "type": "number"
+    },
+    "cloud_score": {
+      "type": "number"
+    },
+    "attack_score": {
+      "type": "number"
+    },
+    "runtime_score": {
+      "type": "number"
+    },
+    "supply_chain_score": {
+      "type": "number"
+    },
+    "governance_score": {
+      "type": "number"
+    },
+    "identity_score": {
+      "type": "number"
+    },
+    "data_score": {
+      "type": "number"
+    },
+    "total_open_findings": {
+      "type": "number"
+    },
+    "critical_findings": {
+      "type": "number"
+    },
+    "high_findings": {
+      "type": "number"
+    },
+    "kev_unpatched": {
+      "type": "number"
+    },
+    "sla_breached": {
+      "type": "number"
+    },
+    "assets_protected": {
+      "type": "number"
+    },
+    "compliance_avg_score": {
+      "type": "number"
+    },
+    "calculated_at": {
+      "type": "string"
+    }
+  },
+  "required": [],
+  "name": "GlobalRiskScore"
+}

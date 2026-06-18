@@ -1,0 +1,90 @@
+{
+  "type": "object",
+  "properties": {
+    "alert_type": {
+      "type": "string",
+      "enum": [
+        "credential_breach",
+        "ransomware_mention",
+        "data_leak",
+        "paste_exposure",
+        "c2_infrastructure",
+        "stealer_log",
+        "domain_impersonation",
+        "threat_actor_mention"
+      ]
+    },
+    "severity": {
+      "type": "string",
+      "enum": [
+        "critical",
+        "high",
+        "medium",
+        "low"
+      ]
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "new",
+        "investigating",
+        "remediated",
+        "accepted"
+      ]
+    },
+    "target": {
+      "type": "string"
+    },
+    "target_type": {
+      "type": "string",
+      "enum": [
+        "domain",
+        "email",
+        "organization",
+        "ip",
+        "brand"
+      ]
+    },
+    "title": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "source": {
+      "type": "string"
+    },
+    "source_url": {
+      "type": "string"
+    },
+    "affected_emails": {
+      "type": "number"
+    },
+    "affected_passwords": {
+      "type": "boolean"
+    },
+    "affected_cookies": {
+      "type": "boolean"
+    },
+    "ransomware_group": {
+      "type": "string"
+    },
+    "breach_date": {
+      "type": "string"
+    },
+    "data_classes": {
+      "type": "string"
+    },
+    "remediation": {
+      "type": "string"
+    },
+    "raw_data": {
+      "type": "object"
+    },
+    "detected_at": {
+      "type": "string"
+    }
+  },
+  "required": [],
+  "name": "DarkWebAlert"
+}
