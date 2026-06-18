@@ -1,0 +1,12 @@
+.agents/.env
+.agents/.memory/
+.agents/mcps/
+node_modules/
+dist/
+build/
+*.log
+__pycache__/
+*.pyc
+.venv/
+.DS_Store
+incoming_files/
