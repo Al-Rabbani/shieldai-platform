@@ -18,11 +18,11 @@
       "type": "string",
       "enum": [
         "open",
-        "in_remediation",
+        "in_progress",
         "fixed",
+        "resolved",
         "accepted_risk",
-        "false_positive",
-        "ignored"
+        "false_positive"
       ]
     },
     "source_scanners": {
@@ -35,53 +35,22 @@
       "type": "string"
     },
     "reachability": {
-      "type": "string",
-      "enum": [
-        "reachable",
-        "not_reachable",
-        "unknown"
-      ]
+      "type": "string"
     },
     "exploitability": {
-      "type": "string",
-      "enum": [
-        "high",
-        "medium",
-        "low",
-        "exploited_in_wild",
-        "poc_available",
-        "theoretical",
-        "none"
-      ]
+      "type": "string"
     },
     "noise_reduced": {
       "type": "boolean"
     },
     "business_criticality": {
-      "type": "string",
-      "enum": [
-        "critical_service",
-        "internal_tool",
-        "staging",
-        "deprecated"
-      ]
+      "type": "string"
     },
     "asset_name": {
       "type": "string"
     },
     "asset_type": {
-      "type": "string",
-      "enum": [
-        "repository",
-        "cloud_account",
-        "container",
-        "vm",
-        "api_endpoint",
-        "domain",
-        "web_application",
-        "kubernetes",
-        "virtual_machine"
-      ]
+      "type": "string"
     },
     "owner_team": {
       "type": "string"
@@ -123,6 +92,24 @@
       "type": "string"
     },
     "notes": {
+      "type": "string"
+    },
+    "fixed_version": {
+      "type": "string"
+    },
+    "package": {
+      "type": "string"
+    },
+    "ecosystem": {
+      "type": "string"
+    },
+    "exploited_in_wild": {
+      "type": "boolean"
+    },
+    "description": {
+      "type": "string"
+    },
+    "remediation": {
       "type": "string"
     }
   },
