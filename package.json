@@ -1,0 +1,24 @@
+{
+  "name": "shieldai-platform",
+  "version": "2.0.0",
+  "description": "ShieldAI — AI-Powered Application Security Platform",
+  "private": true,
+  "scripts": {
+    "test": "echo \"No tests configured\" && exit 0",
+    "lint": "eslint functions/"
+  },
+  "dependencies": {
+    "axios": "^1.6.0",
+    "lodash": "^4.17.21",
+    "semver": "^7.5.4",
+    "ws": "^8.14.2",
+    "jsonwebtoken": "^9.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.2",
+    "@types/node": "^20.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
