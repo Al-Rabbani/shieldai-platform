@@ -71,7 +71,7 @@ async function createJiraTicket(params: {
           project: { key: project_key },
           summary: `[ShieldAI] ${(finding.normalized_severity || finding.severity || "high").toUpperCase()}: ${finding.title}`,
           description,
-          issuetype: { name: "Bug" },
+          issuetype: { name: "Task" },
           priority: { name: priorityMap[finding.normalized_severity || finding.severity || "high"] || "High" },
           labels: ["security", "shieldai", finding.normalized_severity || finding.severity || "security"],
         },
