@@ -152,7 +152,7 @@ Deno.serve(async (req) => {
       // Commit file change
       const commitResult = await ghFetch(`/repos/${repo_full_name}/contents/${template.file}`, token, "PUT", {
         message: template.pr_title,
-        content: btoa(unescape(encodeURIComponent(newContent))),
+        content: btoa(String.fromCharCode(...new TextEncoder().encode(newContent))),
         sha: fileData.sha,
         branch: branchName,
         committer: { name: "ShieldAI AutoFix", email: "autofix@shieldai.app" },
@@ -196,14 +196,15 @@ Deno.serve(async (req) => {
 
         const branchName = `${branch_prefix}/${(f.cve_id || f.id).replace(/[^a-z0-9]/gi, "-").toLowerCase()}-${Date.now().toString(36)}`;
         await ghFetch(`/repos/${repo_full_name}/git/refs`, token, "POST", { ref: `refs/heads/${branchName}`, sha: baseSha });
-        await ghFetch(`/repos/${repo_full_name}/contents/${template.file}`, token, "PUT", { message: template.pr_title, content: btoa(unescape(encodeURIComponent(newContent))), sha: fileData.sha, branch: branchName, committer: { name: "ShieldAI AutoFix", email: "autofix@shieldai.app" } });
+        await ghFetch(`/repos/${repo_full_name}/contents/${template.file}`, token, "PUT", { message: template.pr_title, content: btoa(String.fromCharCode(...new TextEncoder().encode(newContent))), sha: fileData.sha, branch: branchName, committer: { name: "ShieldAI AutoFix", email: "autofix@shieldai.app" } });
         const prResult = await ghFetch(`/repos/${repo_full_name}/pulls`, token, "POST", { title: template.pr_title, body: template.pr_body, head: branchName, base: defaultBranch });
         const prUrl = prResult.data?.html_url;
         if (prUrl && f.id) { try { await base44.entities.TriagedFinding.update(f.id, { autofix_available: true, autofix_pr_url: prUrl }); } catch (_) {} }
         results.push({ finding: f.title, severity: f.normalized_severity, pr_url: prUrl, status: prResult.ok ? "pr_created" : "failed" });
       }
 
-      return new Response(JSON.stringify({ success: true, total_attempted: fixable.length, results }), { headers: CORS });
+      const prs_created = results.filter((r: any) => r.status === "pr_created").length;
+      return new Response(JSON.stringify({ success: true, total_attempted: fixable.length, prs_created, results }), { headers: CORS });
     }
 
     return new Response(JSON.stringify({ error: "Unknown action" }), { status: 400, headers: CORS });
