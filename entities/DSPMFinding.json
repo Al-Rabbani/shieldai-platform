@@ -1,0 +1,79 @@
+{
+  "type": "object",
+  "properties": {
+    "asset_id": {
+      "type": "string"
+    },
+    "asset_name": {
+      "type": "string"
+    },
+    "asset_type": {
+      "type": "string"
+    },
+    "finding_type": {
+      "type": "string",
+      "enum": [
+        "pii_exposed",
+        "pci_exposed",
+        "phi_exposed",
+        "credentials_in_data",
+        "unencrypted_sensitive",
+        "public_sensitive_data",
+        "excessive_retention",
+        "shadow_data",
+        "cross_border_transfer",
+        "orphaned_data"
+      ]
+    },
+    "title": {
+      "type": "string"
+    },
+    "severity": {
+      "type": "string",
+      "enum": [
+        "critical",
+        "high",
+        "medium",
+        "low"
+      ]
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "open",
+        "in_progress",
+        "resolved",
+        "accepted"
+      ]
+    },
+    "data_type": {
+      "type": "string"
+    },
+    "sample_count": {
+      "type": "number"
+    },
+    "field_name": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "remediation": {
+      "type": "string"
+    },
+    "regulation": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "detected_at": {
+      "type": "string"
+    },
+    "assignee": {
+      "type": "string"
+    }
+  },
+  "required": [],
+  "name": "DSPMFinding"
+}

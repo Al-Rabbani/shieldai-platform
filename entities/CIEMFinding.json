@@ -1,0 +1,124 @@
+{
+  "type": "object",
+  "properties": {
+    "provider": {
+      "type": "string",
+      "enum": [
+        "aws",
+        "gcp",
+        "azure",
+        "okta",
+        "github"
+      ]
+    },
+    "account_id": {
+      "type": "string"
+    },
+    "identity_type": {
+      "type": "string",
+      "enum": [
+        "user",
+        "role",
+        "service_account",
+        "group",
+        "machine_identity",
+        "federated"
+      ]
+    },
+    "identity_name": {
+      "type": "string"
+    },
+    "identity_arn": {
+      "type": "string"
+    },
+    "finding_type": {
+      "type": "string",
+      "enum": [
+        "overprivileged",
+        "unused_permission",
+        "wildcard_policy",
+        "cross_account_trust",
+        "public_trust",
+        "admin_access",
+        "mfa_not_enforced",
+        "stale_credential",
+        "shadow_admin",
+        "privilege_escalation_path"
+      ]
+    },
+    "title": {
+      "type": "string"
+    },
+    "severity": {
+      "type": "string",
+      "enum": [
+        "critical",
+        "high",
+        "medium",
+        "low"
+      ]
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "open",
+        "in_progress",
+        "resolved",
+        "accepted"
+      ]
+    },
+    "permissions_granted": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "permissions_used": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "unused_permissions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "last_used": {
+      "type": "string"
+    },
+    "days_inactive": {
+      "type": "number"
+    },
+    "blast_radius": {
+      "type": "string",
+      "enum": [
+        "full_account",
+        "service_wide",
+        "resource_specific",
+        "minimal"
+      ]
+    },
+    "remediation": {
+      "type": "string"
+    },
+    "policy_name": {
+      "type": "string"
+    },
+    "privilege_escalation_path": {
+      "type": "string"
+    },
+    "cis_control": {
+      "type": "string"
+    },
+    "detected_at": {
+      "type": "string"
+    },
+    "assignee": {
+      "type": "string"
+    }
+  },
+  "required": [],
+  "name": "CIEMFinding"
+}

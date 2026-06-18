@@ -1,0 +1,134 @@
+{
+  "type": "object",
+  "properties": {
+    "provider": {
+      "type": "string",
+      "enum": [
+        "aws",
+        "gcp",
+        "azure",
+        "snowflake",
+        "postgres",
+        "mysql",
+        "mongodb",
+        "elasticsearch",
+        "redis",
+        "generic"
+      ]
+    },
+    "asset_type": {
+      "type": "string",
+      "enum": [
+        "s3_bucket",
+        "rds_database",
+        "bigquery_dataset",
+        "blob_storage",
+        "elasticsearch_index",
+        "redis_cache",
+        "dynamodb_table",
+        "gcs_bucket",
+        "cosmos_db",
+        "file_share",
+        "data_warehouse",
+        "api_endpoint"
+      ]
+    },
+    "asset_name": {
+      "type": "string"
+    },
+    "asset_id": {
+      "type": "string"
+    },
+    "region": {
+      "type": "string"
+    },
+    "environment": {
+      "type": "string",
+      "enum": [
+        "production",
+        "staging",
+        "development",
+        "test",
+        "unknown"
+      ]
+    },
+    "classification": {
+      "type": "string",
+      "enum": [
+        "public",
+        "internal",
+        "confidential",
+        "restricted",
+        "highly_restricted"
+      ]
+    },
+    "sensitivity_score": {
+      "type": "number"
+    },
+    "pii_detected": {
+      "type": "boolean"
+    },
+    "pii_types": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "pci_data": {
+      "type": "boolean"
+    },
+    "phi_data": {
+      "type": "boolean"
+    },
+    "financial_data": {
+      "type": "boolean"
+    },
+    "credentials_found": {
+      "type": "boolean"
+    },
+    "encryption_at_rest": {
+      "type": "boolean"
+    },
+    "encryption_in_transit": {
+      "type": "boolean"
+    },
+    "public_access": {
+      "type": "boolean"
+    },
+    "data_size_gb": {
+      "type": "number"
+    },
+    "record_count": {
+      "type": "number"
+    },
+    "last_accessed": {
+      "type": "string"
+    },
+    "last_modified": {
+      "type": "string"
+    },
+    "owner_team": {
+      "type": "string"
+    },
+    "owner_email": {
+      "type": "string"
+    },
+    "retention_policy": {
+      "type": "string"
+    },
+    "scanned_at": {
+      "type": "string"
+    },
+    "findings_count": {
+      "type": "number"
+    },
+    "risk_score": {
+      "type": "number"
+    },
+    "tags": {
+      "type": "object"
+    }
+  },
+  "required": [],
+  "name": "DSPMAsset"
+}
