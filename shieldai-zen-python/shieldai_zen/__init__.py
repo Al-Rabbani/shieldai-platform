@@ -23,6 +23,29 @@ import os
 import json
 import threading
 import urllib.request
+import ipaddress
+from urllib.parse import urlparse as _urlparse
+
+def _validate_url(url: str) -> str:
+    """Validate URL to prevent SSRF."""
+    parsed = _urlparse(url)
+    if parsed.scheme not in ('http', 'https'):
+        raise ValueError(f"Blocked: non-HTTP scheme '{parsed.scheme}'")
+    hostname = parsed.hostname or ''
+    if not hostname:
+        raise ValueError('Blocked: no hostname in URL')
+    blocked_hosts = {'169.254.169.254', 'metadata.google.internal', 'metadata'}
+    if hostname in blocked_hosts:
+        raise ValueError(f'Blocked: metadata endpoint {hostname}')
+    try:
+        ip = ipaddress.ip_address(hostname)
+        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
+            raise ValueError(f'Blocked: internal IP {ip}')
+    except ValueError:
+        pass
+    if hostname in ('localhost', '0.0.0.0', '::1'):
+        raise ValueError(f'Blocked: localhost {hostname}')
+    return url
 from typing import Optional, List, Dict, Any
 from datetime import datetime, timezone
 
@@ -87,6 +110,7 @@ def _report_async(events: List[Dict], token: str, app_name: str, endpoint: str) 
                 endpoint, data=payload,
                 headers={"Content-Type": "application/json"}, method="POST"
             )
+            _validate_url(endpoint)
             urllib.request.urlopen(req, timeout=2)
         except Exception:
             pass  # Never raise — reporting is best-effort
