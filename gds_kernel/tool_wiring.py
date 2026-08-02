@@ -376,7 +376,7 @@ def wire_real_tools(kernel) -> int:
     return wired_count
 
 
-def test_wired_tools(kernel) -> Dict[str, Any]:
+async def test_wired_tools(kernel) -> Dict[str, Any]:
     import asyncio
 
     async def _run_tests():
@@ -403,4 +403,4 @@ def test_wired_tools(kernel) -> Dict[str, Any]:
                 results[tool_id] = {"status": "error", "error": str(e)}
         return results
 
-    return asyncio.run(_run_tests())
+    return await _run_tests()
