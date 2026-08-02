@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Phase 4 Fix: Wire Redis swap + in-memory fallback for page_out.
-Also fixes get_global_stats to count Redis swap segments.
+Fixes get_global_stats to count Redis swap segments.
 Then runs the overflow test to verify.
 """
 import sys
@@ -16,7 +16,7 @@ print("=" * 60)
 
 from gds_kernel.kernel_router import get_kernel
 k = get_kernel()
-mm = k.memory  # k.memory — NOT k.me anything
+mm = k.memory
 
 print(f"  MemoryManager.redis = {mm.redis}")
 print(f"  MemoryManager.redis type = {type(mm.redis)}")
@@ -31,16 +31,6 @@ if mm.redis is not None:
 else:
     print("  Redis client is None - NOT connected!")
 
-# Check what _redis_client the kernel has
-if hasattr(k, '_redis_client'):
-    print(f"  Kernel._redis_client = {k._redis_client}")
-if hasattr(k, '_get_redis_client'):
-    try:
-        rc = k._get_redis_client()
-        print(f"  Kernel._get_redis_client() = {rc}")
-    except Exception as e:
-        print(f"  Kernel._get_redis_client() FAILED: {e}")
-
 # ============================================================
 # Step 2: Fix _page_out method
 # ============================================================
@@ -52,34 +42,27 @@ print("=" * 60)
 f = "/opt/gds-os/apps/api/gds_kernel/memory.py"
 content = open(f).read()
 
-import re
-
-# Find the _page_out method
-page_out_match = re.search(
-    r'(def _page_out\(self.*?)(?=\n    def |\Z)',
-    content, re.DOTALL
-)
-
-if page_out_match:
-    old_method = page_out_match.group(0)
-    print(f"  Found _page_out method ({len(old_method)} chars)")
-    
-    # Check if already fixed
-    if "Redis swap failed" in old_method:
-        print("  Already fixed - _page_out has Redis error handling")
-    else:
-        # Replace the storage section with error handling + fallback
-        # Find the "Store in swap" section
-        if "self.redis.setex" in old_method:
-            # Replace the entire storage block
-            old_store = re.search(
-                r'# Store in swap.*?\n(?:.*?\n)*?.*?segment\.tier = MemoryTier\.SWAP',
-                old_method, re.DOTALL
+# Check if already fixed
+if "Redis swap failed" in content:
+    print("  Already fixed - _page_out has Redis error handling")
+else:
+    # Find the setex block and replace with error-handling version
+    old_setex = """        if self.redis:
+            self.redis.setex(
+                f"mem:swap:{segment.segment_id}",
+                3600,  # 1 hour TTL
+                json.dumps({
+                    "content": segment.content,
+                    "summary": segment.summary,
+                    "token_count": segment.token_count,
+                    "segment_type": segment.segment_type.value,
+                    "process_id": segment.process_id,
+                })
             )
-            if old_store:
-                old_block = old_store.group(0)
-                new_block = """# Store in swap (Redis with in-memory fallback)
-        stored = False
+        else:
+            self.swap[segment.segment_id] = segment"""
+
+    new_setex = """        stored = False
         if self.redis:
             try:
                 self.redis.setex(
@@ -96,25 +79,30 @@ if page_out_match:
                 stored = True
             except Exception as e:
                 logger.warning(f"Redis swap failed for {segment.segment_id}: {e} - using in-memory")
-        
+
         if not stored:
-            self.swap[segment.segment_id] = segment
-        
-        segment.tier = MemoryTier.SWAP"""
-            
-            new_method = old_method.replace(old_block, new_block)
-            content = content.replace(old_method, new_method)
-            open(f, "w").write(content)
-            print("  FIXED: _page_out now has Redis error handling + in-memory fallback")
-        else:
-            print("  WARNING: Could not find setex block in _page_out")
-            # Show what's there
-            for line in old_method.split("\n")[:20]:
-                print(f"    {line}")
+            self.swap[segment.segment_id] = segment"""
+
+    if old_setex in content:
+        content = content.replace(old_setex, new_setex)
+        open(f, "w").write(content)
+        print("  FIXED: _page_out now has Redis error handling + in-memory fallback")
     else:
-        print("  WARNING: Could not find _page_out method")
-else:
-    print("  Already fixed or pattern not found")
+        # Try alternate formatting (may have been partially patched)
+        import re
+        # Look for any version of the setex block
+        pattern = r'if self\.redis:\s*\n\s*self\.redis\.setex\([^)]+\)\s*\n\s*else:\s*\n\s*self\.swap\[segment\.segment_id\] = segment'
+        if re.search(pattern, content, re.DOTALL):
+            content = re.sub(pattern, new_setex, content, count=1)
+            open(f, "w").write(content)
+            print("  FIXED via regex: _page_out now has error handling")
+        else:
+            print("  WARNING: Could not find setex block to replace")
+            # Check what's actually there
+            if "self.redis.setex" in content:
+                idx = content.index("self.redis.setex")
+                print(f"  Found setex at char {idx}")
+                print(f"  Context: {content[max(0,idx-50):idx+200]}")
 
 # ============================================================
 # Step 3: Fix get_global_stats to count Redis swap
@@ -126,10 +114,10 @@ print("=" * 60)
 
 content = open(f).read()
 
-# Add a _count_redis_swap helper if not present
+# Add _count_redis_swap helper if not present
 if "_count_redis_swap" not in content:
     helper = '''
-    def _count_redis_swap(self) -> int:
+    def _count_redis_swap(self):
         """Safely count Redis swap segments."""
         try:
             if self.redis:
@@ -140,18 +128,19 @@ if "_count_redis_swap" not in content:
         return 0
 
 '''
-    # Add before get_global_stats
     content = content.replace("    def get_global_stats", helper + "    def get_global_stats")
     print("  Added _count_redis_swap helper method")
+else:
+    print("  _count_redis_swap already present")
 
-# Fix swap_segments counting
+# Fix swap_segments counting to include Redis
+import re
 content = re.sub(
     r'"swap_segments":\s*len\(self\.swap\)\s*(?:\+[^,]+)?,',
     '"swap_segments": len(self.swap) + self._count_redis_swap(),',
     content,
     count=1
 )
-
 open(f, "w").write(content)
 print("  FIXED: get_global_stats now counts in-memory + Redis swap segments")
 
@@ -236,7 +225,7 @@ for i in range(250):
         "segment_type": "tool_result",
         "importance": 0.5
     })
-    
+
     if (i + 1) % 50 == 0:
         stats = kget(f"/memory/stats/{PID}")
         g = kget("/memory/global-stats")
@@ -276,24 +265,11 @@ print(f"  Total tokens paged: {g.get('total_tokens_paged',0)}")
 if redis_keys:
     print(f"  Redis key samples:  {redis_keys[:3]}")
 
-# Check kernel logs for Redis errors
-log_path = "/var/log/gds-os/error.log"
-try:
-    with open(log_path) as lf:
-        lines = lf.readlines()[-30:]
-        redis_errors = [l for l in lines if "Redis swap" in l or "redis" in l.lower()]
-        if redis_errors:
-            print(f"\n  Redis errors in log:")
-            for l in redis_errors[:3]:
-                print(f"    {l.strip()[:150]}")
-except Exception:
-    pass
-
 print()
 if total_faults > 0 and (g.get("swap_segments", 0) > 0 or len(redis_keys) > 0):
     print("  [VERIFIED] PAGE FAULTS + SWAP WORKING - 3-tier memory hierarchy confirmed!")
 elif total_faults > 0:
-    print("  [PARTIAL] Page faults work but swap storage still not recording")
+    print("  [PARTIAL] Page faults work but swap storage still empty - check Redis wiring")
 else:
     print("  [FAIL] No page faults triggered")
 
