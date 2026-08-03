@@ -13,6 +13,31 @@ Env vars needed:
   RESEND_API_KEY (for fallback)
 """
 import smtplib, ssl, sys, os, json, urllib.request, urllib.error
+import ipaddress
+import socket
+from urllib.parse import urlparse
+
+def _validate_url(url: str) -> str:
+    """Validate URL to prevent SSRF — block internal/private/metadata endpoints."""
+    parsed = urlparse(url)
+    if parsed.scheme not in ('http', 'https'):
+        raise ValueError(f"Blocked: non-HTTP scheme '{parsed.scheme}'")
+    hostname = parsed.hostname or ''
+    if not hostname:
+        raise ValueError('Blocked: no hostname in URL')
+    # Block metadata endpoints and internal addresses
+    blocked_hosts = {'169.254.169.254', 'metadata.google.internal', 'metadata'}
+    if hostname in blocked_hosts:
+        raise ValueError(f'Blocked: metadata endpoint {hostname}')
+    try:
+        ip = ipaddress.ip_address(hostname)
+        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
+            raise ValueError(f'Blocked: internal IP {ip}')
+    except ValueError:
+        pass  # hostname is a domain, not an IP — check for localhost
+    if hostname in ('localhost', '0.0.0.0', '::1'):
+        raise ValueError(f'Blocked: localhost {hostname}')
+    return url
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
@@ -47,6 +72,7 @@ def send_via_resend(to: str, subject: str, html: str, api_key: str) -> dict:
         headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
         method="POST",
     )
+    _validate_url(RESEND_API)
     with urllib.request.urlopen(req, timeout=15) as resp:
         result = json.loads(resp.read())
     return {"success": True, "method": "resend", "id": result.get("id"), "to": to}

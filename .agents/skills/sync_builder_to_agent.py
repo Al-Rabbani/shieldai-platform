@@ -25,6 +25,29 @@ Field mapping (builder → agent):
 SKIP logic: only skip explicitly flagged test subdomains, never broad keywords.
 """
 import json, urllib.request, urllib.error, os, sys
+import ipaddress
+from urllib.parse import urlparse
+
+def _validate_url(url: str) -> str:
+    """Validate URL to prevent SSRF — block internal/private/metadata endpoints."""
+    parsed = urlparse(url)
+    if parsed.scheme not in ('http', 'https'):
+        raise ValueError(f"Blocked: non-HTTP scheme '{parsed.scheme}'")
+    hostname = parsed.hostname or ''
+    if not hostname:
+        raise ValueError('Blocked: no hostname in URL')
+    blocked_hosts = {'169.254.169.254', 'metadata.google.internal', 'metadata'}
+    if hostname in blocked_hosts:
+        raise ValueError(f'Blocked: metadata endpoint {hostname}')
+    try:
+        ip = ipaddress.ip_address(hostname)
+        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
+            raise ValueError(f'Blocked: internal IP {ip}')
+    except ValueError:
+        pass
+    if hostname in ('localhost', '0.0.0.0', '::1'):
+        raise ValueError(f'Blocked: localhost {hostname}')
+    return url
 
 BUILDER_APP = "69e2e852c48630e3502f13b1"
 AGENT_APP   = "6a14246111a4fa5e22999619"
@@ -46,6 +69,7 @@ def api(method, app_id, path, data=None, token=""):
         "Accept":        "application/json",
     })
     try:
+    _validate_url(url)
         with urllib.request.urlopen(req, timeout=15) as r:
             return json.loads(r.read())
     except urllib.error.HTTPError as e:
