@@ -15,6 +15,9 @@ import os
 import logging
 import time
 import uuid
+import asyncio
+import inspect
+import json
 from typing import Dict, Any, Optional
 
 logger = logging.getLogger("gds.kernel.agent_runner")
@@ -45,6 +48,32 @@ try:
     KERNEL_AVAILABLE = True
 except Exception as e:
     logger.warning("Kernel not available: %s" % e)
+
+
+async def _safe_execute_tool(tool_name, tool_args):
+    """Execute a tool, handling both sync and async execute_tool functions."""
+    if execute_tool is None:
+        return {"error": "No tool executor available"}
+    try:
+        result = execute_tool(tool_name, tool_args)
+        if asyncio.iscoroutine(result):
+            result = await result
+        return result
+    except Exception as e:
+        logger.error("Tool %s failed: %s" % (tool_name, e))
+        return {"error": str(e)}
+
+
+def _serialize_result(result):
+    """Make sure result is JSON-serializable (no coroutines, no objects)."""
+    if isinstance(result, dict):
+        return {k: _serialize_result(v) for k, v in result.items()}
+    elif isinstance(result, list):
+        return [_serialize_result(v) for v in result]
+    elif isinstance(result, (str, int, float, bool, type(None))):
+        return result
+    else:
+        return str(result)
 
 
 async def run_kernel_agent_runner(
@@ -157,19 +186,18 @@ async def run_kernel_agent_runner(
                 for tc in msg.tool_calls:
                     tool_name = tc.function.name
                     try:
-                        import json
                         tool_args = json.loads(tc.function.arguments) if tc.function.arguments else {}
                     except Exception:
                         tool_args = {}
 
                     logger.info("Iteration %d: calling %s" % (iteration, tool_name))
 
-                    try:
-                        result = execute_tool(tool_name, tool_args)
-                        result_str = str(result)
-                    except Exception as e:
-                        result_str = "Error: %s" % e
-                        result = {"error": str(e)}
+                    # Execute tool — handles both sync and async execute_tool
+                    result = await _safe_execute_tool(tool_name, tool_args)
+                    result_str = str(result)
+
+                    # Serialize result to ensure JSON-safe
+                    result = _serialize_result(result)
 
                     tool_calls.append({
                         "tool": tool_name,
