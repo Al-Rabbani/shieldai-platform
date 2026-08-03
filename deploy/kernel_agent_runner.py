@@ -16,7 +16,6 @@ import logging
 import time
 import uuid
 import asyncio
-import inspect
 import json
 from typing import Dict, Any, Optional
 
@@ -43,8 +42,11 @@ except Exception as e:
 
 # Import kernel for memory management
 KERNEL_AVAILABLE = False
+MemorySegmentType = None
 try:
     from gds_kernel.kernel_router import get_kernel
+    from gds_kernel.memory import MemorySegmentType as _MST
+    MemorySegmentType = _MST
     KERNEL_AVAILABLE = True
 except Exception as e:
     logger.warning("Kernel not available: %s" % e)
@@ -89,9 +91,11 @@ async def run_kernel_agent_runner(
     pid = "agent-%s-%s" % (agent_id, uuid.uuid4().hex[:8])
 
     kernel = None
+    mem = None
     if KERNEL_AVAILABLE:
         try:
             kernel = get_kernel()
+            mem = getattr(kernel, 'memory')
         except Exception as e:
             logger.warning("Could not get kernel: %s" % e)
 
@@ -102,7 +106,7 @@ async def run_kernel_agent_runner(
     error_message = None
 
     # Allocate memory in kernel
-    if kernel:
+    if mem:
         try:
             tool_names = ", ".join(TOOL_REGISTRY.keys()) if TOOL_REGISTRY else "none"
             system_prompt = (
@@ -112,16 +116,16 @@ async def run_kernel_agent_runner(
                 "Available tools: %s"
             ) % (agent_id, tool_names)
 
-            kernel.memory.allocate(
-                pid=pid,
+            mem.allocate(
+                process_id=pid,
                 content=system_prompt,
-                segment_type="system_prompt",
+                segment_type=MemorySegmentType.SYSTEM_PROMPT,
                 importance=1.0
             )
-            kernel.memory.allocate(
-                pid=pid,
+            mem.allocate(
+                process_id=pid,
                 content=goal,
-                segment_type="conversation",
+                segment_type=MemorySegmentType.CONVERSATION,
                 importance=0.8
             )
             logger.info("Kernel memory allocated for %s" % pid)
@@ -209,12 +213,12 @@ async def run_kernel_agent_runner(
                     })
 
                     # Allocate tool result in kernel memory
-                    if kernel:
+                    if mem:
                         try:
-                            kernel.memory.allocate(
-                                pid=pid,
+                            mem.allocate(
+                                process_id=pid,
                                 content="Tool %s result: %s" % (tool_name, result_str[:2000]),
-                                segment_type="tool_result",
+                                segment_type=MemorySegmentType.TOOL_RESULT,
                                 importance=0.5
                             )
                         except Exception as e:
@@ -230,14 +234,12 @@ async def run_kernel_agent_runner(
                 break
 
         # Build context from kernel memory
-        if kernel:
+        if mem:
             try:
-                stats = kernel.memory.get_stats(pid)
-                logger.info("Kernel context for %s: %s/%s tokens, %s segments" % (
-                    pid, stats.get("tokens_used", 0), stats.get("max_tokens", 0), stats.get("segment_count", 0)
-                ))
+                stats = mem.get_memory_stats(pid)
+                logger.info("Kernel context for %s: %s" % (pid, json.dumps(stats)[:200]))
             except Exception as e:
-                logger.debug("Build context failed: %s" % e)
+                logger.debug("Stats failed: %s" % e)
 
     except Exception as e:
         success = False
@@ -258,5 +260,5 @@ async def run_kernel_agent_runner(
         "duration_ms": duration_ms,
         "pid": pid,
         "error": error_message,
-        "kernel_managed": kernel is not None,
+        "kernel_managed": mem is not None,
     }
