@@ -99,73 +99,48 @@ def _ensure_mission_table():
         conn.close()
 
 def _persist_mission(mission_data: Dict[str, Any]):
-    """Persist mission to PostgreSQL."""
-    conn = _get_db()
-    if not conn:
+    """Persist mission to PostgreSQL through the verified service scope (Phase C).
+
+    Explicit tenant/repository identity comes only from the server-owned
+    scope; missing identity fails closed with no ambient fallback."""
+    from gds_api.security_scope import (SecurityScopeError,
+                                        resolve_service_scope,
+                                        scoped_mission_persist,
+                                        service_scope_configured)
+    if not service_scope_configured():
+        logger.error("Mission persist failed closed: service security scope not configured")
         return
     try:
-        cur = conn.cursor()
-        cur.execute("""
-            INSERT INTO mission_results (mission_id, goal, status, plan, agent_results, unified_report,
-                mission_pid, total_tool_calls, successful_agents, total_agents, duration_ms,
-                kernel_managed, completed_at)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            ON CONFLICT (mission_id) DO UPDATE SET
-                status = EXCLUDED.status,
-                agent_results = EXCLUDED.agent_results,
-                unified_report = EXCLUDED.unified_report,
-                total_tool_calls = EXCLUDED.total_tool_calls,
-                successful_agents = EXCLUDED.successful_agents,
-                duration_ms = EXCLUDED.duration_ms,
-                completed_at = EXCLUDED.completed_at
-        """, (
-            mission_data.get("mission_id"),
-            mission_data.get("goal", ""),
-            mission_data.get("status", "completed"),
-            json.dumps(mission_data.get("plan", {})),
-            json.dumps(mission_data.get("agent_results", [])),
-            mission_data.get("unified_report", ""),
-            mission_data.get("mission_pid", ""),
-            mission_data.get("total_tool_calls", 0),
-            mission_data.get("successful_agents", 0),
-            mission_data.get("total_agents", 0),
-            mission_data.get("duration_ms", 0),
-            mission_data.get("kernel_managed", False),
-            mission_data.get("completed_at")
-        ))
-        conn.commit()
-        logger.info("Mission %s persisted to PostgreSQL" % mission_data.get("mission_id"))
-    except Exception as e:
-        logger.error("Failed to persist mission: %s" % e)
-    finally:
-        conn.close()
+        scoped_mission_persist(mission_data, resolve_service_scope())
+        logger.info("Mission %s persisted to PostgreSQL (tenant-scoped)" % mission_data.get("mission_id"))
+    except SecurityScopeError as e:
+        logger.error("Mission persist failed closed: %s" % e)
+
 
 def _load_mission_from_db(mission_id: str) -> Optional[Dict[str, Any]]:
-    """Load a mission from PostgreSQL."""
-    conn = _get_db()
-    if not conn:
+    """Load a mission from PostgreSQL through the verified service scope."""
+    from gds_api.security_scope import (SecurityScopeError,
+                                        resolve_service_scope,
+                                        scoped_mission_load,
+                                        service_scope_configured)
+    if not service_scope_configured():
+        logger.error("Mission load failed closed: service security scope not configured")
         return None
     try:
-        cur = conn.cursor()
-        cur.execute("SELECT * FROM mission_results WHERE mission_id = %s", (mission_id,))
-        row = cur.fetchone()
-        if not row:
+        data = scoped_mission_load(mission_id, resolve_service_scope())
+        if not data:
             return None
-        cols = [desc[0] for desc in cur.description]
-        data = dict(zip(cols, row))
         # Parse JSON fields
         if data.get("plan"):
             data["plan"] = json.loads(data["plan"]) if isinstance(data["plan"], str) else data["plan"]
         if data.get("agent_results"):
             data["agent_results"] = json.loads(data["agent_results"]) if isinstance(data["agent_results"], str) else data["agent_results"]
         return data
-    except Exception as e:
-        logger.error("Failed to load mission: %s" % e)
+    except SecurityScopeError as e:
+        logger.error("Mission load failed closed: %s" % e)
         return None
-    finally:
-        conn.close()
 
-# Initialize table on import
+# Initialize table on import# Initialize table on import
 _ensure_mission_table()
 
 # ═══════════════════════════════════════════════════════════

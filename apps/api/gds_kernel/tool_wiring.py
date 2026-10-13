@@ -267,61 +267,36 @@ except Exception as e:
 FINDING_DATABASE_SCRIPT = r'''
 import json, os, sys
 try:
-    import psycopg2
-    request = json.load(sys.stdin)
-    db_url = os.environ.get("DATABASE_URL", "")
-    if not db_url:
-        try:
-            with open("/opt/.env") as env_file:
-                for line in env_file:
-                    if line.startswith("DATABASE_URL="):
-                        db_url = line.split("=", 1)[1].strip().strip("'").strip('"')
-                        break
-        except OSError:
-            pass
-    if db_url:
-        conn = psycopg2.connect(db_url, connect_timeout=5)
+    from gds_api.security_scope import (SecurityScopeError,
+                                        read_scoped_findings,
+                                        resolve_service_scope,
+                                        service_scope_configured,
+                                        store_scoped_finding)
+    request = json.loads(sys.stdin.read() or "{}")
+    # Trusted execution identity comes from the server-owned environment,
+    # never from the model payload. Missing identity fails closed.
+    if not service_scope_configured():
+        raise SecurityScopeError("Service scope is not configured")
+    scope = resolve_service_scope()
+    if request["operation"] == "get":
+        payload = request["payload"]
+        query = {"limit": int(payload["limit"])}
+        if payload.get("severity"):
+            query["severity"] = str(payload["severity"])
+        if payload.get("target"):
+            query["target"] = str(payload["target"])
+        findings = read_scoped_findings(query, scope)
+        print(json.dumps({"success": True, "findings": findings, "count": len(findings)}))
+    elif request["operation"] == "store":
+        print(json.dumps(store_scoped_finding(request["payload"], scope)))
     else:
-        password = os.environ.get("POSTGRES_PASSWORD", "")
-        if not password:
-            raise RuntimeError("Database credentials not configured")
-        conn = psycopg2.connect(
-            host="127.0.0.1", port=5432, dbname="gds_os",
-            user=os.environ.get("POSTGRES_USER", "gds"), password=password,
-            connect_timeout=5,
-        )
-    try:
-        with conn:
-            with conn.cursor() as cur:
-                if request["operation"] == "get":
-                    payload = request["payload"]
-                    conditions, values = [], []
-                    for field in ("severity", "target"):
-                        if payload.get(field):
-                            conditions.append(field + " = %s")
-                            values.append(payload[field])
-                    where = " WHERE " + " AND ".join(conditions) if conditions else ""
-                    query = "SELECT id, title, severity, status, scanner, detected_at, target FROM security_findings" + where + " ORDER BY detected_at DESC LIMIT %s"
-                    cur.execute(query, tuple(values + [payload["limit"]]))
-                    findings = [{"id": str(r[0]), "title": r[1], "severity": r[2], "status": r[3], "scanner": r[4], "detected_at": str(r[5]), "target": r[6]} for r in cur.fetchall()]
-                    result = {"success": True, "findings": findings, "count": len(findings)}
-                elif request["operation"] == "store":
-                    payload = request["payload"]
-                    cur.execute(
-                        "INSERT INTO security_findings (scanner, title, severity, target, details, status) VALUES (%s, %s, %s, %s, %s, 'open') RETURNING id",
-                        (payload["source"], payload["title"], payload["severity"], payload["target"], json.dumps({"description": payload["description"], "cve_id": payload["cve_id"]})),
-                    )
-                    result = {"success": True, "finding_id": str(cur.fetchone()[0])}
-                else:
-                    raise ValueError("Unknown finding operation")
-        print(json.dumps(result))
-    finally:
-        conn.close()
+        raise ValueError("Unknown finding operation")
+except SecurityScopeError as e:
+    print(json.dumps({"success": False, "error": str(e)}))
 except Exception:
     # Connection exceptions can contain credentials; do not return raw text.
     print(json.dumps({"success": False, "error": "Finding database operation failed"}))
 '''
-
 
 def _finding_result(tool: str, operation: str, payload: Dict, timeout: int) -> Dict:
     result = _run_python(FINDING_DATABASE_SCRIPT, timeout=timeout,

@@ -290,83 +290,61 @@ analyze them and decide the next step. When done, provide a summary.
             return {"error": f"Tool failed: {str(e)}", "tool": gateway_name}
     
     async def _store_finding(self, args: dict) -> dict:
-        """Store a security finding in PostgreSQL."""
+        """Store a security finding through the verified service scope (Phase C).
+
+        Fail closed: no scope, no write. The model payload can never select
+        tenant/repository identity."""
+        from gds_api.security_scope import (SecurityScopeError,
+                                            resolve_service_scope,
+                                            service_scope_configured,
+                                            store_scoped_finding)
+        if not service_scope_configured():
+            return {"error": "Finding store requires a configured service security scope (fail closed)"}
         try:
-            from sqlalchemy import create_engine, text
-            DB_URL = os.getenv("DATABASE_URL", "")
-            engine = create_engine(DB_URL)
-            
-            with engine.connect() as conn:
-                # Wrap details in valid JSON (DB column is JSONB)
-                details_raw = args.get("details", "{}")
-                if isinstance(details_raw, dict):
-                    details_json = json.dumps(details_raw)
-                elif isinstance(details_raw, str):
-                    # If it's a plain string, wrap in a JSON object
-                    try:
-                        json.loads(details_raw)  # Already valid JSON?
-                        details_json = details_raw
-                    except:
-                        details_json = json.dumps({"description": details_raw})
-                else:
-                    details_json = json.dumps({"description": str(details_raw)})
-                
-                conn.execute(text("""
-                    INSERT INTO security_findings (scanner, title, severity, target, details, remediation, status, detected_at)
-                    VALUES (:s, :t, :se, :tg, CAST(:d AS JSONB), :r, 'open', NOW())
-                """), {
-                    "s": args.get("scanner", "agent"),
-                    "t": args.get("title", "Untitled"),
-                    "se": args.get("severity", "info"),
-                    "tg": args.get("target", ""),
-                    "d": details_json,
-                    "r": args.get("remediation", "")
-                })
-                conn.commit()
-            
-            return {"success": True, "message": "Finding stored"}
-        except Exception as e:
+            scope = resolve_service_scope()
+            details_raw = args.get("details", {})
+            if isinstance(details_raw, dict):
+                description = str(details_raw.get("description", json.dumps(details_raw)))[:2000]
+            else:
+                description = str(details_raw)[:2000]
+            return store_scoped_finding({
+                "source": str(args.get("scanner", "agent")),
+                "title": str(args.get("title", "Untitled")),
+                "severity": str(args.get("severity", "info")),
+                "target": str(args.get("target", "")),
+                "description": description,
+                "cve_id": str(args.get("cve_id", "")),
+                "remediation": str(args.get("remediation", ""))[:2000],
+            }, scope)
+        except SecurityScopeError as e:
             return {"error": str(e)}
-    
+
     async def _get_findings(self, args: dict) -> dict:
-        """Retrieve findings from PostgreSQL."""
+        """Retrieve findings through the verified service scope (Phase C).
+
+        Fail closed: no scope, no read."""
+        from gds_api.security_scope import (SecurityScopeError,
+                                            read_scoped_findings,
+                                            resolve_service_scope,
+                                            service_scope_configured)
+        if not service_scope_configured():
+            return {"error": "Finding read requires a configured service security scope (fail closed)"}
         try:
-            from sqlalchemy import create_engine, text
-            DB_URL = os.getenv("DATABASE_URL", "")
-            engine = create_engine(DB_URL)
-            
-            status = args.get("status", "open")
-            severity = args.get("severity")
-            
-            query = "SELECT id, scanner, title, severity, target, status, detected_at FROM security_findings"
-            conditions = []
-            params = {}
-            
-            if status != "all":
-                conditions.append("status = :status")
-                params["status"] = status
-            
+            scope = resolve_service_scope()
+            query = {"limit": 50}
+            if args.get("target"):
+                query["target"] = str(args["target"])
+            severity = str(args.get("severity", "") or "").lower()
             if severity:
-                conditions.append("severity = :severity")
-                params["severity"] = severity
-            
-            if conditions:
-                query += " WHERE " + " AND ".join(conditions)
-            
-            query += " ORDER BY detected_at DESC LIMIT 50"
-            
-            with engine.connect() as conn:
-                result = conn.execute(text(query), params)
-                findings = [
-                    {"id": str(row[0]), "scanner": row[1], "title": row[2], 
-                     "severity": row[3], "target": row[4], "status": row[5]}
-                    for row in result
-                ]
-            
+                query["severity"] = severity
+            status = str(args.get("status", "") or "").lower()
+            if status and status != "all":
+                query["status"] = status
+            findings = read_scoped_findings(query, scope)
             return {"findings": findings, "count": len(findings)}
-        except Exception as e:
+        except SecurityScopeError as e:
             return {"error": str(e)}
-    
+
     async def _aws_iam_scan(self, args: dict) -> dict:
         """AWS IAM scan using boto3."""
         try:
