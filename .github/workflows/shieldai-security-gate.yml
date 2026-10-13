@@ -17,7 +17,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - run: python -m unittest discover -s tests -p 'test_security_gate_client.py' -v
+      - run: |
+          python -m unittest discover -s tests -p 'test_security_gate_client.py' -v
+          python -m unittest discover -s tests -p 'test_ci_gate_backend.py' -v
 
   security-gate:
     name: ShieldAI Security Scan & Gate
