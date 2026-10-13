@@ -62,7 +62,7 @@ async def execute_capability_request(
     workflow_run_id = request_record.workflow_run_id if request_record else None
 
     try:
-        output = await tool_gateway.execute_tool(
+        output = await tool_gateway.execute_tool_governed(
             db,
             tenant_id=tenant_id,
             user_id=user_id,

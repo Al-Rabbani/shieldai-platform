@@ -71,6 +71,14 @@ class Settings(BaseSettings):
     # every route in the app.
     anthropic_api_key: str | None = None
     model_router_default_model: str = "claude-sonnet-5"
+    # 2026-10-13 owner decision: route model_router through OpenAI instead of Anthropic
+    # (ANTHROPIC_API_KEY in /opt/.env is truncated/invalid; OPENAI_API_KEY is proven
+    # live daily by gds_kernel's kernel_executor). "anthropic" remains a first-class
+    # provider - switch back here once a valid Anthropic key exists.
+    model_router_provider: str = "openai"
+    # The exact model gds_kernel's kernel_executor (GPT_MODEL default) has used for
+    # every daily agent mission since 2026-08-02 - proven live, not speculative.
+    model_router_openai_model: str = "gpt-4.1"
 
     # Phase 18: same optional-with-clear-error-at-call-time pattern as anthropic_api_key
     # above - gds_api.engineering.openai_provider raises its own real ProviderError only
