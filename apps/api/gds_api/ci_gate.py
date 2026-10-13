@@ -157,18 +157,87 @@ def _github_commit_diff(repo: str, sha: str, token: str) -> Optional[str]:
         return None
     if len(raw) > _MAX_DIFF_BYTES:
         return None  # too large to scan fully — never a partial verdict
-    return raw.decode("utf-8", "replace")
+    try:
+        return raw.decode("utf-8")
+    except UnicodeDecodeError:
+        return None  # unsupported encoding cannot produce a text verdict
 
 
 def _scan_diff(diff_text: str):
-    """Return (added_lines, files_scanned)."""
+    """Validate text hunks and return added lines plus changed-file count.
+
+    Binary content and incomplete/unknown diff formats require a separate
+    scanner; never describe them as a successful text assessment.
+    """
     added = []
     files = 0
+    remaining = None
+    has_change = False
+    hunk_re = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@(?:.*)$")
+    metadata = ("index ", "--- ", "+++ ", "old mode ", "new mode ",
+                "new file mode ", "deleted file mode ", "similarity index ",
+                "dissimilarity index ", "rename from ", "rename to ",
+                "copy from ", "copy to ")
+
+    def finish_hunk():
+        if remaining is not None and remaining != [0, 0]:
+            raise ValueError("Incomplete diff hunk")
+
+    def finish_file():
+        finish_hunk()
+        if files and not has_change:
+            raise ValueError("Incomplete diff file")
+
     for line in diff_text.splitlines():
-        if line.startswith("diff --git"):
+        if line.startswith("diff --git "):
+            finish_file()
             files += 1
-        elif line.startswith("+") and not line.startswith("+++"):
-            added.append(line[1:])
+            remaining = None
+            has_change = False
+            continue
+        if not files:
+            if line:
+                raise ValueError("Missing diff file header")
+            continue
+        if line.startswith("@@"):
+            finish_hunk()
+            match = hunk_re.fullmatch(line)
+            if not match:
+                raise ValueError("Unsupported diff hunk")
+            remaining = [int(match[2]) if match[2] is not None else 1,
+                         int(match[4]) if match[4] is not None else 1]
+            has_change = True
+            continue
+        if line == "\\ No newline at end of file":
+            if remaining is None:
+                raise ValueError("Unexpected newline marker")
+            continue
+        if remaining is not None and remaining != [0, 0]:
+            if line.startswith("+"):
+                remaining[1] -= 1
+                added.append(line[1:])
+            elif line.startswith("-"):
+                remaining[0] -= 1
+            elif line.startswith(" "):
+                remaining[0] -= 1
+                remaining[1] -= 1
+            else:
+                raise ValueError("Malformed diff content")
+            if min(remaining) < 0:
+                raise ValueError("Diff exceeds declared hunk size")
+            continue
+        if line.startswith(("Binary files ", "GIT binary patch")):
+            raise ValueError("Binary diff requires a supported scanner")
+        if line.startswith(metadata) and remaining is None:
+            if line.startswith(("old mode ", "new mode ", "new file mode ",
+                                "deleted file mode ", "rename from ", "copy from ")):
+                has_change = True
+            continue
+        if line:
+            raise ValueError("Unsupported diff metadata or extra content")
+    finish_file()
+    if not files:
+        raise ValueError("No diff coverage")
     return added, files
 
 
@@ -240,6 +309,16 @@ def security_gate(req: GateRequest):
             "checked_at": now,
         }
 
+    try:
+        added_lines, files_scanned = _scan_diff(diff_text)
+    except ValueError:
+        return {
+            "status": "integration_error", "pass": False,
+            "block_reasons": ["commit_diff_unsupported_or_incomplete"],
+            "repo": req.repo_full_name, "commit": req.commit_sha,
+            "checked_at": now,
+        }
+
     counts = _db_counts(req.repo_full_name)
     if counts is None:
         return {
@@ -249,7 +328,6 @@ def security_gate(req: GateRequest):
             "checked_at": now,
         }
 
-    added_lines, files_scanned = _scan_diff(diff_text)
     secret_names = _scan_secrets(added_lines)
 
     reasons = []
