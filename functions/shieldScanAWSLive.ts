@@ -67,7 +67,8 @@ async function awsRequest(service: string, region: string, keyId: string, secret
 // XML parser helper
 function xmlAttr(xml: string, tag: string): string[] {
   const matches: string[] = [];
-  const re = new RegExp(`<${tag}[^>]*>(.*?)</${tag}>`, "gs");
+  const safeTag = tag.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const re = new RegExp(`<${safeTag}[^>]*>(.*?)</${safeTag}>`, "gs");
   let m;
   while ((m = re.exec(xml)) !== null) matches.push(m[1].trim());
   return matches;
