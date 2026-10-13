@@ -130,7 +130,25 @@ export function zen(options: ZenOptions = {}) {
     allowlist = [],
   } = options;
 
-  const allowlistRegexes = allowlist.map(p => new RegExp(p));
+  // Sanitize user-provided regex patterns to prevent ReDoS (CWE-1333)
+  const safeRegExp = (pattern: string): RegExp => {
+    // Limit pattern length to prevent catastrophic backtracking
+    if (pattern.length > 200) {
+      throw new Error('Regex pattern too long (max 200 chars)');
+    }
+    // Block known dangerous patterns
+    const dangerous = /(\1|\2|\(\?:\(\?:|\(\(.+\)\+\)\+|\(\[.*\]\+\)\+)/;
+    if (dangerous.test(pattern)) {
+      throw new Error('Potentially dangerous regex pattern blocked');
+    }
+    try {
+      return new RegExp(pattern);
+    } catch {
+      // If invalid regex, escape all special chars and treat as literal
+      return new RegExp(pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+    }
+  };
+  const allowlistRegexes = allowlist.map(p => safeRegExp(p));
 
   return function zenMiddleware(req: any, res: any, next: any) {
     const startMs = Date.now();

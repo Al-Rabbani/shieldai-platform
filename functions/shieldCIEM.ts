@@ -54,7 +54,8 @@ async function iamRequest(keyId: string, secret: string, sessionToken: string, a
 }
 
 function xmlAttr(xml: string, tag: string): string[] {
-  const re = new RegExp(`<${tag}[^>]*>(.*?)</${tag}>`, "gs");
+  const safeTag = tag.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const re = new RegExp(`<${safeTag}[^>]*>(.*?)</${safeTag}>`, "gs");
   const r: string[] = []; let m;
   while ((m = re.exec(xml)) !== null) r.push(m[1].trim());
   return r;

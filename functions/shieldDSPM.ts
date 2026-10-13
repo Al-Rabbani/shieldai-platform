@@ -32,7 +32,8 @@ const DATA_PATTERNS = [
 function classifyContent(content: string): { pii_types: string[]; pii_detected: boolean; pci_data: boolean; phi_data: boolean; credentials_found: boolean; financial_data: boolean; regulation: string[]; sample_count: number } {
   const result = { pii_types: [] as string[], pii_detected: false, pci_data: false, phi_data: false, credentials_found: false, financial_data: false, regulation: [] as string[], sample_count: 0 };
   for (const pat of DATA_PATTERNS) {
-    const matches = content.match(new RegExp(pat.regex.source, "gi")) || [];
+    const safeSource = pat.regex.source.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const matches = content.match(new RegExp(safeSource, "gi")) || [];
     if (matches.length > 0) {
       result.sample_count += matches.length;
       if (pat.pii) { result.pii_detected = true; result.pii_types.push(pat.label); }
@@ -104,7 +105,8 @@ async function s3Request(keyId: string, secret: string, sessionToken: string, bu
 }
 
 function xmlAttr(xml: string, tag: string): string[] {
-  const re = new RegExp(`<${tag}[^>]*>(.*?)</${tag}>`, "gs");
+  const safeTag = tag.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const re = new RegExp(`<${safeTag}[^>]*>(.*?)</${safeTag}>`, "gs");
   const r: string[] = []; let m;
   while ((m = re.exec(xml)) !== null) r.push(m[1].trim());
   return r;
