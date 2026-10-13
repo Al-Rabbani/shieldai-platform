@@ -251,40 +251,63 @@ def _scan_secrets(lines: List[str]) -> List[str]:
     return found
 
 
-def _db_counts(repo: str) -> Optional[dict]:
-    """Open severity counts from security_findings, repo-scoped by target,
-    case-normalized. Returns None on DB integration failure (never
-    fabricated)."""
-    db_url = os.environ.get("DATABASE_URL", "")
-    if not db_url:
+def _repo_provider_id(repo: str, github_token: str) -> Optional[int]:
+    """Fetch the IMMUTABLE GitHub repository ID server-side. A full name or
+    commit URL is never repository identity (Phase C trusted chain)."""
+    import json as _json
+    import urllib.request
+    req = urllib.request.Request(
+        f"https://api.github.com/repos/{repo}",
+        headers={"Authorization": f"Bearer {github_token}",
+                 "Accept": "application/vnd.github+json",
+                 "User-Agent": "shieldai-ci-gate"})
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = _json.loads(resp.read().decode("utf-8"))
+            rid = data.get("id")
+            if isinstance(rid, int) and rid > 0:
+                return rid
+    except Exception:
+        return None
+    return None
+
+
+def _db_counts(repo: str, github_token: str) -> Optional[dict]:
+    """Open severity counts from security_findings, scoped to the verified
+    tenant and the exact registered repository binding ID. No substring
+    matching. Returns None on integration failure (never fabricated); an
+    unregistered binding fails closed."""
+    from gds_api.security_scope import (SecurityScopeError,
+                                        resolve_repository_binding,
+                                        resolve_service_scope,
+                                        scoped_finding_counts,
+                                        service_scope_configured)
+    if not service_scope_configured():
         return None
     try:
-        conn = psycopg2.connect(db_url, connect_timeout=5)
-        try:
-            with conn.cursor() as cur:
-                like = f"%{repo}%"
-                cur.execute(
-                    "SELECT LOWER(severity), COUNT(*) FROM security_findings "
-                    "WHERE status = 'open' AND target ILIKE %s "
-                    "GROUP BY LOWER(severity)", (like,))
-                counts = {sev: int(n) for sev, n in cur.fetchall()}
-                since = (datetime.datetime.utcnow()
-                         - datetime.timedelta(hours=24)).isoformat()
-                cur.execute(
-                    "SELECT COUNT(*) FROM security_findings "
-                    "WHERE status = 'open' AND LOWER(severity) = 'critical' "
-                    "AND target ILIKE %s AND detected_at >= %s",
-                    (like, since))
-                new_critical = int(cur.fetchone()[0])
-        finally:
-            conn.close()
+        provider_id = _repo_provider_id(repo, github_token)
+        if not provider_id:
+            return None
+        scope = resolve_service_scope()
+        binding_id = resolve_repository_binding(
+            scope, provider="github", provider_repository_id=provider_id,
+            provider_full_name=repo)
+        counts = scoped_finding_counts(
+            scope, repository_binding_id=binding_id, statuses=("open",))
+        since = datetime.datetime.utcnow() - datetime.timedelta(hours=24)
+        new_critical = scoped_finding_counts(
+            scope, repository_binding_id=binding_id, statuses=("open",),
+            since=since)["by_severity"].get("critical", 0)
         return {
-            "critical": counts.get("critical", 0),
-            "high": counts.get("high", 0),
-            "medium": counts.get("medium", 0),
-            "low": counts.get("low", 0),
+            "critical": counts["by_severity"].get("critical", 0),
+            "high": counts["by_severity"].get("high", 0),
+            "medium": counts["by_severity"].get("medium", 0),
+            "low": counts["by_severity"].get("low", 0),
             "new_critical": new_critical,
         }
+    except SecurityScopeError:
+        # Unregistered/inactive binding or unverified name: fail closed.
+        return None
     except Exception:
         return None
 
@@ -319,7 +342,7 @@ def security_gate(req: GateRequest):
             "checked_at": now,
         }
 
-    counts = _db_counts(req.repo_full_name)
+    counts = _db_counts(req.repo_full_name, req.github_token)
     if counts is None:
         return {
             "status": "integration_error", "pass": False,

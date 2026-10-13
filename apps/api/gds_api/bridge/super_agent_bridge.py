@@ -119,8 +119,13 @@ async def list_agents(authorization: Optional[str] = Header(None)):
 
 
 @router.get("/mission/{mission_id}")
-async def get_mission_status_endpoint(mission_id: str):
-    """Phase 6 v2: Get mission status (in-memory or PostgreSQL)."""
+async def get_mission_status_endpoint(
+    mission_id: str,
+    authorization: Optional[str] = Header(None),
+):
+    """Phase C: status polling requires authentication, and the PostgreSQL
+    fallback is tenant-scoped via the verified service scope."""
+    _verify_auth(authorization)
     result = _get_mission_status(mission_id)
     return result
 @router.get("/missions")
