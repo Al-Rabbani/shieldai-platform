@@ -615,3 +615,116 @@ async def execute_tool(
 def list_tools() -> list[str]:
     """Return all available tool names."""
     return list(TOOL_REGISTRY.keys())
+
+
+# ---- Real tool specs (risk_class + description) ---------------------------------
+# gds_api.workflows' decide prompt and _resolve_task_risk_class() read
+# spec.risk_class / spec.description off every TOOL_REGISTRY function. Those fields
+# are NOT invented here: for tools that map to an OPERATIONAL capability both fields
+# come from the capability catalog itself (CAPABILITY_REGISTRY via
+# TOOL_TO_CAPABILITY_KEY, whose risk classes are the documented model in
+# docs/security/capability-risk-model.md), and the RiskClass->label mapping below is
+# that model's own wording (R0/R1 fall inside "low"; R2/R3/R4 map to medium/high/
+# critical respectively). The legacy scanner tools are NOT capability-mapped yet -
+# evaluate_task already fail-closes them at the broker until they are - so their specs
+# are hand-written here from their real behaviour, at the same scale.
+from gds_api.capabilities.definitions import RiskClass  # noqa: E402
+
+_RISK_CLASS_LABEL: dict[str, str] = {
+    RiskClass.R0: "low",
+    RiskClass.R1: "low",
+    RiskClass.R2: "medium",
+    RiskClass.R3: "high",
+    RiskClass.R4: "critical",
+}
+
+# Legacy scanners, not yet in the capability catalog. The broker denies them until they
+# are properly mapped, so these labels only ever reach the decide prompt - they never
+# grant execution. Risk labels follow the same low/medium/high/critical scale.
+_LEGACY_SCANNER_SPECS: dict[str, tuple[str, str]] = {
+    "nmap_scan": ("high", "TCP port and service scan of a target host or range (nmap)."),
+    "nuclei_scan": ("high", "Template-driven vulnerability scan of a target (nuclei)."),
+    "nikto_scan": ("high", "Web server vulnerability scan of a target (nikto)."),
+    "sqlmap_scan": ("critical", "Active SQL injection testing against a target (sqlmap)."),
+    "masscan_scan": ("high", "High-speed TCP port sweep of a target range (masscan)."),
+    "ffuf_scan": ("high", "Directory/endpoint brute-force discovery of a target (ffuf)."),
+    "gobuster_scan": ("high", "Directory/endpoint brute-force discovery of a target (gobuster)."),
+    "wpscan_scan": ("high", "WordPress-specific scan of a target (wpscan)."),
+    "semgrep_scan": ("low", "Static code scan of a local repository (semgrep)."),
+    "trivy_scan": ("low", "Vulnerability scan of a local container image (trivy)."),
+    "check_url_headers": ("low", "Fetch and review a target URL's HTTP response headers."),
+    "httpx_probe": ("low", "Probe target URL(s) for reachability and basic HTTP data (httpx)."),
+    "subfinder_scan": ("low", "Passive subdomain enumeration via DNS sources (subfinder)."),
+    "search_osv": ("low", "Look up known vulnerabilities for a package (OSV.dev API)."),
+    "noop": ("low", "Do nothing - a no-op for testing the tool path only."),
+}
+
+
+def _attach_tool_specs() -> None:
+    # Imported lazily: capabilities.catalog is a peer module and this keeps the import
+    # order independent of it.
+    from gds_api.capabilities.catalog import CAPABILITY_REGISTRY, TOOL_TO_CAPABILITY_KEY
+
+    for _name, _fn in TOOL_REGISTRY.items():
+        if hasattr(_fn, "risk_class"):
+            continue
+        _cap = CAPABILITY_REGISTRY.get(TOOL_TO_CAPABILITY_KEY.get(_name, ""))
+        if _cap is not None:
+            _fn.risk_class = _RISK_CLASS_LABEL[_cap.risk_class]
+            _fn.description = _cap.description
+        elif _name in _LEGACY_SCANNER_SPECS:
+            _fn.risk_class, _fn.description = _LEGACY_SCANNER_SPECS[_name]
+        else:
+            # Fail closed: a registry tool with no capability mapping and no explicit
+            # spec must be loud at startup, not silently mislabeled in the decide
+            # prompt or approval gating.
+            raise RuntimeError(
+                f"tool {_name!r} has no capability mapping and no explicit spec - "
+                "attach one before it can be advertised to the reasoning loop"
+            )
+
+
+_attach_tool_specs()
+
+
+async def execute_tool_governed(
+    db: Any,
+    *,
+    tenant_id: Any,
+    user_id: Any,
+    mission_id: Any,
+    tool_name: str,
+    input_data: dict[str, Any],
+    requesting_agent_id: Any = None,
+    workflow_run_id: Any = None,
+    capability_decision_id: Any = None,
+) -> dict[str, Any]:
+    """Capability-governed execution entry point for gds_api.capabilities.gateway.
+
+    Phase 17's gateway passes the real db/tenant-scoped context (the human user_id and
+    mission behind the request, plus the agent/workflow/decision that authorized it).
+    The broker has ALREADY made its governance decision for this exact request
+    (evaluate_capability_request + reevaluate_capability_request in the gateway); this
+    function makes no second governance decision - it only executes the real registered
+    handler through the plain execute_tool path (registry lookup, tool_executing /
+    tool_completed logging, error containment) with the real actor fields, so every
+    governed execution keeps the same real audit trail an ungoverned one has.
+
+    The authorizing decision id is logged, not re-evaluated: the gateway records
+    executed|failed on that decision itself (mark_capability_execution), guarded by
+    CapabilityExecutionConflict so a decision can only ever be marked executed once.
+    """
+    actor_id = str(requesting_agent_id) if requesting_agent_id else str(user_id)
+    actor_type = "agent" if requesting_agent_id else "user"
+    logger.info(
+        f"tool_governed_execute: tool={tool_name} actor={actor_id} "
+        f"tenant={tenant_id} mission={mission_id} decision={capability_decision_id}"
+    )
+    return await execute_tool(
+        tool_name=tool_name,
+        payload=input_data,
+        actor_id=actor_id,
+        actor_type=actor_type,
+        actor_role=f"mission:{mission_id}",
+        tenant_id=str(tenant_id),
+    )
