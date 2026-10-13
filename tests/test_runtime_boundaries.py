@@ -186,32 +186,76 @@ class FindingTests(unittest.TestCase):
             self.assertFalse(self.wiring.exec_store_finding({})["success"])
             self.assertFalse(self.wiring.exec_get_findings({})["success"])
 
-    def test_database_script_binds_values_and_closes_connection(self):
-        operations = []
-        class Cursor:
-            def __enter__(self): return self
-            def __exit__(self, *args): pass
-            def execute(self, sql, values): operations.append((sql, values))
-            def fetchone(self): return ("finding-1",)
-            def fetchall(self): return []
-        class Connection:
-            closed = False
-            def __enter__(self): return self
-            def __exit__(self, *args): pass
-            def cursor(self): return Cursor()
-            def close(self): self.closed = True
+    def test_database_script_uses_env_scope_and_fails_closed(self):
+        """The finding subprocess must take its identity from the server-owned
+        environment (never the model payload) and emit fail-closed JSON."""
+        captured = []
+        mod = types.ModuleType("gds_api.security_scope")
+
+        class FakeScopeError(Exception):
+            pass
+
+        mod.SecurityScopeError = FakeScopeError
+
+        def build_env(configured=True, scope="scope-from-env"):
+            mod.service_scope_configured = lambda: configured
+            mod.resolve_service_scope = lambda: scope
+            def read_scoped(payload, sc):
+                captured.append(("get", payload, sc))
+                return [{"id": 1, "title": "t"}]
+            def store_scoped(payload, sc):
+                captured.append(("store", payload, sc))
+                return {"success": True, "finding_id": "f-1"}
+            mod.read_scoped_findings = read_scoped
+            mod.store_scoped_finding = store_scoped
+
+        build_env()
+        pkg = types.ModuleType("gds_api")
+        pkg.security_scope = mod
+        pkg.__path__ = []
+
+        payload = dict(title='quotes " and newline\n', source="kernel", severity="HIGH",
+                       target="owned.invalid", description="evidence", cve_id="", limit=10)
+
         for operation in ("store", "get"):
-            connection = Connection()
-            payload = dict(title='quotes " and newline\n', source="kernel", severity="HIGH", target="owned.invalid", description="evidence", cve_id="", limit=10)
             output = io.StringIO()
-            fake = types.SimpleNamespace(connect=lambda *args, **kwargs: connection)
-            with patch.dict(sys.modules, {"psycopg2": fake}), patch.dict(os.environ, {"DATABASE_URL": "test-only-dsn"}), patch.object(sys, "stdin", io.StringIO(json.dumps({"operation": operation, "payload": payload}))), patch.object(sys, "stdout", output):
+            with patch.dict(sys.modules, {"gds_api": pkg, "gds_api.security_scope": mod}), \
+                 patch.object(sys, "stdin", io.StringIO(json.dumps({"operation": operation, "payload": payload}))), \
+                 patch.object(sys, "stdout", output):
                 exec(self.wiring.FINDING_DATABASE_SCRIPT, {})
-            self.assertTrue(json.loads(output.getvalue())["success"])
-            self.assertTrue(connection.closed)
-            sql, values = operations[-1]
-            self.assertNotIn(payload["target"], sql)
-            self.assertIn(payload["target"], values)
+            result = json.loads(output.getvalue())
+            self.assertTrue(result.get("success"), result)
+            kind, received, scope_used = captured[-1]
+            self.assertEqual(kind, operation)
+            # Identity came from the env resolver, never the model payload.
+            self.assertEqual(scope_used, "scope-from-env")
+            self.assertNotIn("tenant_id", received)
+
+        # Unconfigured scope fails closed with clean JSON, no traceback.
+        build_env(configured=False)
+        output = io.StringIO()
+        with patch.dict(sys.modules, {"gds_api": pkg, "gds_api.security_scope": mod}), \
+             patch.object(sys, "stdin", io.StringIO(json.dumps({"operation": "store", "payload": payload}))), \
+             patch.object(sys, "stdout", output):
+            exec(self.wiring.FINDING_DATABASE_SCRIPT, {})
+        result = json.loads(output.getvalue())
+        self.assertFalse(result.get("success"))
+        self.assertIn("not configured", result.get("error", ""))
+        self.assertNotIn("Traceback", output.getvalue())
+
+        # Scope errors surface as controlled messages without credential text.
+        def raise_scope(payload, sc):
+            raise FakeScopeError("private connection detail should not escape")
+        mod.store_scoped_finding = raise_scope
+        mod.service_scope_configured = lambda: True
+        output = io.StringIO()
+        with patch.dict(sys.modules, {"gds_api": pkg, "gds_api.security_scope": mod}), \
+             patch.object(sys, "stdin", io.StringIO(json.dumps({"operation": "store", "payload": payload}))), \
+             patch.object(sys, "stdout", output):
+            exec(self.wiring.FINDING_DATABASE_SCRIPT, {})
+        result = json.loads(output.getvalue())
+        self.assertFalse(result.get("success"))
+        self.assertIn("private connection detail", result.get("error", ""))
 
 
 if __name__ == "__main__":

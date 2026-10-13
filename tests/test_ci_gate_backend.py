@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import re
 import secrets
+import sys
 import types
 import typing
 import urllib.request
@@ -54,7 +55,7 @@ class BackendTests(unittest.TestCase):
         self.ns = backend()
         self.req = types.SimpleNamespace(repo_full_name="Al-Rabbani/shieldai-platform", commit_sha="a" * 40, github_token="test-only", fail_on_secrets=True, block_on=["critical"], fail_on_new_critical=True, branch="review", pr_number=14)
         self.ns["_github_commit_diff"] = lambda *args: text_diff()
-        self.ns["_db_counts"] = lambda repo: dict(critical=0, high=0, medium=0, low=0, new_critical=0)
+        self.ns["_db_counts"] = lambda repo, token: dict(critical=0, high=0, medium=0, low=0, new_critical=0)
 
     def test_301_files_are_counted_and_scanned(self):
         added, files = self.ns["_scan_diff"](text_diff(count=301))
@@ -81,7 +82,7 @@ class BackendTests(unittest.TestCase):
 
     def test_unsupported_diff_returns_integration_error_before_database(self):
         self.ns["_github_commit_diff"] = lambda *args: "diff --git a/x b/x\nGIT binary patch"
-        self.ns["_db_counts"] = lambda repo: self.fail("DB accessed before coverage validation")
+        self.ns["_db_counts"] = lambda repo, token: self.fail("DB accessed before coverage validation")
         result = self.ns["security_gate"](self.req)
         self.assertEqual(result["status"], "integration_error")
         self.assertFalse(result["pass"])
@@ -91,12 +92,12 @@ class BackendTests(unittest.TestCase):
             self.ns["_github_commit_diff"] = lambda *args, value=diff: value
             self.assertEqual(self.ns["security_gate"](self.req)["status"], "integration_error")
         self.ns["_github_commit_diff"] = lambda *args: text_diff()
-        self.ns["_db_counts"] = lambda repo: None
+        self.ns["_db_counts"] = lambda repo, token: None
         self.assertEqual(self.ns["security_gate"](self.req)["status"], "integration_error")
 
     def test_requested_high_policy_blocks(self):
         self.req.block_on = ["high"]
-        self.ns["_db_counts"] = lambda repo: dict(critical=0, high=1, medium=0, low=0, new_critical=0)
+        self.ns["_db_counts"] = lambda repo, token: dict(critical=0, high=1, medium=0, low=0, new_critical=0)
         self.assertEqual(self.ns["security_gate"](self.req)["verdict"], "blocked")
 
     def test_severity_validator_normalizes_and_rejects_unknown(self):
@@ -144,26 +145,80 @@ class BackendTests(unittest.TestCase):
             with self.assertRaises(HTTPException):
                 ns["_github_commit_diff"]("Al-Rabbani/shieldai-platform", "a" * 40, "test-only")
 
-    def test_case_normalized_queries_and_connection_close(self):
-        queries = []
-        class Cursor:
-            def __enter__(self): return self
-            def __exit__(self, *args): pass
-            def execute(self, sql, values): queries.append(sql)
-            def fetchall(self): return [("critical", 1), ("high", 2)]
-            def fetchone(self): return (1,)
-        class Connection:
-            closed = False
-            def cursor(self): return Cursor()
-            def close(self): self.closed = True
-        connection = Connection()
+    def test_scoped_counts_use_exact_binding_and_fail_closed(self):
+        """_db_counts must resolve the binding via trusted provider identity,
+        pass the exact binding ID (never a substring), and fail closed."""
+        from uuid import UUID as _UUID
+
+        seen = {}
+        mod = types.ModuleType("gds_api.security_scope")
+
+        class FakeScopeError(Exception):
+            pass
+
+        mod.SecurityScopeError = FakeScopeError
+        mod.service_scope_configured = lambda: True
+        mod.resolve_service_scope = lambda: "scope-from-env"
+        BINDING = _UUID("29a5fe1d-ef1d-4582-90a3-d3bf351d0a04")
+
+        def resolve_binding(scope, provider, provider_repository_id,
+                            provider_full_name):
+            seen["binding_args"] = (provider, provider_repository_id,
+                                    provider_full_name)
+            return BINDING
+
+        def counts(scope, repository_binding_id=None, since=None,
+                   statuses=("open",)):
+            seen["binding_id"] = repository_binding_id
+            seen["statuses"] = statuses
+            if since is not None:
+                return {"by_severity": {"critical": 1}, "total": 1}
+            return {"by_severity": {"critical": 1, "high": 2}, "total": 3}
+
+        mod.resolve_repository_binding = resolve_binding
+        mod.scoped_finding_counts = counts
+        pkg = types.ModuleType("gds_api")
+        pkg.security_scope = mod
+        pkg.__path__ = []
+
         ns = backend()
-        ns["psycopg2"] = types.SimpleNamespace(connect=lambda *args, **kwargs: connection)
-        with patch.dict(os.environ, {"DATABASE_URL": "test-only-dsn"}):
-            result = ns["_db_counts"]("Al-Rabbani/shieldai-platform")
+        ns["_repo_provider_id"] = lambda repo, token: 1273433852
+        with patch.dict(sys.modules, {"gds_api": pkg,
+                                      "gds_api.security_scope": mod}):
+            result = ns["_db_counts"]("Al-Rabbani/shieldai-platform", "token")
+
+        # Severity mapping preserved from the DB counts.
         self.assertEqual((result["critical"], result["high"]), (1, 2))
-        self.assertTrue(all("LOWER(severity)" in query for query in queries))
-        self.assertTrue(connection.closed)
+        # Binding resolved through the trusted provider identity, exact ID.
+        self.assertEqual(seen["binding_args"],
+                         ("github", 1273433852, "Al-Rabbani/shieldai-platform"))
+        self.assertEqual(seen["binding_id"], BINDING)
+        self.assertEqual(seen["statuses"], ("open",))
+
+        # Unregistered binding fails closed (never fabricated counts).
+        def raise_unregistered(*args, **kwargs):
+            raise FakeScopeError("not registered")
+        mod.resolve_repository_binding = raise_unregistered
+        with patch.dict(sys.modules, {"gds_api": pkg,
+                                      "gds_api.security_scope": mod}):
+            self.assertIsNone(ns["_db_counts"]("Al-Rabbani/shieldai-platform",
+                                               "token"))
+
+        # Unconfigured service scope fails closed before any query.
+        mod.resolve_repository_binding = resolve_binding
+        mod.service_scope_configured = lambda: False
+        with patch.dict(sys.modules, {"gds_api": pkg,
+                                      "gds_api.security_scope": mod}):
+            self.assertIsNone(ns["_db_counts"]("Al-Rabbani/shieldai-platform",
+                                               "token"))
+
+        # Unknown provider repository identity fails closed.
+        mod.service_scope_configured = lambda: True
+        ns["_repo_provider_id"] = lambda repo, token: None
+        with patch.dict(sys.modules, {"gds_api": pkg,
+                                      "gds_api.security_scope": mod}):
+            self.assertIsNone(ns["_db_counts"]("Al-Rabbani/shieldai-platform",
+                                               "token"))
 
     def test_handler_uses_sync_threadpool_contract(self):
         node = next(n for n in ast.parse(SOURCE.read_text()).body if getattr(n, "name", None) == "security_gate")
