@@ -81,4 +81,26 @@ exercise the full API, production ORM schema, RLS or VPS release.
 
 Local PostgreSQL execution could not start because this workspace denies socket
 creation. The CI workflow therefore includes an isolated PostgreSQL 16 service.
-Do not report those database checks passed until its job actually succeeds.
+The PostgreSQL job succeeded in run 43484961011 after enabling SQLAlchemy asyncio dependencies: all four tests ran and passed. This proves the isolated claim contracts, not production RLS or the deployed VPS.
+
+
+## Authenticated runtime connection control
+
+Base44 checkpoint `6af75a3c1bc2c9d3c1bad699`, commit
+`d65f1387cbdbb87ba0453543e19ddc84c2185be4`, adds the admin-only
+`gds-runtime-diagnostics` backend and a Verify runtime connection button in Agent
+Fleet. It performs only fixed-origin GET requests to the GDS bridge. It rejects
+redirects, bounds response size and timeout, returns selected metadata only and
+never sends the key to the browser or accepts a caller-selected URL.
+
+Set the EXISTING VPS bridge credential privately in Base44 server Secrets under
+`BRIDGE_API_KEY`. A newly invented key will not authenticate to the existing VPS.
+No credential was copied, generated or changed during this work. Missing credentials
+return an explicit blocked state without network access. Older releases can supply
+an authenticated roster; a roster never proves worker execution or production
+readiness. A separate authorized deployment channel is still needed for VPS rollout.
+
+The Base44 build and all 37 backend contracts passed (19 safeguards, 10 existing
+AgentOS, 8 diagnostic transport). CI additionally exercises the 27 snapshot tests;
+the 10 existing AgentOS contracts remain in the actual Base44 app. CI's PostgreSQL
+service is disposable and contains no customer data.

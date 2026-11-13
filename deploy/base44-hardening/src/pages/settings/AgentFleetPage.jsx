@@ -20,6 +20,17 @@ export default function AgentFleetPage() {
 
   useEffect(() => { load(); }, [load]);
 
+  async function verifyRuntime() {
+    setModalTitle('Runtime connection');
+    setModalLoading(true); setModalData(null);
+    const result = await invokeAction('gds-runtime-diagnostics', {})
+      .catch(error => error?.response?.data || { error: 'Runtime diagnostics are unavailable.' });
+    setModalData({ response: result.success
+      ? `Connection: ${result.connection_status}\n\nReported agents: ${result.declared_agents ?? 'Unknown'}\n\nReported tools: ${result.declared_tools ?? 'Unknown'}\n\nReported release: ${result.reported_release_sha ?? 'Unknown'}\n\nThis confirms metadata access only. Worker execution, isolation and recovery remain unverified.`
+      : result.error || 'Runtime diagnostics are unavailable.' });
+    setModalLoading(false);
+  }
+
   async function restart(agent) {
     setModalTitle(`Recovery — ${agent.name}`);
     setModalLoading(false);
@@ -45,6 +56,7 @@ export default function AgentFleetPage() {
   return (
     <div className="min-h-screen p-4 space-y-4" style={{ background: "#0a0f1e" }}>
       <h1 className="text-xl font-bold text-white">⚙️ Agent Fleet</h1>
+      <button onClick={verifyRuntime} className="px-3 py-2 rounded-lg text-sm bg-blue-500/15 text-blue-300 border border-blue-500/30">Verify runtime connection</button>
 
       <p className="text-xs text-slate-400">Status follows recorded heartbeat age. Tool execution remains unverified.</p>
       {loadError && <p role="alert" className="text-sm text-amber-400">{loadError}</p>}
