@@ -3,6 +3,12 @@
 Updated 13 November 2026. This is a project-wide risk assessment with targeted
 source review and tests, not certification that every feature or agent works.
 
+Later evidence: [restore and identifier validation](restore-and-identifier-validation-2026-11-13.md)
+records a successful isolated restore, effective two-tenant checks on the four
+protected tables, and prepared guards for invalid workflow identifiers. It
+supersedes the earlier untested-restore and untested-policy status below. Full
+API identity/isolation and source rollout remain pending.
+
 ## Evidence and current deployment
 
 Base44 source was inspected directly through the connected app sandbox. Its

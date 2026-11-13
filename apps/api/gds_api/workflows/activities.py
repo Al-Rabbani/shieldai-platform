@@ -25,6 +25,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from temporalio import activity
+from temporalio.exceptions import ApplicationError
 
 from gds_api import memory, model_router, tool_gateway
 from gds_api.agents.manifest import FoundationAgent
@@ -36,8 +37,20 @@ from gds_api.capabilities.gateway import CapabilityExecutionDenied, execute_capa
 from gds_api.db import async_session_factory
 from gds_api.events import publish_mission_event
 from gds_api.models import Approval, Mission, MissionTask
+from gds_api.identifiers import parse_database_uuid
 from gds_api.policy import evaluate_policy
 from gds_api.workflow_sync import sync_workflow_run
+
+
+def _activity_record_uuid(value: object, record_type: str) -> uuid.UUID:
+    try:
+        return parse_database_uuid(value, record_type=record_type)
+    except ValueError:
+        raise ApplicationError(
+            f"A database UUID is required for {record_type}; legacy bridge IDs are not workflow IDs",
+            type="InvalidDatabaseIdentifier",
+            non_retryable=True,
+        ) from None
 
 
 def _infer_target_type(target: str) -> str:
@@ -304,8 +317,9 @@ _CHAT_REPORT_SYSTEM_PROMPT = (
 
 @activity.defn
 async def assess_mission(mission_id: str) -> dict[str, str]:
+    record_id = _activity_record_uuid(mission_id, "mission")
     async with async_session_factory() as db:
-        mission = await db.get(Mission, uuid.UUID(mission_id))
+        mission = await db.get(Mission, record_id)
         if mission is None:
             raise ValueError(f"Mission {mission_id} not found")
 
@@ -340,10 +354,11 @@ async def decide_next_step(payload: dict[str, Any]) -> dict[str, Any]:
     row itself (this activity is the only place a MissionTask gets created now;
     reasoning_loop.py just calls this repeatedly and reacts to what it returns, same
     durable-workflow discipline as before)."""
-    mission_id = payload["mission_id"]
+    mission_id = payload.get("mission_id")
 
+    record_id = _activity_record_uuid(mission_id, "mission")
     async with async_session_factory() as db:
-        mission = await db.get(Mission, uuid.UUID(mission_id))
+        mission = await db.get(Mission, record_id)
         if mission is None:
             raise ValueError(f"Mission {mission_id} not found")
 
@@ -427,8 +442,9 @@ async def decide_next_step(payload: dict[str, Any]) -> dict[str, Any]:
 
 @activity.defn
 async def evaluate_task(task_id: str) -> dict[str, Any]:
+    record_id = _activity_record_uuid(task_id, "task")
     async with async_session_factory() as db:
-        task = await db.get(MissionTask, uuid.UUID(task_id))
+        task = await db.get(MissionTask, record_id)
         if task is None:
             raise ValueError(f"Task {task_id} not found")
         mission = await db.get(Mission, task.mission_id)
@@ -518,8 +534,9 @@ async def evaluate_task(task_id: str) -> dict[str, Any]:
 
 @activity.defn
 async def check_approval(approval_id: str) -> str:
+    record_id = _activity_record_uuid(approval_id, "approval")
     async with async_session_factory() as db:
-        approval = await db.get(Approval, uuid.UUID(approval_id))
+        approval = await db.get(Approval, record_id)
         if approval is None:
             raise ValueError(f"Approval {approval_id} not found")
         return approval.status
@@ -527,8 +544,9 @@ async def check_approval(approval_id: str) -> str:
 
 @activity.defn
 async def execute_task(task_id: str) -> dict[str, Any]:
+    record_id = _activity_record_uuid(task_id, "task")
     async with async_session_factory() as db:
-        task = await db.get(MissionTask, uuid.UUID(task_id))
+        task = await db.get(MissionTask, record_id)
         if task is None:
             raise ValueError(f"Task {task_id} not found")
         mission = await db.get(Mission, task.mission_id)
@@ -687,8 +705,9 @@ async def execute_task(task_id: str) -> dict[str, Any]:
 
 @activity.defn
 async def deny_task(task_id: str) -> None:
+    record_id = _activity_record_uuid(task_id, "task")
     async with async_session_factory() as db:
-        task = await db.get(MissionTask, uuid.UUID(task_id))
+        task = await db.get(MissionTask, record_id)
         if task is None:
             raise ValueError(f"Task {task_id} not found")
         task.status = "denied"
@@ -706,11 +725,12 @@ async def mark_mission_failed(payload: dict[str, Any]) -> None:
     the workflow code that calls this activity re-raises the original exception right
     after, so Temporal's own execution history still shows the real failure too; this
     activity's only job is making sure Postgres agrees before that happens."""
-    mission_id = payload["mission_id"]
+    mission_id = payload.get("mission_id")
     error_message_safe = str(payload.get("error_message_safe", ""))[:500]
 
+    record_id = _activity_record_uuid(mission_id, "mission")
     async with async_session_factory() as db:
-        mission = await db.get(Mission, uuid.UUID(mission_id))
+        mission = await db.get(Mission, record_id)
         if mission is None:
             return
         if mission.status in ("completed", "failed", "cancelled"):
@@ -790,11 +810,12 @@ def _build_report_user_message(
 
 @activity.defn
 async def synthesize_report(payload: dict[str, Any]) -> None:
-    mission_id = payload["mission_id"]
+    mission_id = payload.get("mission_id")
     hit_iteration_limit = bool(payload.get("hit_iteration_limit", False))
 
+    record_id = _activity_record_uuid(mission_id, "mission")
     async with async_session_factory() as db:
-        mission = await db.get(Mission, uuid.UUID(mission_id))
+        mission = await db.get(Mission, record_id)
         if mission is None:
             raise ValueError(f"Mission {mission_id} not found")
 
