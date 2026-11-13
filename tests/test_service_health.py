@@ -44,8 +44,7 @@ class TemporalHealthTests(unittest.IsolatedAsyncioTestCase):
             'Callable': Callable, 'Awaitable': Awaitable,
         })
         async def failing():
-            raise RuntimeError('postgres://user:private-password@host/db')
+            raise RuntimeError('sensitive connection detail (fixture only)')
         result = await ns['_timed']('postgres', failing)
         self.assertEqual(result.status, 'unhealthy')
         self.assertEqual(result.detail, 'RuntimeError: service check failed')
-

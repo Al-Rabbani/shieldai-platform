@@ -67,8 +67,8 @@ copy was performed; archive parsing is not proof of restoration or full recovery
 
 ## Changes and verification in this batch
 
-Base44 checkpoint `6af7751dbb61280d498f3db2`, source commit
-`1413cbebb68517953589af957d686beaa99a00c7`, contains the additional six function
+Base44 checkpoint `6af7763541897aacb7413b99`, source commit
+`74dd029ae9fb53bec4f32d63867a0394ddc6830d`, contains the additional six function
 safeguards. A build and 46 contracts passed in the actual sandbox: 28 hardening,
 8 diagnostic transport, 10 existing AgentOS contracts. SDK/providers are mocked;
 hosted denied/allowed authorization must still be verified. Source snapshots are
@@ -86,8 +86,10 @@ https://python.temporal.io/temporalio.client.ServiceClient.html#check_health
 Local verification: 91 offline contracts and four FastAPI route/dependency tests
 passed. The HTTP tests use the actual stats handler and fixture identity/data
 providers; they prove dependency resolution and tenant forwarding, not production
-JWT verification, ORM access or RLS. Four existing real-PostgreSQL claim tests
-passed on the preceding CI revision; the updated head must complete CI separately.
+JWT verification, ORM access or RLS. CI run 43503762805 passed all four jobs, including four real-PostgreSQL claim
+tests. The separate security gate correctly blocked a synthetic password-shaped
+DSN in a new error-redaction fixture; the fixture now uses generic sensitive
+detail text. Gate policy is unchanged. The follow-up head must pass independently.
 
 ## Delivery order
 

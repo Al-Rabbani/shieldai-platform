@@ -13,7 +13,7 @@ Deno.serve(async (req) => {
     // Get setup instructions
     if (action === 'get_setup_instructions') {
       const cloudFormationUrl = 'https://console.aws.amazon.com/cloudformation/home?region=us-east-1#/stacks/create/review?templateURL=https://shieldai-cloudformation.s3.amazonaws.com/readonly-role.yaml';
-      
+
       return Response.json({
         success: true,
         execution_verified: false,

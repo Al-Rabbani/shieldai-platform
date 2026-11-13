@@ -1,7 +1,7 @@
 # Base44 safeguard source snapshot
 
-Latest additional containment checkpoint: `6af7751dbb61280d498f3db2`, commit
-`1413cbebb68517953589af957d686beaa99a00c7`. Hardening contracts now total 28;
+Latest additional containment checkpoint: `6af7763541897aacb7413b99`, commit
+`74dd029ae9fb53bec4f32d63867a0394ddc6830d`. Hardening contracts now total 28;
 diagnostic transport adds eight. Ten existing AgentOS contracts run separately
 inside the actual Base44 app, for 46 there. See the current project assessment
 under `docs/operations/` for behavior changes and remaining gates.
