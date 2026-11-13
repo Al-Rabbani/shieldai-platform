@@ -18,7 +18,7 @@ from gds_api.autofix.engine import (
 )
 from gds_api.db import get_db
 from gds_api.logging_config import get_logger
-from gds_api.security import CurrentUser
+from gds_api.security import CurrentUser, get_current_user
 
 logger = get_logger(__name__)
 
@@ -57,7 +57,7 @@ class BatchFixRequest(BaseModel):
 async def generate_fix(
     body: GenerateFixRequest,
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = Depends,
+    user: CurrentUser = Depends(get_current_user),
 ) -> dict[str, Any]:
     job = AutoFixJob(
         tenant_id=user.tenant_id,
@@ -83,7 +83,7 @@ async def create_pr(
     job_id: uuid.UUID,
     body: CreatePRRequest,
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = Depends,
+    user: CurrentUser = Depends(get_current_user),
 ) -> dict[str, Any]:
     q = select(AutoFixJob).where(
         AutoFixJob.id == job_id,
@@ -114,7 +114,7 @@ async def create_pr(
 async def list_jobs(
     repo_name: str | None = None,
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = Depends,
+    user: CurrentUser = Depends(get_current_user),
 ) -> list[dict[str, Any]]:
     q = select(AutoFixJob).where(AutoFixJob.tenant_id == user.tenant_id)
     if repo_name:
@@ -143,7 +143,7 @@ async def list_jobs(
 async def get_job(
     job_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = Depends,
+    user: CurrentUser = Depends(get_current_user),
 ) -> dict[str, Any]:
     q = select(AutoFixJob).where(
         AutoFixJob.id == job_id,
@@ -188,7 +188,7 @@ async def list_templates() -> dict[str, Any]:
 async def batch_fix(
     body: BatchFixRequest,
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = Depends,
+    user: CurrentUser = Depends(get_current_user),
 ) -> list[dict[str, Any]]:
     results = []
     for finding in body.findings:

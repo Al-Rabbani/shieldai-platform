@@ -26,7 +26,7 @@ from gds_api.marketplace.engine import (
     get_marketplace_stats, get_publisher_analytics,
 )
 from gds_api.db import get_db
-from gds_api.security import CurrentUser
+from gds_api.security import CurrentUser, get_current_user
 
 router = APIRouter(prefix="/marketplace", tags=["marketplace"])
 
@@ -114,14 +114,14 @@ class UpgradePartnerRequest(BaseModel):
 async def api_register_developer(
     req: RegisterDeveloperRequest,
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = Depends,
+    user: CurrentUser = Depends(get_current_user),
 ) -> dict[str, Any]:
     return await register_developer(db, user.tenant_id, req.display_name, req.email, req.developer_type, req.website, req.bio)
 
 @router.get("/developers")
 async def list_developers(
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = Depends,
+    user: CurrentUser = Depends(get_current_user),
     limit: int = 50,
 ) -> dict[str, Any]:
     stmt = (
@@ -146,7 +146,7 @@ async def list_developers(
 async def api_verify_developer(
     developer_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = Depends,
+    user: CurrentUser = Depends(get_current_user),
 ) -> dict[str, Any]:
     try:
         return await verify_developer(db, developer_id, user.tenant_id)
@@ -162,7 +162,7 @@ async def api_verify_developer(
 async def api_publish_listing(
     req: PublishListingRequest,
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = Depends,
+    user: CurrentUser = Depends(get_current_user),
 ) -> dict[str, Any]:
     try:
         return await publish_listing(
@@ -177,7 +177,7 @@ async def api_publish_listing(
 @router.get("/listings")
 async def list_listings(
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = Depends,
+    user: CurrentUser = Depends(get_current_user),
     item_type: str | None = None,
     category: str | None = None,
     pricing_model: str | None = None,
@@ -228,7 +228,7 @@ async def list_listings(
 async def get_listing(
     listing_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = Depends,
+    user: CurrentUser = Depends(get_current_user),
 ) -> dict[str, Any]:
     stmt = select(MarketplaceListing).where(
         MarketplaceListing.id == listing_id,
@@ -259,7 +259,7 @@ async def get_listing(
 async def api_approve_listing(
     listing_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = Depends,
+    user: CurrentUser = Depends(get_current_user),
 ) -> dict[str, Any]:
     try:
         result = await approve_listing(db, listing_id, user.tenant_id)
@@ -273,7 +273,7 @@ async def api_reject_listing(
     listing_id: uuid.UUID,
     reason: str = "",
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = Depends,
+    user: CurrentUser = Depends(get_current_user),
 ) -> dict[str, Any]:
     try:
         return await reject_listing(db, listing_id, user.tenant_id, reason)
@@ -289,7 +289,7 @@ async def api_reject_listing(
 async def api_certify_listing(
     listing_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = Depends,
+    user: CurrentUser = Depends(get_current_user),
 ) -> dict[str, Any]:
     try:
         result = await run_certification(db, listing_id, user.tenant_id)
@@ -301,7 +301,7 @@ async def api_certify_listing(
 @router.get("/certifications")
 async def list_certifications(
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = Depends,
+    user: CurrentUser = Depends(get_current_user),
     limit: int = 20,
 ) -> dict[str, Any]:
     stmt = (
@@ -332,7 +332,7 @@ async def list_certifications(
 async def api_subscribe(
     req: SubscribeRequest,
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = Depends,
+    user: CurrentUser = Depends(get_current_user),
 ) -> dict[str, Any]:
     try:
         result = await subscribe_to_listing(
@@ -348,7 +348,7 @@ async def api_subscribe(
 async def api_download(
     req: DownloadRequest,
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = Depends,
+    user: CurrentUser = Depends(get_current_user),
 ) -> dict[str, Any]:
     try:
         result = await record_download(
@@ -363,7 +363,7 @@ async def api_download(
 @router.get("/subscriptions")
 async def list_subscriptions(
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = Depends,
+    user: CurrentUser = Depends(get_current_user),
     limit: int = 50,
 ) -> dict[str, Any]:
     stmt = (
@@ -392,7 +392,7 @@ async def list_subscriptions(
 async def create_review(
     req: ReviewRequest,
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = Depends,
+    user: CurrentUser = Depends(get_current_user),
 ) -> dict[str, Any]:
     if not 1 <= req.rating <= 5:
         raise HTTPException(status_code=400, detail="Rating must be 1-5")
@@ -420,7 +420,7 @@ async def create_review(
 async def get_reviews(
     listing_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = Depends,
+    user: CurrentUser = Depends(get_current_user),
     limit: int = 20,
 ) -> dict[str, Any]:
     stmt = (
@@ -448,7 +448,7 @@ async def get_reviews(
 async def api_revenue_share(
     req: RevenueShareRequest,
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = Depends,
+    user: CurrentUser = Depends(get_current_user),
 ) -> dict[str, Any]:
     try:
         result = await calculate_revenue_share(
@@ -464,7 +464,7 @@ async def api_revenue_share(
 async def api_generate_invoice(
     req: GenerateInvoiceRequest,
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = Depends,
+    user: CurrentUser = Depends(get_current_user),
 ) -> dict[str, Any]:
     return await generate_invoice(
         db, user.tenant_id, uuid.UUID(req.subscriber_tenant_id),
@@ -476,7 +476,7 @@ async def api_generate_invoice(
 @router.get("/invoices")
 async def list_invoices(
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = Depends,
+    user: CurrentUser = Depends(get_current_user),
     limit: int = 20,
 ) -> dict[str, Any]:
     stmt = (
@@ -506,7 +506,7 @@ async def list_invoices(
 async def api_register_partner(
     req: RegisterPartnerRequest,
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = Depends,
+    user: CurrentUser = Depends(get_current_user),
 ) -> dict[str, Any]:
     try:
         result = await register_partner(db, user.tenant_id, req.name, req.partner_type, req.contact_email, req.country, req.tier)
@@ -518,7 +518,7 @@ async def api_register_partner(
 @router.get("/partners")
 async def list_partners(
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = Depends,
+    user: CurrentUser = Depends(get_current_user),
     limit: int = 50,
 ) -> dict[str, Any]:
     stmt = (
@@ -544,7 +544,7 @@ async def api_calc_commission(
     partner_id: uuid.UUID,
     req: CommissionRequest,
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = Depends,
+    user: CurrentUser = Depends(get_current_user),
 ) -> dict[str, Any]:
     try:
         result = await calculate_partner_commission(db, partner_id, user.tenant_id, req.revenue_usd)
@@ -558,7 +558,7 @@ async def api_upgrade_partner(
     partner_id: uuid.UUID,
     req: UpgradePartnerRequest,
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = Depends,
+    user: CurrentUser = Depends(get_current_user),
 ) -> dict[str, Any]:
     try:
         result = await upgrade_partner_tier(db, partner_id, user.tenant_id, req.new_tier)
@@ -579,7 +579,7 @@ async def list_partner_tiers() -> dict[str, Any]:
 @router.get("/stats")
 async def api_marketplace_stats(
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = Depends,
+    user: CurrentUser = Depends(get_current_user),
 ) -> dict[str, Any]:
     return await get_marketplace_stats(db, user.tenant_id)
 
@@ -587,7 +587,7 @@ async def api_marketplace_stats(
 async def api_publisher_analytics(
     publisher_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = Depends,
+    user: CurrentUser = Depends(get_current_user),
 ) -> dict[str, Any]:
     return await get_publisher_analytics(db, publisher_id, user.tenant_id)
 

@@ -16,7 +16,7 @@ from gds_api.digital_twin.engine import (
     measure_resilience, assess_blast_radius, generate_resilience_report,
 )
 from gds_api.db import get_db
-from gds_api.security import CurrentUser
+from gds_api.security import CurrentUser, get_current_user
 
 router = APIRouter(prefix="/digital-twin", tags=["digital-twin"])
 
@@ -43,7 +43,7 @@ class ChaosRequest(BaseModel):
 async def create_env(
     req: CreateEnvRequest,
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = Depends,
+    user: CurrentUser = Depends(get_current_user),
 ) -> dict[str, Any]:
     return await create_twin_environment(db, user.tenant_id, req.name, req.description, req.twin_type, req.isolation_level)
 
@@ -51,7 +51,7 @@ async def create_env(
 @router.get("/environments")
 async def list_envs(
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = Depends,
+    user: CurrentUser = Depends(get_current_user),
     limit: int = 20,
 ) -> dict[str, Any]:
     stmt = (
@@ -78,7 +78,7 @@ async def list_envs(
 async def get_env(
     env_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = Depends,
+    user: CurrentUser = Depends(get_current_user),
 ) -> dict[str, Any]:
     stmt = select(DigitalTwinEnvironment).where(
         DigitalTwinEnvironment.id == env_id,
@@ -111,7 +111,7 @@ async def mirror_prod_assets(
     env_id: uuid.UUID,
     req: MirrorAssetsRequest,
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = Depends,
+    user: CurrentUser = Depends(get_current_user),
 ) -> dict[str, Any]:
     if not req.assets:
         raise HTTPException(status_code=400, detail="No assets provided")
@@ -123,7 +123,7 @@ async def trigger_chaos(
     env_id: uuid.UUID,
     req: ChaosRequest,
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = Depends,
+    user: CurrentUser = Depends(get_current_user),
 ) -> dict[str, Any]:
     try:
         result = await run_chaos_experiment(db, user.tenant_id, env_id, req.chaos_type, req.name, req.hypothesis, req.target_asset)
@@ -137,7 +137,7 @@ async def trigger_chaos(
 async def get_resilience(
     env_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = Depends,
+    user: CurrentUser = Depends(get_current_user),
 ) -> dict[str, Any]:
     return await measure_resilience(db, user.tenant_id, env_id)
 
@@ -146,7 +146,7 @@ async def get_resilience(
 async def get_resilience_report(
     env_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = Depends,
+    user: CurrentUser = Depends(get_current_user),
 ) -> dict[str, Any]:
     return await generate_resilience_report(db, user.tenant_id, env_id)
 
@@ -154,7 +154,7 @@ async def get_resilience_report(
 @router.get("/experiments")
 async def list_experiments(
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = Depends,
+    user: CurrentUser = Depends(get_current_user),
     limit: int = 20,
 ) -> dict[str, Any]:
     stmt = (
@@ -184,7 +184,7 @@ async def list_experiments(
 async def get_experiment(
     exp_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = Depends,
+    user: CurrentUser = Depends(get_current_user),
 ) -> dict[str, Any]:
     stmt = select(ChaosExperiment).where(
         ChaosExperiment.id == exp_id,

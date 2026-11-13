@@ -1,6 +1,6 @@
 # GDS production hardening: implementation and release gates
 
-Status: source changes prepared, Base44 safeguards saved, VPS deployment blocked by missing authenticated access. This is not a production-readiness certification.
+Status: source changes prepared and Base44 safeguards saved. VPS operations are available through GDS Co-Pilot; direct Codex SSH remains blocked by workspace networking. This is not a production-readiness certification. The later [project assessment](project-assessment-2026-11-13.md) supersedes earlier access, backup and Temporal status below.
 
 ## Applied to Base44
 
