@@ -778,7 +778,7 @@ async def mark_capability_execution(
         raise CapabilityDenied(
             "DENY", "invalid_decision", "The capability decision could not be found."
         )
-    if decision.execution_status is not None:
+    if status not in ("executed", "failed") or decision.execution_status != "executing":
         raise CapabilityExecutionConflict(
             f"Decision {decision_id} already recorded execution_status="
             f"{decision.execution_status!r}."

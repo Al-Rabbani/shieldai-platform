@@ -242,53 +242,10 @@ analyze them and decide the next step. When done, provide a summary.
         )
     
     async def _execute_tool(self, tool_name: str, args: dict) -> dict:
-        """Execute a tool through the tool gateway."""
-        
-        # Tools handled directly
-        if tool_name == "store_finding":
-            return await self._store_finding(args)
-        elif tool_name == "get_findings":
-            return await self._get_findings(args)
-        elif tool_name == "aws_iam_scan":
-            return await self._aws_iam_scan(args)
-        
-        # Map OpenAI tool name to TOOL_REGISTRY key
-        gateway_name = TOOL_NAME_MAP.get(tool_name, tool_name)
-        
-        # Verify tool exists
-        if gateway_name not in self.tool_registry:
-            return {"error": f"Tool {tool_name} not in TOOL_REGISTRY (tried {gateway_name})",
-                    "available": list(self.tool_registry.keys())[:20]}
-        
-        # Apply parameter name mapping
-        param_map = PARAM_MAP.get(gateway_name, {})
-        mapped_args = {}
-        for k, v in args.items():
-            mapped_key = param_map.get(k, k)
-            mapped_args[mapped_key] = v
-        # Also try common fallbacks
-        if "url" not in mapped_args and "target" in mapped_args:
-            if gateway_name in ("check_url_security_headers", "check_url_headers", "gobuster_scan", "ffuf_scan", "wpscan_scan"):
-                mapped_args["url"] = mapped_args["target"]
-            elif gateway_name in ("check_domain_security", "subfinder_scan"):
-                mapped_args["domain"] = mapped_args["target"]
-        
-        try:
-            result = await self.execute_tool_fn(gateway_name, payload=mapped_args)
-            
-            if isinstance(result, str):
-                try:
-                    return json.loads(result)
-                except:
-                    return {"result": result}
-            elif isinstance(result, dict):
-                return result
-            else:
-                return {"result": str(result)}
-                
-        except Exception as e:
-            return {"error": f"Tool failed: {str(e)}", "tool": gateway_name}
-    
+        """Legacy loop cannot manufacture an authenticated broker execution context."""
+        return {"success": False, "error": "Use the governed workflow executor",
+                "code": "GOVERNED_CAPABILITY_REQUIRED", "execution_mode": "not_executed"}
+
     async def _store_finding(self, args: dict) -> dict:
         """Store a security finding through the verified service scope (Phase C).
 

@@ -584,7 +584,7 @@ TOOL_REGISTRY = {
 }
 
 
-async def execute_tool(
+async def _execute_registered_tool(
     tool_name: str,
     action: str = "execute",
     payload: dict[str, Any] | None = None,
@@ -610,6 +610,15 @@ async def execute_tool(
     except Exception as e:
         logger.error(f"tool_error: tool={tool_name} error={str(e)}")
         return {"success": False, "error": str(e), "tool": tool_name}
+
+
+async def execute_tool(
+    tool_name: str, action: str = "execute", payload: dict[str, Any] | None = None,
+    actor_id: str = "", actor_type: str = "agent", actor_role: str = "", tenant_id: str = "",
+) -> dict[str, Any]:
+    """Legacy dispatch is closed; actor strings are not an authorization grant."""
+    return {"success": False, "error": "A governed capability request is required",
+            "code": "GOVERNED_CAPABILITY_REQUIRED", "execution_mode": "not_executed"}
 
 
 def list_tools() -> list[str]:
@@ -720,7 +729,21 @@ async def execute_tool_governed(
         f"tool_governed_execute: tool={tool_name} actor={actor_id} "
         f"tenant={tenant_id} mission={mission_id} decision={capability_decision_id}"
     )
-    return await execute_tool(
+    from datetime import datetime, UTC
+    from gds_api.models import CapabilityDecisionRecord, CapabilityRequestRecord
+    decision = await db.get(CapabilityDecisionRecord, capability_decision_id)
+    if (decision is None or decision.tenant_id != tenant_id
+            or decision.evaluated_user_id != user_id
+            or decision.evaluated_mission_id != mission_id
+            or decision.decision != "ALLOW" or decision.execution_status != "executing"
+            or decision.expires_at is None or decision.expires_at <= datetime.now(UTC)):
+        return {"success": False, "code": "INVALID_EXECUTION_GRANT", "error": "Execution grant is invalid"}
+    request = await db.get(CapabilityRequestRecord, decision.request_id)
+    if (request is None or request.tenant_id != tenant_id or request.user_id != user_id
+            or request.mission_id != mission_id or request.requested_tool_id != tool_name
+            or request.requested_parameters_safe != input_data):
+        return {"success": False, "code": "EXECUTION_BINDING_MISMATCH", "error": "Execution request mismatch"}
+    return await _execute_registered_tool(
         tool_name=tool_name,
         payload=input_data,
         actor_id=actor_id,

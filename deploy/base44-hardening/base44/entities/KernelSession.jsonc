@@ -1,0 +1,93 @@
+{
+  "name": "KernelSession",
+  "type": "object",
+  "properties": {
+    "session_id": {
+      "type": "string"
+    },
+    "intent": {
+      "type": "string"
+    },
+    "intent_type": {
+      "type": "string",
+      "enum": [
+        "scan",
+        "remediate",
+        "investigate",
+        "report",
+        "approve",
+        "configure",
+        "query",
+        "orchestrate"
+      ],
+      "default": "query"
+    },
+    "actor_role": {
+      "type": "string",
+      "enum": [
+        "admin",
+        "analyst",
+        "viewer"
+      ],
+      "default": "analyst"
+    },
+    "actor_id": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "initializing",
+        "planning",
+        "executing",
+        "completed",
+        "failed",
+        "awaiting_approval",
+        "draft"
+      ],
+      "default": "initializing"
+    },
+    "current_stage": {
+      "type": "number",
+      "default": 1
+    },
+    "duration_ms": {
+      "type": "number",
+      "default": 0
+    },
+    "context_summary": {
+      "type": "string"
+    },
+    "next_step": {
+      "type": "string"
+    },
+    "result_summary": {
+      "type": "string"
+    },
+    "error_message": {
+      "type": "string"
+    },
+    "started_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "completed_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "session_id",
+    "intent"
+  ],
+  "rls": {
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "create": false,
+    "update": false,
+    "delete": false
+  }
+}

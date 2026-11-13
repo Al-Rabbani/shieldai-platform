@@ -14,6 +14,7 @@ Authentication: Bearer token (BRIDGE_API_KEY from /opt/.env)
 """
 from fastapi import Request
 import os, sys, json, asyncio, uuid, logging
+import secrets
 from datetime import datetime
 from fastapi import APIRouter, Header, HTTPException, BackgroundTasks
 from pydantic import BaseModel
@@ -58,7 +59,7 @@ def _verify_auth(authorization: str = None):
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(401, "Missing or invalid Authorization header")
     token = authorization.replace("Bearer ", "")
-    if token != BRIDGE_API_KEY:
+    if not BRIDGE_API_KEY or not secrets.compare_digest(token.encode(), BRIDGE_API_KEY.encode()):
         raise HTTPException(401, "Invalid bridge API key")
     return True
 
@@ -91,11 +92,14 @@ async def bridge_health():
         from gds_api.tool_gateway import TOOL_REGISTRY
         
         return {
-            "status": "healthy",
+            "status": "reachable",
+            "verification_status": "registry_loaded_only",
+            "workers_verified": False,
+            "tool_execution_verified": False,
             "bridge": "base44-rabbani",
             "agents_available": len(AGENT_REGISTRY),
             "tools_available": len(TOOL_REGISTRY),
-            "reasoning_engine": "active",
+            "reasoning_engine": "declared_unverified",
             "timestamp": datetime.utcnow().isoformat()
         }
     except Exception as e:
@@ -325,3 +329,24 @@ async def bridge_mission(request: Request):
     except Exception as e:
         logger.error("Mission failed: %s" % str(e))
         raise HTTPException(status_code=500, detail=str(e))
+@router.get("/diagnostics")
+async def bridge_diagnostics(authorization: Optional[str] = Header(None)):
+    """Bounded metadata for deployment verification; never secrets or customer data."""
+    _verify_auth(authorization)
+    from gds_api.reasoning.prompts import AGENT_REGISTRY
+    from gds_api.tool_gateway import TOOL_REGISTRY
+    release = os.environ.get("GDS_RELEASE_SHA", "")
+    release_valid = len(release) == 40 and all(c in "0123456789abcdef" for c in release)
+    return {
+        "schema_version": 1,
+        "release_sha": release if release_valid else None,
+        "registry_counts": {"agents": len(AGENT_REGISTRY), "tools": len(TOOL_REGISTRY)},
+        "workers_verified": False,
+        "tool_canary_verified": False,
+        "database_isolation_verified": False,
+        "recovery_verified": False,
+        "production_ready": False,
+        "legacy_raw_execution": "disabled_in_this_release",
+        "service_scope_configured": bool(os.environ.get("SECURITY_SERVICE_PRINCIPAL_ID") and os.environ.get("SECURITY_SERVICE_TENANT_ID")),
+        "timestamp": datetime.utcnow().isoformat(),
+    }
