@@ -165,108 +165,16 @@ class ToolSandbox:
         return False
 
     async def execute(self, tool_id: str, payload: Dict[str, Any]) -> ExecutionResult:
-        """
-        Execute a tool in a sandboxed environment.
-        
-        Args:
-            tool_id: Which tool to run
-            payload: Input parameters for the tool
-        
-        Returns:
-            ExecutionResult with output, timing, and status
-        """
-        driver = self.drivers.get(tool_id)
-        if driver is None:
-            return ExecutionResult(
-                tool_id=tool_id, success=False,
-                error=f"Tool '{tool_id}' not registered"
-            )
-        
-        if not driver.is_healthy:
-            return ExecutionResult(
-                tool_id=tool_id, success=False,
-                error=f"Tool '{tool_id}' is unhealthy (consecutive failures: {driver.consecutive_failures})"
-            )
-        
-        if self.current_concurrent >= self.max_concurrent_tools:
-            return ExecutionResult(
-                tool_id=tool_id, success=False,
-                error="Max concurrent tools reached, try again later"
-            )
-        
-        # Execute with timeout and isolation
-        self.current_concurrent += 1
-        driver.state = ToolState.EXECUTING
-        start_time = time.time()
-        
-        try:
-            result = await asyncio.wait_for(
-                self._execute_driver(driver, payload),
-                timeout=driver.timeout_seconds
-            )
-            
-            duration_ms = int((time.time() - start_time) * 1000)
-            self._record_success(driver, duration_ms)
-            
-            return ExecutionResult(
-                tool_id=tool_id,
-                success=True,
-                output=result,
-                duration_ms=duration_ms,
-            )
-            
-        except asyncio.TimeoutError:
-            duration_ms = int((time.time() - start_time) * 1000)
-            self._record_failure(driver, f"Timeout after {driver.timeout_seconds}s")
-            self.total_timeouts += 1
-            logger.warning(f"Tool {tool_id} timed out after {driver.timeout_seconds}s")
-            
-            return ExecutionResult(
-                tool_id=tool_id,
-                success=False,
-                error=f"Timeout after {driver.timeout_seconds} seconds",
-                duration_ms=duration_ms,
-                timed_out=True,
-            )
-            
-        except asyncio.CancelledError:
-            self._record_failure(driver, "Execution cancelled")
-            return ExecutionResult(
-                tool_id=tool_id, success=False,
-                error="Execution cancelled", killed=True
-            )
-            
-        except Exception as e:
-            duration_ms = int((time.time() - start_time) * 1000)
-            self._record_failure(driver, str(e))
-            self.total_panics += 1
-            logger.error(f"Tool {tool_id} panicked: {e}", exc_info=True)
-            
-            return ExecutionResult(
-                tool_id=tool_id,
-                success=False,
-                error=f"Panic: {str(e)}",
-                duration_ms=duration_ms,
-            )
-            
-        finally:
-            self.current_concurrent -= 1
-            driver.state = ToolState.OPEN
-            driver.last_executed = time.time()
+        """Legacy sandbox dispatch has no tenant-bound capability grant.
 
-    async def _execute_driver(self, driver: ToolDriver, payload: Dict) -> Any:
+        Internal daemons and direct callers are subject to the same boundary as
+        HTTP clients. Modern workflows execute through capabilities.gateway.
+        A PID, driver-health flag or shared bridge key is not permission to act.
         """
-        Execute the driver's function.
-        Handles both sync and async executors.
-        """
-        if asyncio.iscoroutinefunction(driver.executor):
-            return await driver.executor(payload)
-        else:
-            # Run sync function in a thread pool to avoid blocking
-            loop = asyncio.get_event_loop()
-            return await loop.run_in_executor(
-                None, driver.executor, payload
-            )
+        return ExecutionResult(
+            tool_id=tool_id, success=False,
+            error="GOVERNED_CAPABILITY_REQUIRED: use the governed capability executor",
+        )
 
     def _record_success(self, driver: ToolDriver, duration_ms: int) -> None:
         """Record successful execution."""
@@ -324,7 +232,9 @@ class ToolSandbox:
         """Return sandbox telemetry."""
         return {
             "registered_tools": len(self.drivers),
-            "healthy_tools": sum(1 for d in self.drivers.values() if d.is_healthy),
+            "healthy_tools": None,
+            "verification_status": "registered_drivers_only",
+            "legacy_execution_enabled": False,
             "unhealthy_tools": sum(1 for d in self.drivers.values() if not d.is_healthy),
             "current_concurrent": self.current_concurrent,
             "max_concurrent": self.max_concurrent_tools,

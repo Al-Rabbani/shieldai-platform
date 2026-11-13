@@ -157,3 +157,38 @@ class ClaimTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(db.locked);self.assertTrue(db.committed);self.assertEqual(decision.execution_status,'executing')
         with self.assertRaises(Denied):await ns['_claim_execution'](db,**scope)
         self.assertTrue(db.rolled_back)
+
+
+class InternalSandboxTests(unittest.IsolatedAsyncioTestCase):
+    async def test_direct_sandbox_and_syscall_cannot_execute_callbacks(self):
+        import importlib.util
+        import sys
+        from test_runtime_boundaries import ROOT
+        spec=importlib.util.spec_from_file_location('gds_sandbox_under_test',ROOT/'gds_kernel/sandbox.py')
+        module=importlib.util.module_from_spec(spec)
+        sys.modules[spec.name]=module
+        try:
+            spec.loader.exec_module(module)
+            calls=[]
+            driver=module.ToolDriver(tool_id='canary',display_name='canary',description='test',executor=lambda payload:calls.append(payload))
+            sandbox=module.ToolSandbox()
+            sandbox.register_driver(driver)
+            result=await sandbox.execute('canary',{'target':'owned.invalid'})
+            self.assertFalse(result.success);self.assertEqual(calls,[])
+            self.assertIn('GOVERNED_CAPABILITY_REQUIRED',result.error)
+            self.assertIsNone(sandbox.get_stats()['healthy_tools'])
+            import ast,time
+            nodes=ast.parse((ROOT/'gds_kernel/syscalls.py').read_text())
+            cls=next(n for n in nodes.body if isinstance(n,ast.ClassDef) and n.name=='SystemCallInterface')
+            method=next(n for n in cls.body if getattr(n,'name',None)=='sys_tool_call')
+            ns=load_nodes('gds_kernel/syscalls.py',['SyscallResult'],{'time':time,'ExecutionResult':module.ExecutionResult})
+            exec(compile(ast.Module(body=[method],type_ignores=[]),'syscalls','exec'),ns)
+            runtime=SimpleNamespace(sandbox=sandbox,_audit=lambda *args:None)
+            denied=await ns['sys_tool_call'](runtime,'legacy-pid','canary',{})
+            self.assertFalse(denied.success);self.assertEqual(calls,[])
+            wiring=load_nodes('gds_kernel/tool_wiring.py',['wire_real_tools'],{
+                '_ensure_path':lambda:None,'REAL_EXECUTORS':{'canary':driver.executor},'ToolState':module.ToolState})
+            self.assertEqual(wiring['wire_real_tools'](SimpleNamespace(sandbox=sandbox)),1)
+            self.assertEqual(driver.to_dict()['state'],'open')
+        finally:
+            sys.modules.pop(spec.name,None)

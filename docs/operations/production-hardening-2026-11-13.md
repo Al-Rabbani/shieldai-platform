@@ -64,3 +64,21 @@ This release intentionally retires ungoverned legacy execution. Do not roll back
 | Commercial readiness | No capacity or compliance certification claimed | Measured costs/capacity, onboarding boundaries and operational ownership |
 
 No new customer tenant, Grok account or paid subscription was created. Grok must receive only tenant-scoped, redacted functions; never root SSH, general shell or shared database/bridge credentials.
+
+
+## Follow-up: internal sandbox and database execution claims
+
+The hardening branch is published as draft PR #21. The follow-up also denies direct
+`ToolSandbox.execute` calls, closing the internal daemon/syscall route around HTTP
+and API gates. Tool wiring uses `ToolState.OPEN` instead of integer `2`, so driver
+serialization can safely use the enum's `.value`.
+
+The offline suite now has 87 passing checks. Four opt-in PostgreSQL integration
+checks exercise the production `_claim_execution` implementation against real
+SQLAlchemy sessions and a disposable schema: twenty concurrent attempts, replay
+after re-evaluation, wrong-tenant rejection and decision substitution. They do not
+exercise the full API, production ORM schema, RLS or VPS release.
+
+Local PostgreSQL execution could not start because this workspace denies socket
+creation. The CI workflow therefore includes an isolated PostgreSQL 16 service.
+Do not report those database checks passed until its job actually succeeds.
