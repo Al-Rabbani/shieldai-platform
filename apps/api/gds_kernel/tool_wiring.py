@@ -19,6 +19,7 @@ import subprocess
 import time
 from typing import Dict, Any, Optional, Callable
 from pathlib import Path
+from gds_kernel.sandbox import ToolState
 
 logger = logging.getLogger("gds.kernel.wiring")
 
@@ -362,7 +363,7 @@ def wire_real_tools(kernel) -> int:
             logger.warning(f"Cannot wire {tool_id} - driver not registered")
             continue
         driver.executor = real_executor
-        driver.state = 2  # ToolState.OPEN
+        driver.state = ToolState.OPEN
         wired_count += 1
         logger.info(f"Wired {tool_id} -> {real_executor.__name__}")
     logger.info(f"Tool wiring complete: {wired_count}/{len(REAL_EXECUTORS)} tools wired to real executors")

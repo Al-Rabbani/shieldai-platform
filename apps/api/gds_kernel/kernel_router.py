@@ -170,12 +170,8 @@ async def list_tools():
 
 @router.post("/tool/execute")
 async def execute_tool(req: ToolExecuteRequest):
-    """Execute a tool through the sandbox."""
-    k = get_kernel()
-    result = await k.syscall.sys_tool_call(req.pid, req.tool_id, req.payload)
-    if not result.success:
-        raise HTTPException(400, result.error)
-    return result.data
+    """Raw kernel RPC cannot substitute for a tenant-bound capability grant."""
+    raise HTTPException(503, "Use the governed capability execution service")
 
 @router.post("/llm/request")
 async def llm_request(req: LLMRequest):
@@ -207,10 +203,8 @@ async def approval_request(req: ApprovalRequest):
 
 @router.post("/approval/grant")
 async def approval_grant(req: ApprovalGrantRequest):
-    """Grant or deny an approval."""
-    k = get_kernel()
-    result = k.syscall.sys_approval_grant(req.approver_pid, req.target_pid, req.approved, req.reason)
-    return result.data
+    """A shared bridge key is not a human approver's identity."""
+    raise HTTPException(503, "Use the authenticated governed approval service")
 
 @router.get("/audit")
 async def audit_log(last_n: int = 100):

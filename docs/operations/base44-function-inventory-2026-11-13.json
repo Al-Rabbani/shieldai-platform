@@ -1,0 +1,1238 @@
+{
+  "kind": "static_reference_inventory_not_effective_authorization_test",
+  "functions": [
+    {
+      "function": "agentSimulator",
+      "auth_me_reference": true,
+      "admin_role_reference": true,
+      "service_role_reference": false,
+      "random_reference": false,
+      "llm_reference": false,
+      "entity_mutation_reference": false
+    },
+    {
+      "function": "agentWorker",
+      "auth_me_reference": true,
+      "admin_role_reference": true,
+      "service_role_reference": false,
+      "random_reference": false,
+      "llm_reference": false,
+      "entity_mutation_reference": false
+    },
+    {
+      "function": "gds-runtime-diagnostics",
+      "auth_me_reference": true,
+      "admin_role_reference": true,
+      "service_role_reference": false,
+      "random_reference": false,
+      "llm_reference": false,
+      "entity_mutation_reference": false
+    },
+    {
+      "function": "gdsAIRedTeam",
+      "auth_me_reference": true,
+      "admin_role_reference": false,
+      "service_role_reference": true,
+      "random_reference": true,
+      "llm_reference": false,
+      "entity_mutation_reference": false
+    },
+    {
+      "function": "gdsAISAST",
+      "auth_me_reference": true,
+      "admin_role_reference": false,
+      "service_role_reference": true,
+      "random_reference": true,
+      "llm_reference": false,
+      "entity_mutation_reference": true
+    },
+    {
+      "function": "gdsAISPM",
+      "auth_me_reference": true,
+      "admin_role_reference": false,
+      "service_role_reference": false,
+      "random_reference": false,
+      "llm_reference": false,
+      "entity_mutation_reference": false
+    },
+    {
+      "function": "gdsAccessControlMonthlyAudit",
+      "auth_me_reference": true,
+      "admin_role_reference": false,
+      "service_role_reference": false,
+      "random_reference": false,
+      "llm_reference": false,
+      "entity_mutation_reference": false
+    },
+    {
+      "function": "gdsAgentOS",
+      "auth_me_reference": true,
+      "admin_role_reference": true,
+      "service_role_reference": false,
+      "random_reference": false,
+      "llm_reference": true,
+      "entity_mutation_reference": true
+    },
+    {
+      "function": "gdsAgentRuntime",
+      "auth_me_reference": true,
+      "admin_role_reference": true,
+      "service_role_reference": false,
+      "random_reference": false,
+      "llm_reference": false,
+      "entity_mutation_reference": false
+    },
+    {
+      "function": "gdsAlertRuleEngine",
+      "auth_me_reference": true,
+      "admin_role_reference": false,
+      "service_role_reference": true,
+      "random_reference": true,
+      "llm_reference": false,
+      "entity_mutation_reference": false
+    },
+    {
+      "function": "gdsApplySLATemplates",
+      "auth_me_reference": true,
+      "admin_role_reference": false,
+      "service_role_reference": false,
+      "random_reference": false,
+      "llm_reference": false,
+      "entity_mutation_reference": true
+    },
+    {
+      "function": "gdsApprovalEscalation",
+      "auth_me_reference": true,
+      "admin_role_reference": false,
+      "service_role_reference": false,
+      "random_reference": false,
+      "llm_reference": false,
+      "entity_mutation_reference": true
+    },
+    {
+      "function": "gdsAutoApplySLA",
+      "auth_me_reference": true,
+      "admin_role_reference": false,
+      "service_role_reference": false,
+      "random_reference": false,
+      "llm_reference": false,
+      "entity_mutation_reference": true
+    },
+    {
+      "function": "gdsAutoAssignCriticalCloudVuln",
+      "auth_me_reference": true,
+      "admin_role_reference": false,
+      "service_role_reference": false,
+      "random_reference": false,
+      "llm_reference": false,
+      "entity_mutation_reference": true
+    },
+    {
+      "function": "gdsAutoInvestigation",
+      "auth_me_reference": true,
+      "admin_role_reference": true,
+      "service_role_reference": false,
+      "random_reference": false,
+      "llm_reference": false,
+      "entity_mutation_reference": true
+    },
+    {
+      "function": "gdsAutoInvestigationTrigger",
+      "auth_me_reference": true,
+      "admin_role_reference": false,
+      "service_role_reference": false,
+      "random_reference": false,
+      "llm_reference": false,
+      "entity_mutation_reference": true
+    },
+    {
+      "function": "gdsAutoLinkPlaybook",
+      "auth_me_reference": false,
+      "admin_role_reference": false,
+      "service_role_reference": false,
+      "random_reference": false,
+      "llm_reference": false,
+      "entity_mutation_reference": true
+    },
+    {
+      "function": "gdsAutoPatchLowRisk",
+      "auth_me_reference": true,
+      "admin_role_reference": false,
+      "service_role_reference": false,
+      "random_reference": false,
+      "llm_reference": true,
+      "entity_mutation_reference": true
+    },
+    {
+      "function": "gdsAutoPenReport",
+      "auth_me_reference": true,
+      "admin_role_reference": false,
+      "service_role_reference": false,
+      "random_reference": false,
+      "llm_reference": false,
+      "entity_mutation_reference": false
+    },
+    {
+      "function": "gdsAutonomousIR",
+      "auth_me_reference": true,
+      "admin_role_reference": false,
+      "service_role_reference": true,
+      "random_reference": true,
+      "llm_reference": false,
+      "entity_mutation_reference": false
+    },
+    {
+      "function": "gdsAzureScan",
+      "auth_me_reference": true,
+      "admin_role_reference": false,
+      "service_role_reference": true,
+      "random_reference": false,
+      "llm_reference": false,
+      "entity_mutation_reference": true
+    },
+    {
+      "function": "gdsCalculateComplianceScores",
+      "auth_me_reference": true,
+      "admin_role_reference": false,
+      "service_role_reference": false,
+      "random_reference": false,
+      "llm_reference": false,
+      "entity_mutation_reference": true
+    },
+    {
+      "function": "gdsCleanup",
+      "auth_me_reference": true,
+      "admin_role_reference": true,
+      "service_role_reference": false,
+      "random_reference": false,
+      "llm_reference": false,
+      "entity_mutation_reference": false
+    },
+    {
+      "function": "gdsCloudCostRisk",
+      "auth_me_reference": true,
+      "admin_role_reference": false,
+      "service_role_reference": true,
+      "random_reference": false,
+      "llm_reference": false,
+      "entity_mutation_reference": false
+    },
+    {
+      "function": "gdsCloudNativeScanner",
+      "auth_me_reference": true,
+      "admin_role_reference": false,
+      "service_role_reference": true,
+      "random_reference": false,
+      "llm_reference": false,
+      "entity_mutation_reference": true
+    },
+    {
+      "function": "gdsComplianceAlertMonitor",
+      "auth_me_reference": true,
+      "admin_role_reference": true,
+      "service_role_reference": false,
+      "random_reference": true,
+      "llm_reference": false,
+      "entity_mutation_reference": true
+    },
+    {
+      "function": "gdsComplianceAutomation",
+      "auth_me_reference": true,
+      "admin_role_reference": false,
+      "service_role_reference": true,
+      "random_reference": true,
+      "llm_reference": false,
+      "entity_mutation_reference": true
+    },
+    {
+      "function": "gdsComplianceBulkExport",
+      "auth_me_reference": true,
+      "admin_role_reference": false,
+      "service_role_reference": false,
+      "random_reference": false,
+      "llm_reference": false,
+      "entity_mutation_reference": false
+    },
+    {
+      "function": "gdsConnectorHub",
+      "auth_me_reference": true,
+      "admin_role_reference": true,
+      "service_role_reference": false,
+      "random_reference": true,
+      "llm_reference": false,
+      "entity_mutation_reference": true
+    },
+    {
+      "function": "gdsConnectorSDK",
+      "auth_me_reference": true,
+      "admin_role_reference": false,
+      "service_role_reference": true,
+      "random_reference": true,
+      "llm_reference": false,
+      "entity_mutation_reference": true
+    },
+    {
+      "function": "gdsCopilot",
+      "auth_me_reference": false,
+      "admin_role_reference": false,
+      "service_role_reference": false,
+      "random_reference": true,
+      "llm_reference": false,
+      "entity_mutation_reference": true
+    },
+    {
+      "function": "gdsCopilotV10",
+      "auth_me_reference": true,
+      "admin_role_reference": false,
+      "service_role_reference": false,
+      "random_reference": true,
+      "llm_reference": true,
+      "entity_mutation_reference": true
+    },
+    {
+      "function": "gdsCriticalAgentTaskAlert",
+      "auth_me_reference": false,
+      "admin_role_reference": false,
+      "service_role_reference": true,
+      "random_reference": false,
+      "llm_reference": false,
+      "entity_mutation_reference": true
+    },
+    {
+      "function": "gdsDailyVulnerabilityDigest",
+      "auth_me_reference": true,
+      "admin_role_reference": false,
+      "service_role_reference": false,
+      "random_reference": false,
+      "llm_reference": false,
+      "entity_mutation_reference": false
+    },
+    {
+      "function": "gdsDataFabric",
+      "auth_me_reference": true,
+      "admin_role_reference": false,
+      "service_role_reference": true,
+      "random_reference": true,
+      "llm_reference": false,
+      "entity_mutation_reference": true
+    },
+    {
+      "function": "gdsDevSecOpsPipeline",
+      "auth_me_reference": true,
+      "admin_role_reference": false,
+      "service_role_reference": false,
+      "random_reference": true,
+      "llm_reference": false,
+      "entity_mutation_reference": false
+    },
+    {
+      "function": "gdsEventStreamGateway",
+      "auth_me_reference": true,
+      "admin_role_reference": false,
+      "service_role_reference": true,
+      "random_reference": false,
+      "llm_reference": false,
+      "entity_mutation_reference": true
+    },
+    {
+      "function": "gdsEvidenceLocker",
+      "auth_me_reference": true,
+      "admin_role_reference": true,
+      "service_role_reference": false,
+      "random_reference": true,
+      "llm_reference": false,
+      "entity_mutation_reference": true
+    },
+    {
+      "function": "gdsExecutiveIntelligence",
+      "auth_me_reference": true,
+      "admin_role_reference": true,
+      "service_role_reference": false,
+      "random_reference": false,
+      "llm_reference": false,
+      "entity_mutation_reference": false
+    },
+    {
+      "function": "gdsExecutiveReport",
+      "auth_me_reference": true,
+      "admin_role_reference": false,
+      "service_role_reference": false,
+      "random_reference": false,
+      "llm_reference": false,
+      "entity_mutation_reference": false
+    },
+    {
+      "function": "gdsExecutiveRiskDashboard",
+      "auth_me_reference": true,
+      "admin_role_reference": false,
+      "service_role_reference": false,
+      "random_reference": false,
+      "llm_reference": false,
+      "entity_mutation_reference": false
+    },
+    {
+      "function": "gdsExecutiveRiskOverview",
+      "auth_me_reference": true,
+      "admin_role_reference": true,
+      "service_role_reference": false,
+      "random_reference": false,
+      "llm_reference": false,
+      "entity_mutation_reference": false
+    },
+    {
+      "function": "gdsExecutiveSummaryEngine",
+      "auth_me_reference": true,
+      "admin_role_reference": false,
+      "service_role_reference": true,
+      "random_reference": true,
+      "llm_reference": false,
+      "entity_mutation_reference": false
+    },
+    {
+      "function": "gdsExportChatToGoogleDocs",
+      "auth_me_reference": true,
+      "admin_role_reference": false,
+      "service_role_reference": true,
+      "random_reference": false,
+      "llm_reference": false,
+      "entity_mutation_reference": false
+    },
+    {
+      "function": "gdsExportComplianceReport",
+      "auth_me_reference": true,
+      "admin_role_reference": false,
+      "service_role_reference": false,
+      "random_reference": false,
+      "llm_reference": false,
+      "entity_mutation_reference": false
+    },
+    {
+      "function": "gdsFAIRRisk",
+      "auth_me_reference": true,
+      "admin_role_reference": false,
+      "service_role_reference": true,
+      "random_reference": false,
+      "llm_reference": false,
+      "entity_mutation_reference": false
+    },
+    {
+      "function": "gdsFindingAssignment",
+      "auth_me_reference": true,
+      "admin_role_reference": false,
+      "service_role_reference": false,
+      "random_reference": false,
+      "llm_reference": false,
+      "entity_mutation_reference": true
+    },
+    {
+      "function": "gdsForensicChain",
+      "auth_me_reference": true,
+      "admin_role_reference": false,
+      "service_role_reference": true,
+      "random_reference": false,
+      "llm_reference": false,
+      "entity_mutation_reference": true
+    },
+    {
+      "function": "gdsGCPScan",
+      "auth_me_reference": true,
+      "admin_role_reference": false,
+      "service_role_reference": true,
+      "random_reference": false,
+      "llm_reference": false,
+      "entity_mutation_reference": true
+    },
+    {
+      "function": "gdsHermesOffensive",
+      "auth_me_reference": true,
+      "admin_role_reference": false,
+      "service_role_reference": false,
+      "random_reference": true,
+      "llm_reference": true,
+      "entity_mutation_reference": true
+    },
+    {
+      "function": "gdsIDEPlugin",
+      "auth_me_reference": true,
+      "admin_role_reference": false,
+      "service_role_reference": true,
+      "random_reference": true,
+      "llm_reference": false,
+      "entity_mutation_reference": false
+    },
+    {
+      "function": "gdsIdentityPlatform",
+      "auth_me_reference": true,
+      "admin_role_reference": true,
+      "service_role_reference": false,
+      "random_reference": true,
+      "llm_reference": false,
+      "entity_mutation_reference": true
+    },
+    {
+      "function": "gdsJiraIntegration",
+      "auth_me_reference": true,
+      "admin_role_reference": false,
+      "service_role_reference": true,
+      "random_reference": true,
+      "llm_reference": false,
+      "entity_mutation_reference": true
+    },
+    {
+      "function": "gdsJiraToWorkflowSync",
+      "auth_me_reference": true,
+      "admin_role_reference": false,
+      "service_role_reference": false,
+      "random_reference": false,
+      "llm_reference": false,
+      "entity_mutation_reference": true
+    },
+    {
+      "function": "gdsKernelAutoArchive",
+      "auth_me_reference": true,
+      "admin_role_reference": true,
+      "service_role_reference": true,
+      "random_reference": false,
+      "llm_reference": false,
+      "entity_mutation_reference": true
+    },
+    {
+      "function": "gdsKernelGateway",
+      "auth_me_reference": true,
+      "admin_role_reference": true,
+      "service_role_reference": true,
+      "random_reference": true,
+      "llm_reference": false,
+      "entity_mutation_reference": true
+    },
+    {
+      "function": "gdsLiveAgentEngine",
+      "auth_me_reference": true,
+      "admin_role_reference": true,
+      "service_role_reference": false,
+      "random_reference": false,
+      "llm_reference": false,
+      "entity_mutation_reference": true
+    },
+    {
+      "function": "gdsMLAnomalyEngine",
+      "auth_me_reference": true,
+      "admin_role_reference": false,
+      "service_role_reference": true,
+      "random_reference": false,
+      "llm_reference": false,
+      "entity_mutation_reference": false
+    },
+    {
+      "function": "gdsMSSP",
+      "auth_me_reference": true,
+      "admin_role_reference": false,
+      "service_role_reference": false,
+      "random_reference": false,
+      "llm_reference": false,
+      "entity_mutation_reference": false
+    },
+    {
+      "function": "gdsMSSPEngine",
+      "auth_me_reference": true,
+      "admin_role_reference": false,
+      "service_role_reference": true,
+      "random_reference": false,
+      "llm_reference": false,
+      "entity_mutation_reference": true
+    },
+    {
+      "function": "gdsMSSPMultiTenant",
+      "auth_me_reference": true,
+      "admin_role_reference": false,
+      "service_role_reference": false,
+      "random_reference": true,
+      "llm_reference": false,
+      "entity_mutation_reference": false
+    },
+    {
+      "function": "gdsMapVulnerabilitiesToCompliance",
+      "auth_me_reference": true,
+      "admin_role_reference": false,
+      "service_role_reference": false,
+      "random_reference": false,
+      "llm_reference": false,
+      "entity_mutation_reference": true
+    },
+    {
+      "function": "gdsMasterOrchestrator",
+      "auth_me_reference": true,
+      "admin_role_reference": true,
+      "service_role_reference": false,
+      "random_reference": false,
+      "llm_reference": false,
+      "entity_mutation_reference": true
+    },
+    {
+      "function": "gdsMemoryEngine",
+      "auth_me_reference": true,
+      "admin_role_reference": false,
+      "service_role_reference": false,
+      "random_reference": true,
+      "llm_reference": false,
+      "entity_mutation_reference": true
+    },
+    {
+      "function": "gdsMonthlyComplianceAuditLog",
+      "auth_me_reference": true,
+      "admin_role_reference": true,
+      "service_role_reference": false,
+      "random_reference": false,
+      "llm_reference": false,
+      "entity_mutation_reference": false
+    },
+    {
+      "function": "gdsNotificationEngine",
+      "auth_me_reference": true,
+      "admin_role_reference": false,
+      "service_role_reference": false,
+      "random_reference": true,
+      "llm_reference": false,
+      "entity_mutation_reference": true
+    },
+    {
+      "function": "gdsPRReview",
+      "auth_me_reference": true,
+      "admin_role_reference": false,
+      "service_role_reference": true,
+      "random_reference": false,
+      "llm_reference": false,
+      "entity_mutation_reference": true
+    },
+    {
+      "function": "gdsPlatformHealthMonitor",
+      "auth_me_reference": true,
+      "admin_role_reference": true,
+      "service_role_reference": false,
+      "random_reference": false,
+      "llm_reference": false,
+      "entity_mutation_reference": false
+    },
+    {
+      "function": "gdsPostureMLEngine",
+      "auth_me_reference": true,
+      "admin_role_reference": false,
+      "service_role_reference": true,
+      "random_reference": true,
+      "llm_reference": false,
+      "entity_mutation_reference": false
+    },
+    {
+      "function": "gdsPredictiveRisk",
+      "auth_me_reference": true,
+      "admin_role_reference": false,
+      "service_role_reference": true,
+      "random_reference": true,
+      "llm_reference": false,
+      "entity_mutation_reference": false
+    },
+    {
+      "function": "gdsPurpleTeamReport",
+      "auth_me_reference": true,
+      "admin_role_reference": false,
+      "service_role_reference": false,
+      "random_reference": false,
+      "llm_reference": false,
+      "entity_mutation_reference": false
+    },
+    {
+      "function": "gdsPurpleTeamScheduler",
+      "auth_me_reference": true,
+      "admin_role_reference": true,
+      "service_role_reference": false,
+      "random_reference": false,
+      "llm_reference": false,
+      "entity_mutation_reference": true
+    },
+    {
+      "function": "gdsQuantumSafe",
+      "auth_me_reference": true,
+      "admin_role_reference": false,
+      "service_role_reference": true,
+      "random_reference": true,
+      "llm_reference": false,
+      "entity_mutation_reference": true
+    },
+    {
+      "function": "gdsRBACEngine",
+      "auth_me_reference": true,
+      "admin_role_reference": false,
+      "service_role_reference": false,
+      "random_reference": false,
+      "llm_reference": false,
+      "entity_mutation_reference": true
+    },
+    {
+      "function": "gdsReachability",
+      "auth_me_reference": true,
+      "admin_role_reference": false,
+      "service_role_reference": true,
+      "random_reference": true,
+      "llm_reference": false,
+      "entity_mutation_reference": true
+    },
+    {
+      "function": "gdsRealSOAR",
+      "auth_me_reference": true,
+      "admin_role_reference": true,
+      "service_role_reference": true,
+      "random_reference": false,
+      "llm_reference": false,
+      "entity_mutation_reference": false
+    },
+    {
+      "function": "gdsRegulatoryIntel",
+      "auth_me_reference": true,
+      "admin_role_reference": false,
+      "service_role_reference": true,
+      "random_reference": false,
+      "llm_reference": false,
+      "entity_mutation_reference": false
+    },
+    {
+      "function": "gdsRiskCorrelation",
+      "auth_me_reference": true,
+      "admin_role_reference": false,
+      "service_role_reference": true,
+      "random_reference": false,
+      "llm_reference": false,
+      "entity_mutation_reference": true
+    },
+    {
+      "function": "gdsRiskIntelligenceReport",
+      "auth_me_reference": true,
+      "admin_role_reference": true,
+      "service_role_reference": false,
+      "random_reference": false,
+      "llm_reference": false,
+      "entity_mutation_reference": false
+    },
+    {
+      "function": "gdsRuntimeProtection",
+      "auth_me_reference": true,
+      "admin_role_reference": false,
+      "service_role_reference": true,
+      "random_reference": false,
+      "llm_reference": false,
+      "entity_mutation_reference": true
+    },
+    {
+      "function": "gdsRuntimeProtectionEngine",
+      "auth_me_reference": true,
+      "admin_role_reference": false,
+      "service_role_reference": true,
+      "random_reference": true,
+      "llm_reference": false,
+      "entity_mutation_reference": false
+    },
+    {
+      "function": "gdsSAASSecurityPosture",
+      "auth_me_reference": true,
+      "admin_role_reference": false,
+      "service_role_reference": false,
+      "random_reference": true,
+      "llm_reference": false,
+      "entity_mutation_reference": false
+    },
+    {
+      "function": "gdsSBOMIntelligence",
+      "auth_me_reference": true,
+      "admin_role_reference": false,
+      "service_role_reference": true,
+      "random_reference": true,
+      "llm_reference": false,
+      "entity_mutation_reference": false
+    },
+    {
+      "function": "gdsSLSA",
+      "auth_me_reference": true,
+      "admin_role_reference": false,
+      "service_role_reference": false,
+      "random_reference": false,
+      "llm_reference": false,
+      "entity_mutation_reference": false
+    },
+    {
+      "function": "gdsSOAROrchestrator",
+      "auth_me_reference": true,
+      "admin_role_reference": true,
+      "service_role_reference": false,
+      "random_reference": false,
+      "llm_reference": false,
+      "entity_mutation_reference": false
+    },
+    {
+      "function": "gdsSaveVoiceMemory",
+      "auth_me_reference": true,
+      "admin_role_reference": false,
+      "service_role_reference": true,
+      "random_reference": false,
+      "llm_reference": false,
+      "entity_mutation_reference": true
+    },
+    {
+      "function": "gdsSecurityDataMesh",
+      "auth_me_reference": true,
+      "admin_role_reference": false,
+      "service_role_reference": false,
+      "random_reference": false,
+      "llm_reference": false,
+      "entity_mutation_reference": false
+    },
+    {
+      "function": "gdsSecurityKnowledgeGraph",
+      "auth_me_reference": true,
+      "admin_role_reference": false,
+      "service_role_reference": true,
+      "random_reference": false,
+      "llm_reference": false,
+      "entity_mutation_reference": false
+    },
+    {
+      "function": "gdsSecurityMaturityBenchmark",
+      "auth_me_reference": true,
+      "admin_role_reference": false,
+      "service_role_reference": true,
+      "random_reference": true,
+      "llm_reference": false,
+      "entity_mutation_reference": false
+    },
+    {
+      "function": "gdsSmartCityAlert",
+      "auth_me_reference": true,
+      "admin_role_reference": false,
+      "service_role_reference": false,
+      "random_reference": false,
+      "llm_reference": false,
+      "entity_mutation_reference": true
+    },
+    {
+      "function": "gdsSyncFindingToJira",
+      "auth_me_reference": true,
+      "admin_role_reference": false,
+      "service_role_reference": false,
+      "random_reference": false,
+      "llm_reference": false,
+      "entity_mutation_reference": false
+    },
+    {
+      "function": "gdsTenantAlertHandler",
+      "auth_me_reference": true,
+      "admin_role_reference": false,
+      "service_role_reference": false,
+      "random_reference": false,
+      "llm_reference": false,
+      "entity_mutation_reference": true
+    },
+    {
+      "function": "gdsTenantAuditEngine",
+      "auth_me_reference": true,
+      "admin_role_reference": false,
+      "service_role_reference": false,
+      "random_reference": true,
+      "llm_reference": false,
+      "entity_mutation_reference": true
+    },
+    {
+      "function": "gdsTenantBillingReport",
+      "auth_me_reference": true,
+      "admin_role_reference": false,
+      "service_role_reference": false,
+      "random_reference": false,
+      "llm_reference": false,
+      "entity_mutation_reference": false
+    },
+    {
+      "function": "gdsTenantEngine",
+      "auth_me_reference": true,
+      "admin_role_reference": false,
+      "service_role_reference": false,
+      "random_reference": true,
+      "llm_reference": false,
+      "entity_mutation_reference": true
+    },
+    {
+      "function": "gdsTenantMigration",
+      "auth_me_reference": true,
+      "admin_role_reference": true,
+      "service_role_reference": false,
+      "random_reference": true,
+      "llm_reference": false,
+      "entity_mutation_reference": true
+    },
+    {
+      "function": "gdsTenantProvisioningWorkflow",
+      "auth_me_reference": true,
+      "admin_role_reference": true,
+      "service_role_reference": false,
+      "random_reference": false,
+      "llm_reference": false,
+      "entity_mutation_reference": true
+    },
+    {
+      "function": "gdsThreatHunterProactive",
+      "auth_me_reference": true,
+      "admin_role_reference": false,
+      "service_role_reference": true,
+      "random_reference": true,
+      "llm_reference": false,
+      "entity_mutation_reference": false
+    },
+    {
+      "function": "gdsThreatIntelligenceHub",
+      "auth_me_reference": true,
+      "admin_role_reference": false,
+      "service_role_reference": false,
+      "random_reference": true,
+      "llm_reference": false,
+      "entity_mutation_reference": false
+    },
+    {
+      "function": "gdsThreatModelEngine",
+      "auth_me_reference": true,
+      "admin_role_reference": false,
+      "service_role_reference": false,
+      "random_reference": true,
+      "llm_reference": false,
+      "entity_mutation_reference": false
+    },
+    {
+      "function": "gdsUnifiedRiskCalculator",
+      "auth_me_reference": true,
+      "admin_role_reference": false,
+      "service_role_reference": false,
+      "random_reference": false,
+      "llm_reference": false,
+      "entity_mutation_reference": false
+    },
+    {
+      "function": "gdsVulnIntelCorrelator",
+      "auth_me_reference": true,
+      "admin_role_reference": false,
+      "service_role_reference": true,
+      "random_reference": true,
+      "llm_reference": false,
+      "entity_mutation_reference": false
+    },
+    {
+      "function": "gdsVulnerabilityWorkflow",
+      "auth_me_reference": true,
+      "admin_role_reference": false,
+      "service_role_reference": false,
+      "random_reference": false,
+      "llm_reference": false,
+      "entity_mutation_reference": true
+    },
+    {
+      "function": "gdsWeeklyExecutiveReport",
+      "auth_me_reference": true,
+      "admin_role_reference": true,
+      "service_role_reference": false,
+      "random_reference": false,
+      "llm_reference": false,
+      "entity_mutation_reference": false
+    },
+    {
+      "function": "gdsWeeklyPentestSummary",
+      "auth_me_reference": false,
+      "admin_role_reference": false,
+      "service_role_reference": false,
+      "random_reference": false,
+      "llm_reference": false,
+      "entity_mutation_reference": false
+    },
+    {
+      "function": "gdsWeeklyReport",
+      "auth_me_reference": true,
+      "admin_role_reference": false,
+      "service_role_reference": true,
+      "random_reference": false,
+      "llm_reference": false,
+      "entity_mutation_reference": true
+    },
+    {
+      "function": "gdsWeeklySummaryReport",
+      "auth_me_reference": true,
+      "admin_role_reference": true,
+      "service_role_reference": false,
+      "random_reference": false,
+      "llm_reference": false,
+      "entity_mutation_reference": false
+    },
+    {
+      "function": "gdsZeroTrust",
+      "auth_me_reference": true,
+      "admin_role_reference": false,
+      "service_role_reference": false,
+      "random_reference": false,
+      "llm_reference": false,
+      "entity_mutation_reference": false
+    },
+    {
+      "function": "gdsZeroTrustAlerts",
+      "auth_me_reference": true,
+      "admin_role_reference": false,
+      "service_role_reference": false,
+      "random_reference": false,
+      "llm_reference": false,
+      "entity_mutation_reference": true
+    },
+    {
+      "function": "gdsZeroTrustEngine",
+      "auth_me_reference": true,
+      "admin_role_reference": false,
+      "service_role_reference": true,
+      "random_reference": true,
+      "llm_reference": false,
+      "entity_mutation_reference": false
+    },
+    {
+      "function": "gdsZeroTrustPlatform",
+      "auth_me_reference": true,
+      "admin_role_reference": false,
+      "service_role_reference": false,
+      "random_reference": false,
+      "llm_reference": false,
+      "entity_mutation_reference": true
+    },
+    {
+      "function": "purgeRuntimeThreats",
+      "auth_me_reference": true,
+      "admin_role_reference": true,
+      "service_role_reference": false,
+      "random_reference": false,
+      "llm_reference": false,
+      "entity_mutation_reference": false
+    },
+    {
+      "function": "resolveSlackChannel",
+      "auth_me_reference": false,
+      "admin_role_reference": false,
+      "service_role_reference": true,
+      "random_reference": false,
+      "llm_reference": false,
+      "entity_mutation_reference": false
+    },
+    {
+      "function": "saveReportToDrive",
+      "auth_me_reference": true,
+      "admin_role_reference": false,
+      "service_role_reference": true,
+      "random_reference": false,
+      "llm_reference": false,
+      "entity_mutation_reference": false
+    },
+    {
+      "function": "shieldAIPentest",
+      "auth_me_reference": true,
+      "admin_role_reference": false,
+      "service_role_reference": false,
+      "random_reference": true,
+      "llm_reference": false,
+      "entity_mutation_reference": true
+    },
+    {
+      "function": "shieldAgentSimulator",
+      "auth_me_reference": false,
+      "admin_role_reference": false,
+      "service_role_reference": false,
+      "random_reference": false,
+      "llm_reference": false,
+      "entity_mutation_reference": false
+    },
+    {
+      "function": "shieldAutoFix",
+      "auth_me_reference": true,
+      "admin_role_reference": true,
+      "service_role_reference": false,
+      "random_reference": false,
+      "llm_reference": false,
+      "entity_mutation_reference": false
+    },
+    {
+      "function": "shieldAutoTriage",
+      "auth_me_reference": false,
+      "admin_role_reference": false,
+      "service_role_reference": false,
+      "random_reference": false,
+      "llm_reference": false,
+      "entity_mutation_reference": false
+    },
+    {
+      "function": "shieldBrandProtection",
+      "auth_me_reference": true,
+      "admin_role_reference": false,
+      "service_role_reference": true,
+      "random_reference": false,
+      "llm_reference": false,
+      "entity_mutation_reference": true
+    },
+    {
+      "function": "shieldDASTScan",
+      "auth_me_reference": true,
+      "admin_role_reference": false,
+      "service_role_reference": false,
+      "random_reference": false,
+      "llm_reference": false,
+      "entity_mutation_reference": false
+    },
+    {
+      "function": "shieldDarkWebMonitor",
+      "auth_me_reference": true,
+      "admin_role_reference": true,
+      "service_role_reference": true,
+      "random_reference": false,
+      "llm_reference": false,
+      "entity_mutation_reference": false
+    },
+    {
+      "function": "shieldDeviceProtection",
+      "auth_me_reference": true,
+      "admin_role_reference": false,
+      "service_role_reference": false,
+      "random_reference": true,
+      "llm_reference": false,
+      "entity_mutation_reference": false
+    },
+    {
+      "function": "shieldIOCRadar",
+      "auth_me_reference": true,
+      "admin_role_reference": false,
+      "service_role_reference": true,
+      "random_reference": true,
+      "llm_reference": false,
+      "entity_mutation_reference": true
+    },
+    {
+      "function": "shieldJiraIntegration",
+      "auth_me_reference": true,
+      "admin_role_reference": false,
+      "service_role_reference": false,
+      "random_reference": true,
+      "llm_reference": false,
+      "entity_mutation_reference": true
+    },
+    {
+      "function": "shieldMonthlyReport",
+      "auth_me_reference": true,
+      "admin_role_reference": false,
+      "service_role_reference": true,
+      "random_reference": false,
+      "llm_reference": false,
+      "entity_mutation_reference": false
+    },
+    {
+      "function": "shieldOnboard",
+      "auth_me_reference": true,
+      "admin_role_reference": false,
+      "service_role_reference": false,
+      "random_reference": false,
+      "llm_reference": false,
+      "entity_mutation_reference": true
+    },
+    {
+      "function": "shieldPentestReport",
+      "auth_me_reference": true,
+      "admin_role_reference": false,
+      "service_role_reference": false,
+      "random_reference": false,
+      "llm_reference": false,
+      "entity_mutation_reference": true
+    },
+    {
+      "function": "shieldPostScanPipeline",
+      "auth_me_reference": true,
+      "admin_role_reference": false,
+      "service_role_reference": false,
+      "random_reference": true,
+      "llm_reference": false,
+      "entity_mutation_reference": true
+    },
+    {
+      "function": "shieldRevenue",
+      "auth_me_reference": true,
+      "admin_role_reference": false,
+      "service_role_reference": false,
+      "random_reference": true,
+      "llm_reference": false,
+      "entity_mutation_reference": false
+    },
+    {
+      "function": "shieldScanAWSAgentless",
+      "auth_me_reference": true,
+      "admin_role_reference": true,
+      "service_role_reference": false,
+      "random_reference": false,
+      "llm_reference": false,
+      "entity_mutation_reference": false
+    },
+    {
+      "function": "shieldScanContainer",
+      "auth_me_reference": true,
+      "admin_role_reference": false,
+      "service_role_reference": false,
+      "random_reference": true,
+      "llm_reference": false,
+      "entity_mutation_reference": false
+    },
+    {
+      "function": "shieldScanGitLab",
+      "auth_me_reference": false,
+      "admin_role_reference": false,
+      "service_role_reference": false,
+      "random_reference": false,
+      "llm_reference": false,
+      "entity_mutation_reference": false
+    },
+    {
+      "function": "shieldScanRepo",
+      "auth_me_reference": false,
+      "admin_role_reference": false,
+      "service_role_reference": false,
+      "random_reference": false,
+      "llm_reference": false,
+      "entity_mutation_reference": false
+    },
+    {
+      "function": "shieldSlackAlert",
+      "auth_me_reference": false,
+      "admin_role_reference": false,
+      "service_role_reference": true,
+      "random_reference": false,
+      "llm_reference": false,
+      "entity_mutation_reference": false
+    },
+    {
+      "function": "shieldSlackCriticalAlert",
+      "auth_me_reference": false,
+      "admin_role_reference": false,
+      "service_role_reference": true,
+      "random_reference": false,
+      "llm_reference": false,
+      "entity_mutation_reference": false
+    },
+    {
+      "function": "shieldThreatIntel",
+      "auth_me_reference": true,
+      "admin_role_reference": false,
+      "service_role_reference": false,
+      "random_reference": false,
+      "llm_reference": false,
+      "entity_mutation_reference": false
+    },
+    {
+      "function": "shieldWeeklySummary",
+      "auth_me_reference": false,
+      "admin_role_reference": false,
+      "service_role_reference": true,
+      "random_reference": false,
+      "llm_reference": false,
+      "entity_mutation_reference": false
+    }
+  ]
+}

@@ -2,6 +2,10 @@
 
 Public results deliberately omit raw exception text, which can contain credentials
 or internal connection details. Process liveness and dependency readiness are separate.
+
+Temporal health proves that WorkflowService is serving, not that a worker is polling
+or that a mission can complete. NATS is verified at protocol level (PING/PONG), not by
+TCP acceptance alone.
 """
 
 import asyncio
@@ -40,7 +44,9 @@ async def _timed(name: str, check: Callable[[], Awaitable[str]]) -> ServiceHealt
         return ServiceHealth(
             name=name,
             status="unhealthy",
-            detail=f"{type(exc).__name__}: dependency check failed",
+            # Driver errors can include credentials or connection strings. Keep
+            # public health output bounded; diagnose details in protected logs.
+            detail=f"{type(exc).__name__}: service check failed",
             latency_ms=round((time.perf_counter() - start) * 1000, 1),
         )
 
@@ -106,8 +112,10 @@ async def _check_temporal() -> str:
     # Client.connect performs the real Temporal gRPC system-info handshake.
     from gds_api.temporal_client import get_temporal_client
 
-    await get_temporal_client()
-    return "Temporal gRPC handshake verified"
+    client = await get_temporal_client()
+    if not await client.service_client.check_health():
+        raise RuntimeError("Temporal WorkflowService is not serving")
+    return "WorkflowService gRPC health serving; worker execution unverified"
 
 
 async def _check_nats() -> str:

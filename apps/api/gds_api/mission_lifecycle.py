@@ -23,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from temporalio.client import WorkflowHandle
 
 from gds_api.models import Mission, WorkflowRun
+from gds_api.identifiers import parse_database_uuid
 from gds_api.temporal_client import TASK_QUEUE, get_temporal_client
 from gds_api.workflows.conversation_workflow import ConversationTurnWorkflow
 from gds_api.workflows.mission_workflow import MissionWorkflow
@@ -45,25 +46,26 @@ async def start_mission_workflow(
     idempotency-key infrastructure was judged out of scope this phase. The database's
     own UNIQUE constraint on workflow_runs.mission_id is the backstop against ever
     getting two WorkflowRun rows for one mission, regardless."""
+    record_id = parse_database_uuid(mission.id, record_type="mission")
     client = await get_temporal_client()
     handle: WorkflowHandle[Any, Any]
     if kind == "direct":
         handle = await client.start_workflow(
             MissionWorkflow.run,
-            str(mission.id),
-            id=f"mission-{mission.id}",
+            str(record_id),
+            id=f"mission-{record_id}",
             task_queue=TASK_QUEUE,
         )
     else:
         handle = await client.start_workflow(
             ConversationTurnWorkflow.run,
-            str(mission.id),
-            id=f"conversation-turn-{mission.id}",
+            str(record_id),
+            id=f"conversation-turn-{record_id}",
             task_queue=TASK_QUEUE,
         )
 
     run = WorkflowRun(
-        mission_id=mission.id,
+        mission_id=record_id,
         tenant_id=mission.tenant_id,
         conversation_thread_id=mission.conversation_thread_id,
         temporal_workflow_id=handle.id,

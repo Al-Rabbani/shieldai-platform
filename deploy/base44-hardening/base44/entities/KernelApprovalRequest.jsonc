@@ -1,0 +1,71 @@
+{
+  "name": "KernelApprovalRequest",
+  "type": "object",
+  "properties": {
+    "session_id": {
+      "type": "string"
+    },
+    "approval_type": {
+      "type": "string",
+      "enum": [
+        "single",
+        "dual",
+        "quorum"
+      ],
+      "default": "single"
+    },
+    "risk_level": {
+      "type": "string",
+      "enum": [
+        "critical",
+        "high",
+        "medium",
+        "low"
+      ],
+      "default": "medium"
+    },
+    "requested_action": {
+      "type": "string"
+    },
+    "tool_name": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "partial",
+        "approved",
+        "rejected"
+      ],
+      "default": "pending"
+    },
+    "approvers_required": {
+      "type": "number",
+      "default": 1
+    },
+    "approvals_received": {
+      "type": "number",
+      "default": 0
+    },
+    "expires_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "session_id",
+    "approval_type",
+    "risk_level"
+  ],
+  "rls": {
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "create": false,
+    "update": false,
+    "delete": false
+  }
+}

@@ -1,0 +1,112 @@
+{
+  "name": "Agent",
+  "type": "object",
+  "properties": {
+    "agent_id": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string"
+    },
+    "display_name": {
+      "type": "string"
+    },
+    "agent_type": {
+      "type": "string",
+      "enum": [
+        "defensive",
+        "offensive",
+        "governance",
+        "intelligence",
+        "automation",
+        "orchestration"
+      ]
+    },
+    "description": {
+      "type": "string"
+    },
+    "runtime_class": {
+      "type": "string",
+      "enum": [
+        "sovereign",
+        "command",
+        "specialist",
+        "restricted"
+      ]
+    },
+    "priority": {
+      "type": "string"
+    },
+    "capabilities": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "tools_allowed": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "max_concurrency": {
+      "type": "number",
+      "default": 5
+    },
+    "timeout_seconds": {
+      "type": "number",
+      "default": 300
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "idle",
+        "working",
+        "error"
+      ],
+      "default": "idle"
+    },
+    "health_score": {
+      "type": "number"
+    },
+    "executions_total": {
+      "type": "number",
+      "default": 0
+    },
+    "avg_duration_ms": {
+      "type": "number",
+      "default": 0
+    },
+    "registered_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "last_heartbeat": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "recovering": {
+      "type": "boolean",
+      "default": false
+    },
+    "recovery_strategy": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "agent_id",
+    "name",
+    "agent_type"
+  ],
+  "rls": {
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "create": false,
+    "update": false,
+    "delete": false
+  }
+}
