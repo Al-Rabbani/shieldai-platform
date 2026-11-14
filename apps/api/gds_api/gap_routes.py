@@ -83,7 +83,7 @@ def create_gap_routers(get_db):
     """Create all missing routers. Call this from main.py."""
 
     # ===== 1. CIEM Routes =====
-    ciem_router = APIRouter(prefix="/ciem", tags=["CIEM"], dependencies=[Depends(require_verified_legacy_route)])
+    ciem_router = APIRouter(prefix="/ciem", tags=["CIEM"])
 
     @ciem_router.get("/findings")
     async def list_ciem_findings(
@@ -183,7 +183,7 @@ def create_gap_routers(get_db):
         return {"scan_id": scan_id, "status": "queued", "message": "CIEM scan queued for execution"}
 
     # ===== 2. Cloud Environment Routes =====
-    cloud_router = APIRouter(prefix="/cloud", tags=["Cloud Security"], dependencies=[Depends(require_verified_legacy_route)])
+    cloud_router = APIRouter(prefix="/cloud", tags=["Cloud Security"])
 
     @cloud_router.get("/environments")
     async def list_environments(
@@ -247,7 +247,7 @@ def create_gap_routers(get_db):
         return [dict(zip(cols, row)) for row in rows]
 
     # ===== 3. Agent Routes (fabricated catalogue removed; only real data remains) =====
-    agents_router = APIRouter(prefix="/agents", tags=["Agents"], dependencies=[Depends(require_verified_legacy_route)])
+    agents_router = APIRouter(prefix="/agents", tags=["Agents"])
 
     @agents_router.get("/activity/recent")
     async def agent_activity(
@@ -276,7 +276,7 @@ def create_gap_routers(get_db):
     )
 
     # ===== 5. Policy Routes =====
-    policy_router = APIRouter(prefix="/policy", tags=["Policy"], dependencies=[Depends(require_verified_legacy_route)])
+    policy_router = APIRouter(prefix="/policy", tags=["Policy"])
 
     @policy_router.get("/rules")
     async def list_policy_rules(
@@ -299,7 +299,7 @@ def create_gap_routers(get_db):
 
     @policy_router.post("/evaluate")
     async def evaluate_policy(
-        risk_class: str,
+        risk_class: str = Query(..., description="Risk class to evaluate against this tenant's policy"),
         user: CurrentUser = Depends(get_current_user),
         session: AsyncSession = Depends(get_db),
     ):
@@ -336,7 +336,7 @@ def create_gap_routers(get_db):
         }
 
     # ===== 6. Approvals =====
-    approvals_router = APIRouter(prefix="/approvals", tags=["Approvals"], dependencies=[Depends(require_verified_legacy_route)])
+    approvals_router = APIRouter(prefix="/approvals", tags=["Approvals"])
 
     @approvals_router.get("")
     async def list_approvals(
