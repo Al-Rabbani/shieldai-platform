@@ -613,6 +613,16 @@ async def _aggregate_results(goal, agent_results, aggregator_agent, model="gpt-4
         ))
     
     context_text = "\n\n---\n\n".join(agent_summaries)
+
+    # Grounding: read real counts so the aggregator is told the truth up front.
+    try:
+        from gds_api.reasoning.grounding import ground_truth
+        truth = ground_truth()
+        truth_text = truth.describe()
+    except Exception as _e:
+        truth = None
+        truth_text = "UNAVAILABLE (%s)" % _e
+
     
     synthesis_prompt = """You are the GDS OS Mission Aggregator. Multiple AI security agents completed tasks. Synthesize their findings into a unified security report.
 
@@ -627,7 +637,7 @@ Create a concise but comprehensive security report:
 3. Risk Assessment (overall risk level + trending)
 4. Recommended Actions (prioritized list)
 
-Format as clean text, no markdown headers.""" % (goal, context_text)
+AUTHORITATIVE PLATFORM COUNTS (read from the live database at this moment; these override anything an agent summary claims):\n%s\n\nIf an agent summary contradicts these counts, the database wins and you must say so. Never state a finding count that is not in the authoritative values.\n\nFormat as clean text, no markdown headers.""" % (goal, context_text, truth_text)
     
     try:
         import openai
@@ -643,7 +653,14 @@ Format as clean text, no markdown headers.""" % (goal, context_text)
             temperature=0.2,
             max_tokens=2000
         )
-        return response.choices[0].message.content or "No report generated"
+        _report = response.choices[0].message.content or "No report generated"
+        try:
+            if truth is not None:
+                from gds_api.reasoning.grounding import apply_grounding
+                return apply_grounding(_report, truth)
+        except Exception as _e:
+            logger.error("Grounding check failed: %s" % _e)
+        return _report
     except Exception as e:
         logger.error("Aggregation failed: %s" % e)
         return "Mission Report (Fallback)\n\n" + "\n\n".join(agent_summaries)
