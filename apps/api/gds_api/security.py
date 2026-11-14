@@ -119,6 +119,17 @@ async def get_current_user(request: Request, db: AsyncSession = Depends(get_db))
 
     bind_request_context(tenant_id=str(user.tenant_id), user_id=str(user.id))
 
+    # R2 tenant isolation: bind gds.tenant_id on this request's session so tables with
+    # FORCE ROW LEVEL SECURITY filter correctly. FastAPI caches get_db per request, so this
+    # is the same session the handler receives. Session-level (is_local=false) so the
+    # context survives a commit; NullPool discards the connection when the request ends.
+    from sqlalchemy import text as _sql_text  # local import avoids an import cycle
+
+    await db.execute(
+        _sql_text("SELECT set_config('gds.tenant_id', :tid, false)"),
+        {"tid": str(user.tenant_id)},
+    )
+
     return CurrentUser(
         user_id=user.id,
         tenant_id=user.tenant_id,
