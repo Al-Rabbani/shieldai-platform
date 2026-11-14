@@ -36,6 +36,7 @@ from gds_api.capabilities.broker import evaluate_capability_request
 from gds_api.capabilities.catalog import TOOL_TO_CAPABILITY_KEY
 from gds_api.capabilities.gateway import CapabilityExecutionDenied, execute_capability_request
 from gds_api.db import async_session_factory
+from gds_api.tenant_binding import bind_tenant
 from gds_api.events import publish_mission_event
 from gds_api.models import Approval, Mission, MissionTask
 from gds_api.policy import evaluate_policy
@@ -326,6 +327,8 @@ _CHAT_REPORT_SYSTEM_PROMPT = (
 async def assess_mission(mission_id: str) -> dict[str, str]:
     async with async_session_factory() as db:
         mission = await db.get(Mission, _activity_record_uuid(mission_id, "mission"))
+        if mission is not None:
+            await bind_tenant(db, mission.tenant_id)
         if mission is None:
             raise ApplicationError("Mission not found", type="MissionNotFound", non_retryable=True)
 
@@ -364,6 +367,8 @@ async def decide_next_step(payload: dict[str, Any]) -> dict[str, Any]:
 
     async with async_session_factory() as db:
         mission = await db.get(Mission, _activity_record_uuid(mission_id, "mission"))
+        if mission is not None:
+            await bind_tenant(db, mission.tenant_id)
         if mission is None:
             raise ApplicationError("Mission not found", type="MissionNotFound", non_retryable=True)
 
@@ -452,6 +457,8 @@ async def evaluate_task(task_id: str) -> dict[str, Any]:
         if task is None:
             raise ValueError(f"Task {task_id} not found")
         mission = await db.get(Mission, task.mission_id)
+        if mission is not None:
+            await bind_tenant(db, mission.tenant_id)
         if mission is None:
             raise ValueError(f"Mission {task.mission_id} not found")
 
@@ -552,6 +559,8 @@ async def execute_task(task_id: str) -> dict[str, Any]:
         if task is None:
             raise ValueError(f"Task {task_id} not found")
         mission = await db.get(Mission, task.mission_id)
+        if mission is not None:
+            await bind_tenant(db, mission.tenant_id)
         if mission is None:
             raise ValueError(f"Mission {task.mission_id} not found")
 
@@ -731,6 +740,8 @@ async def mark_mission_failed(payload: dict[str, Any]) -> None:
 
     async with async_session_factory() as db:
         mission = await db.get(Mission, _activity_record_uuid(mission_id, "mission"))
+        if mission is not None:
+            await bind_tenant(db, mission.tenant_id)
         if mission is None:
             return
         if mission.status in ("completed", "failed", "cancelled"):
@@ -815,6 +826,8 @@ async def synthesize_report(payload: dict[str, Any]) -> None:
 
     async with async_session_factory() as db:
         mission = await db.get(Mission, _activity_record_uuid(mission_id, "mission"))
+        if mission is not None:
+            await bind_tenant(db, mission.tenant_id)
         if mission is None:
             raise ApplicationError("Mission not found", type="MissionNotFound", non_retryable=True)
 

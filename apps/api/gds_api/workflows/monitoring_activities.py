@@ -25,6 +25,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from gds_api.db import async_session_factory
+from gds_api.tenant_binding import bind_tenant
 from gds_api.logging_config import get_logger
 from gds_api.monitoring import (
     MonitorType,
@@ -47,6 +48,9 @@ async def run_monitoring_cycle(
     start_time = datetime.now(UTC)
 
     async with async_session_factory() as db:
+        # RLS: bind before the first query so forced tables (security_findings) accept
+        # inserts and reads. tenant_id is a workflow parameter, so it is available here.
+        await bind_tenant(db, tenant_id)
         schedule = await db.get(ScanSchedule, uuid.UUID(schedule_id))
         if schedule is None:
             raise ValueError(f"ScanSchedule {schedule_id} not found")
