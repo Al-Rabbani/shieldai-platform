@@ -25,8 +25,12 @@ class ReasoningBridge:
     
     def __init__(self):
         self.active_missions = {}  # mission_id → AgentResult
+        # mission_id → owning tenant_id. Missions were previously global, so any caller
+        # could list or fetch another tenant's run; the id is guessable.
+        self.mission_tenants = {}
     
-    async def execute_task(self, agent_id: str, goal: str, context: dict = None) -> AgentResult:
+    async def execute_task(self, agent_id: str, goal: str, context: dict = None,
+                          tenant_id: str = None) -> AgentResult:
         """Execute a task using the LLM reasoning loop.
         
         Args:
@@ -48,6 +52,7 @@ class ReasoningBridge:
         # Store result
         mission_id = f"mission_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}_{agent_id}"
         self.active_missions[mission_id] = result
+        self.mission_tenants[mission_id] = tenant_id
         
         logger.info(f"Task complete: {mission_id}, success={result.success}, "
                     f"tools={len(result.tool_calls)}, duration={result.duration_ms}ms")
@@ -106,13 +111,20 @@ class ReasoningBridge:
         logger.info(f"Auto-selected agent: {agent_id} for goal: {goal[:100]}")
         return agent_id
     
-    async def run_with_auto_select(self, goal: str, context: dict = None) -> AgentResult:
+    async def run_with_auto_select(self, goal: str, context: dict = None,
+                                   tenant_id: str = None) -> AgentResult:
         """Auto-select the best agent and execute the goal."""
         agent_id = await self.auto_select_agent(goal)
-        return await self.execute_task(agent_id, goal, context)
+        return await self.execute_task(agent_id, goal, context, tenant_id=tenant_id)
     
-    def get_mission_status(self, mission_id: str) -> dict:
-        """Get status of a mission."""
+    def get_mission_status(self, mission_id: str, tenant_id: str = None) -> dict:
+        """Get status of a mission owned by tenant_id.
+
+        A mission belonging to another tenant returns the same not-found response as a
+        missing one, so ids cannot be enumerated.
+        """
+        if self.mission_tenants.get(mission_id) != tenant_id:
+            return {"error": "Mission not found"}
         result = self.active_missions.get(mission_id)
         if not result:
             return {"error": "Mission not found"}
@@ -132,8 +144,8 @@ class ReasoningBridge:
             "error": result.error
         }
     
-    def list_missions(self) -> list[dict]:
-        """List all missions."""
+    def list_missions(self, tenant_id: str = None) -> list[dict]:
+        """List the missions owned by tenant_id."""
         return [
             {
                 "mission_id": mid,
@@ -144,6 +156,7 @@ class ReasoningBridge:
                 "duration_ms": r.duration_ms
             }
             for mid, r in self.active_missions.items()
+            if self.mission_tenants.get(mid) == tenant_id
         ]
 
 
