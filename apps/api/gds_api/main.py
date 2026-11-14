@@ -354,3 +354,48 @@ from gds_api.cloud.ciem.routes import router as _ciem_canonical_router
 app.include_router(_ciem_canonical_router)
 app.include_router(kernel_router)
 app.include_router(ci_router)
+
+
+# ── Release provenance (R1.2) ───────────────────────────────────────────────
+# Answers "which commit is actually running?" from the server itself, so a
+# deploy can be verified rather than assumed. Prefers GDS_RELEASE_SHA written by
+# the deploy script, falls back to the RELEASE file, then to git.
+@app.get("/health/version")
+async def health_version():
+    import json as _json, os as _os, subprocess as _sp
+    repo = "/opt/gds-os"
+    info = {"sha": _os.environ.get("GDS_RELEASE_SHA", ""), "branch": "", "deployed_at": "", "source": ""}
+    if not info["sha"]:
+        try:
+            with open(_os.path.join(repo, "RELEASE")) as fh:
+                data = _json.load(fh)
+            info.update({k: data.get(k, "") for k in ("sha", "branch", "deployed_at")})
+            info["source"] = "RELEASE file"
+        except Exception:
+            pass
+    if not info["sha"]:
+        try:
+            info["sha"] = _sp.run(["git", "-C", repo, "rev-parse", "HEAD"],
+                                  capture_output=True, text=True, timeout=5).stdout.strip()
+            info["branch"] = _sp.run(["git", "-C", repo, "rev-parse", "--abbrev-ref", "HEAD"],
+                                     capture_output=True, text=True, timeout=5).stdout.strip()
+            info["source"] = "git"
+        except Exception as exc:
+            info["error"] = f"release identity unavailable: {exc}"
+    try:
+        dirty = _sp.run(["git", "-C", repo, "status", "--porcelain"],
+                        capture_output=True, text=True, timeout=5).stdout.strip()
+        info["tree_clean"] = not bool(dirty)
+    except Exception:
+        info["tree_clean"] = None
+    try:
+        import subprocess as _sp2
+        out = _sp2.run(["sudo", "-u", "postgres", "psql", "-d", "gds_os", "-tAc",
+                        "SELECT count(*)||':'||coalesce(max(version),'-') FROM schema_migrations;"],
+                       capture_output=True, text=True, timeout=8).stdout.strip()
+        cnt, latest = (out.split(":", 1) + ["", ""])[:2]
+        info["migrations_applied"] = int(cnt) if cnt.isdigit() else None
+        info["schema_version"] = latest
+    except Exception:
+        info["migrations_applied"] = None
+    return info

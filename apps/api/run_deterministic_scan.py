@@ -144,6 +144,22 @@ async def check_ports(db, tenant_id, host="127.0.0.1"):
             numbers.append(int(head))
     numbers = sorted(set(numbers))
 
+    # A port listening on a loopback or private address is NOT an exposure. The
+    # 2026-11-14 run scanned 127.0.0.1 and filed 5432/8000/8001/8222/9000/9001 as
+    # "unexpected open ports" while every one of them was blocked at the firewall.
+    # Reachability is measured from outside (see the external test), so a local
+    # listener must never be reported as an internet-facing finding.
+    _h = str(host).split(":")[0].strip().lower()
+    _private = (_h in ("localhost", "::1", "127.0.0.1")
+                or _h.startswith("127.")
+                or _h.startswith("10.")
+                or _h.startswith("192.168.")
+                or any(_h.startswith(f"172.{n}.") for n in range(16, 32)))
+    if _private:
+        await db.commit()
+        log(f"nmap {host}: open={numbers} (local listener, not internet-facing; no finding filed)")
+        return {"new": 0, "dupe": 0, "failed": 0}
+
     new = dupe = 0
     unexpected = [n for n in numbers if n not in (22, 80, 443)]
     if unexpected:
