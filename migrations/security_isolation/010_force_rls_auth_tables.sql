@@ -28,12 +28,15 @@
 -- and is deliberately left open rather than guessed at.
 BEGIN;
 
+DROP POLICY IF EXISTS users_principal ON users;
 CREATE POLICY users_principal ON users FOR SELECT
   USING (id = NULLIF(current_setting('gds.principal_id', true), '')::uuid);
 
+DROP POLICY IF EXISTS users_login ON users;
 CREATE POLICY users_login ON users FOR SELECT
   USING (lower(email) = NULLIF(lower(current_setting('gds.login_email', true)), ''));
 
+DROP POLICY IF EXISTS roles_bootstrap ON roles;
 CREATE POLICY roles_bootstrap ON roles FOR SELECT
   USING (EXISTS (
     SELECT 1 FROM users u
