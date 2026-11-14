@@ -25,7 +25,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from gds_api.db import async_session_factory
-from gds_api.tenant_binding import bind_tenant
+from gds_api.tenant_binding import bind_tenant, use_tenant
 from gds_api.logging_config import get_logger
 from gds_api.monitoring import (
     MonitorType,
@@ -45,163 +45,166 @@ async def run_monitoring_cycle(
     user_id: str,
 ) -> MonitoringResult:
     """Execute one monitoring cycle for a schedule. This is the entry point."""
-    start_time = datetime.now(UTC)
+    # RLS: scope the whole cycle to this tenant so every session opened inside it,
+    # including by nested modules that know nothing about tenancy, binds the tenant.
+    with use_tenant(tenant_id):
+        start_time = datetime.now(UTC)
 
-    async with async_session_factory() as db:
-        # RLS: bind before the first query so forced tables (security_findings) accept
-        # inserts and reads. tenant_id is a workflow parameter, so it is available here.
-        await bind_tenant(db, tenant_id)
-        schedule = await db.get(ScanSchedule, uuid.UUID(schedule_id))
-        if schedule is None:
-            raise ValueError(f"ScanSchedule {schedule_id} not found")
+        async with async_session_factory() as db:
+            # RLS: bind before the first query so forced tables (security_findings) accept
+            # inserts and reads. tenant_id is a workflow parameter, so it is available here.
+            await bind_tenant(db, tenant_id)
+            schedule = await db.get(ScanSchedule, uuid.UUID(schedule_id))
+            if schedule is None:
+                raise ValueError(f"ScanSchedule {schedule_id} not found")
 
-        # Create the result record
-        result = MonitoringResult(
-            tenant_id=schedule.tenant_id,
-            schedule_id=schedule.id,
-            monitor_type=schedule.monitor_type,
-            started_at=start_time,
-            findings_created=0,
-            findings_triaged=0,
-            incidents_created=0,
-            critical_findings=0,
-            status="running",
-        )
-        db.add(result)
-        await db.commit()
-        await db.refresh(result)
-
-        try:
-            findings_created = 0
-            findings_triaged = 0
-            incidents_created = 0
-            critical_count = 0
-
-            if schedule.monitor_type == MonitorType.CISA_KEV.value:
-                findings_created, critical_count = await _run_cisa_kev_check(
-                    db, tenant_id=uuid.UUID(tenant_id), config=schedule.target_config
-                )
-            elif schedule.monitor_type == MonitorType.OSV_SCAN.value:
-                findings_created, critical_count = await _run_osv_scan(
-                    db, tenant_id=uuid.UUID(tenant_id), config=schedule.target_config
-                )
-            elif schedule.monitor_type == MonitorType.URLHAUS_CHECK.value:
-                findings_created, critical_count = await _run_urlhaus_check(
-                    db, tenant_id=uuid.UUID(tenant_id), config=schedule.target_config
-                )
-            elif schedule.monitor_type == MonitorType.TLS_CERT.value:
-                findings_created, critical_count = await _run_tls_check(
-                    db, tenant_id=uuid.UUID(tenant_id), config=schedule.target_config
-                )
-            elif schedule.monitor_type == MonitorType.SECURITY_HEADERS.value:
-                findings_created, critical_count = await _run_header_check(
-                    db, tenant_id=uuid.UUID(tenant_id), config=schedule.target_config
-                )
-            elif schedule.monitor_type == MonitorType.MALWARE_HASH.value:
-                findings_created, critical_count = await _run_malware_check(
-                    db, tenant_id=uuid.UUID(tenant_id), config=schedule.target_config
-                )
-            elif schedule.monitor_type == MonitorType.DEPENDENCY_SCAN.value:
-                findings_created, critical_count = await _run_dependency_scan(
-                    db, tenant_id=uuid.UUID(tenant_id), config=schedule.target_config
-                )
-            elif schedule.monitor_type == MonitorType.EPSS_LOOKUP.value:
-                findings_created, critical_count = await _run_epss_enrichment(
-                    db, tenant_id=uuid.UUID(tenant_id), config=schedule.target_config
-                )
-            elif schedule.monitor_type == MonitorType.CLOUD_POSTURE.value:
-                findings_created, critical_count = await _run_cloud_posture(
-                    db, tenant_id=uuid.UUID(tenant_id), config=schedule.target_config
-                )
-            elif schedule.monitor_type == MonitorType.SAST_SCAN.value:
-                findings_created, critical_count = await _run_sast_monitor(
-                    db, tenant_id=uuid.UUID(tenant_id), config=schedule.target_config
-                )
-            elif schedule.monitor_type == MonitorType.DAST_SCAN.value:
-                findings_created, critical_count = await _run_dast_monitor(
-                    db, tenant_id=uuid.UUID(tenant_id), config=schedule.target_config
-                )
-            elif schedule.monitor_type == MonitorType.CONTAINER_SCAN.value:
-                findings_created, critical_count = await _run_container_monitor(
-                    db, tenant_id=uuid.UUID(tenant_id), config=schedule.target_config
-                )
-            elif schedule.monitor_type == MonitorType.IAC_SCAN.value:
-                findings_created, critical_count = await _run_iac_monitor(
-                    db, tenant_id=uuid.UUID(tenant_id), config=schedule.target_config
-                )
-            elif schedule.monitor_type == MonitorType.DARKWEB_MONITOR.value:
-                findings_created, critical_count = await _run_darkweb_monitor(
-                    db, tenant_id=uuid.UUID(tenant_id), config=schedule.target_config
-                )
-            elif schedule.monitor_type == MonitorType.IDENTITY_THREATS.value:
-                findings_created, critical_count = await _run_identity_monitor(
-                    db, tenant_id=uuid.UUID(tenant_id), config=schedule.target_config
-                )
-            else:
-                _logger.warning("unknown_monitor_type", monitor_type=schedule.monitor_type)
-
-            # Auto-triage findings if enabled
-            if schedule.auto_triage and findings_created > 0:
-                findings_triaged = await _auto_triage_findings(
-                    db, tenant_id=uuid.UUID(tenant_id), schedule_id=schedule.id
-                )
-
-            # Auto-escalate critical findings to incidents if enabled
-            if schedule.auto_escalate and critical_count > 0:
-                incidents_created = await _auto_escalate_critical(
-                    db, tenant_id=uuid.UUID(tenant_id), user_id=uuid.UUID(user_id)
-                )
-
-            # Update result
-            result.findings_created = findings_created
-            result.findings_triaged = findings_triaged
-            result.incidents_created = incidents_created
-            result.critical_findings = critical_count
-            result.status = "success"
-            result.completed_at = datetime.now(UTC)
-            result.duration_seconds = (result.completed_at - result.started_at).total_seconds()
-
-            # Update schedule stats
-            schedule.last_run_at = datetime.now(UTC)
-            schedule.next_run_at = datetime.now(UTC).replace(
-                minute=schedule.last_run_at.minute + schedule.interval_minutes % 60,
-                hour=schedule.last_run_at.hour + schedule.interval_minutes // 60,
+            # Create the result record
+            result = MonitoringResult(
+                tenant_id=schedule.tenant_id,
+                schedule_id=schedule.id,
+                monitor_type=schedule.monitor_type,
+                started_at=start_time,
+                findings_created=0,
+                findings_triaged=0,
+                incidents_created=0,
+                critical_findings=0,
+                status="running",
             )
-            schedule.total_runs += 1
-            schedule.total_findings += findings_created
-            schedule.last_run_findings = findings_created
-            schedule.last_error = None
-            schedule.status = ScanScheduleStatus.ACTIVE.value
+            db.add(result)
+            await db.commit()
+            await db.refresh(result)
 
-            # Dispatch external notifications for critical findings
-            if critical_count > 0:
-                from gds_api.notification_dispatch import dispatch_critical_findings
-                await dispatch_critical_findings(
-                    db,
-                    tenant_id=uuid.UUID(tenant_id),
-                    monitor_type=schedule.monitor_type,
-                    critical_count=critical_count,
-                    schedule_name=schedule.name,
+            try:
+                findings_created = 0
+                findings_triaged = 0
+                incidents_created = 0
+                critical_count = 0
+
+                if schedule.monitor_type == MonitorType.CISA_KEV.value:
+                    findings_created, critical_count = await _run_cisa_kev_check(
+                        db, tenant_id=uuid.UUID(tenant_id), config=schedule.target_config
+                    )
+                elif schedule.monitor_type == MonitorType.OSV_SCAN.value:
+                    findings_created, critical_count = await _run_osv_scan(
+                        db, tenant_id=uuid.UUID(tenant_id), config=schedule.target_config
+                    )
+                elif schedule.monitor_type == MonitorType.URLHAUS_CHECK.value:
+                    findings_created, critical_count = await _run_urlhaus_check(
+                        db, tenant_id=uuid.UUID(tenant_id), config=schedule.target_config
+                    )
+                elif schedule.monitor_type == MonitorType.TLS_CERT.value:
+                    findings_created, critical_count = await _run_tls_check(
+                        db, tenant_id=uuid.UUID(tenant_id), config=schedule.target_config
+                    )
+                elif schedule.monitor_type == MonitorType.SECURITY_HEADERS.value:
+                    findings_created, critical_count = await _run_header_check(
+                        db, tenant_id=uuid.UUID(tenant_id), config=schedule.target_config
+                    )
+                elif schedule.monitor_type == MonitorType.MALWARE_HASH.value:
+                    findings_created, critical_count = await _run_malware_check(
+                        db, tenant_id=uuid.UUID(tenant_id), config=schedule.target_config
+                    )
+                elif schedule.monitor_type == MonitorType.DEPENDENCY_SCAN.value:
+                    findings_created, critical_count = await _run_dependency_scan(
+                        db, tenant_id=uuid.UUID(tenant_id), config=schedule.target_config
+                    )
+                elif schedule.monitor_type == MonitorType.EPSS_LOOKUP.value:
+                    findings_created, critical_count = await _run_epss_enrichment(
+                        db, tenant_id=uuid.UUID(tenant_id), config=schedule.target_config
+                    )
+                elif schedule.monitor_type == MonitorType.CLOUD_POSTURE.value:
+                    findings_created, critical_count = await _run_cloud_posture(
+                        db, tenant_id=uuid.UUID(tenant_id), config=schedule.target_config
+                    )
+                elif schedule.monitor_type == MonitorType.SAST_SCAN.value:
+                    findings_created, critical_count = await _run_sast_monitor(
+                        db, tenant_id=uuid.UUID(tenant_id), config=schedule.target_config
+                    )
+                elif schedule.monitor_type == MonitorType.DAST_SCAN.value:
+                    findings_created, critical_count = await _run_dast_monitor(
+                        db, tenant_id=uuid.UUID(tenant_id), config=schedule.target_config
+                    )
+                elif schedule.monitor_type == MonitorType.CONTAINER_SCAN.value:
+                    findings_created, critical_count = await _run_container_monitor(
+                        db, tenant_id=uuid.UUID(tenant_id), config=schedule.target_config
+                    )
+                elif schedule.monitor_type == MonitorType.IAC_SCAN.value:
+                    findings_created, critical_count = await _run_iac_monitor(
+                        db, tenant_id=uuid.UUID(tenant_id), config=schedule.target_config
+                    )
+                elif schedule.monitor_type == MonitorType.DARKWEB_MONITOR.value:
+                    findings_created, critical_count = await _run_darkweb_monitor(
+                        db, tenant_id=uuid.UUID(tenant_id), config=schedule.target_config
+                    )
+                elif schedule.monitor_type == MonitorType.IDENTITY_THREATS.value:
+                    findings_created, critical_count = await _run_identity_monitor(
+                        db, tenant_id=uuid.UUID(tenant_id), config=schedule.target_config
+                    )
+                else:
+                    _logger.warning("unknown_monitor_type", monitor_type=schedule.monitor_type)
+
+                # Auto-triage findings if enabled
+                if schedule.auto_triage and findings_created > 0:
+                    findings_triaged = await _auto_triage_findings(
+                        db, tenant_id=uuid.UUID(tenant_id), schedule_id=schedule.id
+                    )
+
+                # Auto-escalate critical findings to incidents if enabled
+                if schedule.auto_escalate and critical_count > 0:
+                    incidents_created = await _auto_escalate_critical(
+                        db, tenant_id=uuid.UUID(tenant_id), user_id=uuid.UUID(user_id)
+                    )
+
+                # Update result
+                result.findings_created = findings_created
+                result.findings_triaged = findings_triaged
+                result.incidents_created = incidents_created
+                result.critical_findings = critical_count
+                result.status = "success"
+                result.completed_at = datetime.now(UTC)
+                result.duration_seconds = (result.completed_at - result.started_at).total_seconds()
+
+                # Update schedule stats
+                schedule.last_run_at = datetime.now(UTC)
+                schedule.next_run_at = datetime.now(UTC).replace(
+                    minute=schedule.last_run_at.minute + schedule.interval_minutes % 60,
+                    hour=schedule.last_run_at.hour + schedule.interval_minutes // 60,
                 )
+                schedule.total_runs += 1
+                schedule.total_findings += findings_created
+                schedule.last_run_findings = findings_created
+                schedule.last_error = None
+                schedule.status = ScanScheduleStatus.ACTIVE.value
 
-            await db.commit()
+                # Dispatch external notifications for critical findings
+                if critical_count > 0:
+                    from gds_api.notification_dispatch import dispatch_critical_findings
+                    await dispatch_critical_findings(
+                        db,
+                        tenant_id=uuid.UUID(tenant_id),
+                        monitor_type=schedule.monitor_type,
+                        critical_count=critical_count,
+                        schedule_name=schedule.name,
+                    )
 
-        except Exception as exc:
-            _logger.error("monitoring_cycle_failed", schedule_id=schedule_id, error=str(exc))
-            result.status = "error"
-            result.error_message = str(exc)
-            result.completed_at = datetime.now(UTC)
-            result.duration_seconds = (result.completed_at - result.started_at).total_seconds()
-            schedule.last_error = str(exc)
-            schedule.status = ScanScheduleStatus.ERROR.value
-            await db.commit()
+                await db.commit()
 
-        return result
+            except Exception as exc:
+                _logger.error("monitoring_cycle_failed", schedule_id=schedule_id, error=str(exc))
+                result.status = "error"
+                result.error_message = str(exc)
+                result.completed_at = datetime.now(UTC)
+                result.duration_seconds = (result.completed_at - result.started_at).total_seconds()
+                schedule.last_error = str(exc)
+                schedule.status = ScanScheduleStatus.ERROR.value
+                await db.commit()
+
+            return result
 
 
-# ---------------------------------------------------------------------------
-# Individual monitoring implementations
-# ---------------------------------------------------------------------------
+    # ---------------------------------------------------------------------------
+    # Individual monitoring implementations
+    # ---------------------------------------------------------------------------
 
 async def _run_cisa_kev_check(
     db: AsyncSession, *, tenant_id: uuid.UUID, config: dict[str, Any]
