@@ -39,7 +39,7 @@ click-option-group==0.5.9
 click==8.4.2
 cloudpickle==3.1.2
 colorama==0.4.6
-cryptography==49.0.0
+cryptography==50.0.2
 distro==1.9.0
 dnspython==2.9.2
 docstring_parser==0.18.0
@@ -49,7 +49,7 @@ email-validator==2.3.0
 exceptiongroup==1.2.2
 face==26.0.1
 fastapi==0.141.1
-filelock==3.32.7
+filelock==4.2.10
 frozenlist==1.8.0
 fsspec==2026.7.0
 glom==25.12.0
@@ -105,7 +105,7 @@ neo4j==6.2.0
 networkx==3.6.1
 nexus-rpc==1.4.0
 numpy==2.4.6
-oauthlib==3.3.1
+oauthlib==4.0.1
 openai==2.51.0
 opentelemetry-api==1.37.0
 opentelemetry-exporter-otlp-proto-common==1.37.0
@@ -137,7 +137,6 @@ pydantic_core==2.46.4
 pytest==9.1.1
 python-dateutil==2.9.0.post0
 python-dotenv==1.2.2
-python-jose==3.5.0
 python-multipart==0.0.32
 pytz==2026.3.post1
 qdrant-client==1.18.0
