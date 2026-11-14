@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, Float, Integer, String, Text
+from sqlalchemy import UUID, DateTime, Float, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from gds_api.models import Base
@@ -17,6 +17,8 @@ def _uuid() -> str:
 
 class CIEMFinding(Base):
     __tablename__ = "ciem_findings"
+    # Migration 004: ciem_findings is now tenant-isolated with FORCE RLS.
+    tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
     cloud_account_id: Mapped[str] = mapped_column(String(64), index=True)

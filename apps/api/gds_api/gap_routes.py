@@ -11,11 +11,29 @@ import uuid
 import datetime
 import json
 
+from gds_api.security import CurrentUser, get_current_user
+
+
+async def require_verified_legacy_route(
+    current_user: CurrentUser = Depends(get_current_user),
+) -> None:
+    """Quarantine legacy SQL routes until tenant and capability scopes are verified.
+
+    Authentication is evaluated first; authenticated requests fail closed instead of
+    reaching globally scoped legacy queries or unverified tool-execution handlers.
+    Canonical, permission-scoped routers registered before these are unaffected.
+    """
+    raise HTTPException(
+        status_code=503,
+        detail="Legacy endpoint unavailable pending tenant isolation and capability verification.",
+    )
+
+
 def create_gap_routers(get_db):
     """Create all missing routers. Call this from main.py."""
     
     # ===== 1. CIEM Routes =====
-    ciem_router = APIRouter(prefix="/ciem", tags=["CIEM"])
+    ciem_router = APIRouter(prefix="/ciem", tags=["CIEM"], dependencies=[Depends(require_verified_legacy_route)])
     
     @ciem_router.get("/findings")
     async def list_ciem_findings(
@@ -87,7 +105,7 @@ def create_gap_routers(get_db):
         return {"scan_id": scan_id, "status": "queued", "message": "CIEM scan queued for execution"}
 
     # ===== 2. Cloud Environment Routes =====
-    cloud_router = APIRouter(prefix="/cloud", tags=["Cloud Security"])
+    cloud_router = APIRouter(prefix="/cloud", tags=["Cloud Security"], dependencies=[Depends(require_verified_legacy_route)])
     
     @cloud_router.get("/environments")
     async def list_environments(session: AsyncSession = Depends(get_db)):
@@ -136,7 +154,7 @@ def create_gap_routers(get_db):
         return [dict(zip(cols, row)) for row in rows]
 
     # ===== 3. Agent Routes =====
-    agents_router = APIRouter(prefix="/agents", tags=["Agents"])
+    agents_router = APIRouter(prefix="/agents", tags=["Agents"], dependencies=[Depends(require_verified_legacy_route)])
     
     @agents_router.get("")
     async def list_agents(session: AsyncSession = Depends(get_db)):
@@ -192,7 +210,7 @@ def create_gap_routers(get_db):
         ]
 
     # ===== 4. Security Tool Endpoints =====
-    security_tools_router = APIRouter(prefix="/security-tools", tags=["Security Tools"])
+    security_tools_router = APIRouter(prefix="/security-tools", tags=["Security Tools"], dependencies=[Depends(require_verified_legacy_route)])
     
     @security_tools_router.post("/sast")
     async def run_sast_scan(
@@ -298,7 +316,7 @@ def create_gap_routers(get_db):
         }
 
     # ===== 5. Policy Routes (expanded) =====
-    policy_router = APIRouter(prefix="/policy", tags=["Policy"])
+    policy_router = APIRouter(prefix="/policy", tags=["Policy"], dependencies=[Depends(require_verified_legacy_route)])
     
     @policy_router.get("/rules")
     async def list_policy_rules(session: AsyncSession = Depends(get_db)):
@@ -343,7 +361,7 @@ def create_gap_routers(get_db):
         }
 
     # ===== 6. Approvals (expanded) =====
-    approvals_router = APIRouter(prefix="/approvals", tags=["Approvals"])
+    approvals_router = APIRouter(prefix="/approvals", tags=["Approvals"], dependencies=[Depends(require_verified_legacy_route)])
     
     @approvals_router.get("")
     async def list_approvals(

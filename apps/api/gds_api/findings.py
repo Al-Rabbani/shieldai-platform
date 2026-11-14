@@ -1,7 +1,7 @@
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from gds_api.db import get_db
@@ -18,6 +18,14 @@ async def list_findings(
     current_user: CurrentUser = Depends(require_permission("findings:read")),
     db: AsyncSession = Depends(get_db),
 ) -> list[Finding]:
+    # RLS on security_findings is FORCE-enabled (Phase C 002_enforce_rls), so a
+    # connection without gds.tenant_id set sees zero rows regardless of the ORM
+    # predicate. Scope this transaction to the authenticated caller's tenant.
+    await db.execute(
+        text("SELECT set_config('gds.tenant_id', :tid, true)"),
+        {"tid": str(current_user.tenant_id)},
+    )
+
     findings = (
         (
             await db.execute(
@@ -30,6 +38,37 @@ async def list_findings(
         .all()
     )
     return list(findings)
+
+
+@router.get("/security", response_model=list[dict])
+async def list_security_findings(
+    current_user: CurrentUser = Depends(require_permission("findings:read")),
+    db: AsyncSession = Depends(get_db),
+) -> list[dict]:
+    """Canonical findings read path.
+
+    The ORM Finding model maps to the legacy `findings` table, which is empty.
+    Live scanner output is written to `security_findings` (RLS FORCE-enabled,
+    tenant-scoped). This reads that authoritative table, scoped explicitly.
+    """
+    await db.execute(
+        text("SELECT set_config('gds.tenant_id', :tid, true)"),
+        {"tid": str(current_user.tenant_id)},
+    )
+    rows = (
+        await db.execute(
+            text(
+                "SELECT id, scanner, title, severity, status, target, "
+                "source, external_id, cve, cvss, epss, kev_listed, reachability, "
+                "exploitability, exposure, risk_class, confidence, business_impact, " 
+                "remediation, detected_at, resolved_at " 
+                "FROM security_findings WHERE tenant_id = :tid " 
+                "ORDER BY detected_at DESC NULLS LAST LIMIT 500"
+            ),
+            {"tid": str(current_user.tenant_id)},
+        )
+    ).mappings().all()
+    return [dict(r) for r in rows]
 
 
 @router.get("/{finding_id}/correlation", response_model=FindingCorrelationOut)

@@ -11,3 +11,4 @@ mission_state.json
 *.bak
 *.bak.*
 patches/
+RELEASE

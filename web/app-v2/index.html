@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>GDS OS — Security Operations</title>
+<meta name="description" content="Global Digital Security Operating System" />
+<link rel="stylesheet" href="./assets/css/app.css?v=9" />
+</head>
+<body>
+  <!-- Auth gate -->
+  <div id="auth-gate" class="auth-gate" hidden>
+    <div class="auth-card">
+      <div class="brand-mark">GDS</div>
+      <h1>Sovereign Security OS</h1>
+      <p class="auth-sub">Sign in to the operations console</p>
+      <form id="login-form" autocomplete="on">
+        <label for="email">Email</label>
+        <input id="email" name="email" type="email" required autocomplete="username" placeholder="you@company.com" />
+        <label for="password">Password</label>
+        <input id="password" name="password" type="password" required autocomplete="current-password" placeholder="••••••••" />
+        <div id="login-error" class="form-error" hidden></div>
+        <button id="login-btn" type="submit" class="btn btn-primary btn-block">Sign in</button>
+      </form>
+      <p class="auth-foot">Global Digital Security · <span id="auth-api">api.globaldigitalsecurity.io</span></p>
+    </div>
+  </div>
+
+  <!-- Application shell -->
+  <div id="app" class="shell" hidden>
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-head">
+        <div class="brand-mark sm">GDS</div>
+        <div class="brand-text">
+          <strong>GDS OS</strong>
+          <span>Security Operations</span>
+        </div>
+        <button class="icon-btn only-mobile" id="close-nav" aria-label="Close navigation">✕</button>
+      </div>
+      <nav class="nav" id="nav" aria-label="Primary"></nav>
+      <div class="sidebar-foot">
+        <div class="conn" id="conn-state"><span class="dot"></span><span>Checking API…</span></div>
+        <div class="user-chip" id="user-chip" hidden>
+          <div class="avatar" id="user-initial">—</div>
+          <div class="user-meta">
+            <strong id="user-name">—</strong>
+            <span id="user-role">—</span>
+          </div>
+          <button class="icon-btn" id="logout" title="Sign out" aria-label="Sign out">⏻</button>
+        </div>
+      </div>
+    </aside>
+
+    <div class="main">
+      <header class="topbar">
+        <button class="icon-btn only-mobile" id="open-nav" aria-label="Open navigation">☰</button>
+        <div class="crumbs">
+          <span id="crumb-section">Overview</span>
+          <span class="crumb-sub" id="crumb-sub"></span>
+        </div>
+        <div class="topbar-actions">
+          <div class="pill" id="pill-risk" title="Global risk score">Risk —</div>
+          <div class="pill" id="pill-open" title="Open findings">Findings —</div>
+          <button class="icon-btn" id="refresh" title="Refresh" aria-label="Refresh">⟳</button>
+          <button class="icon-btn" id="theme-toggle" title="Toggle theme" aria-label="Toggle theme">◐</button>
+        </div>
+      </header>
+      <main id="view" class="view" tabindex="-1"></main>
+      <footer class="foot" id="foot"></footer>
+    </div>
+  </div>
+
+  <script src="./assets/js/api.js?v=9"></script>
+  <script src="./assets/js/ui.js?v=9"></script>
+  <script src="./assets/js/views.js?v=9"></script>
+  <script src="./assets/js/app.js?v=9"></script>
+</body>
+</html>
