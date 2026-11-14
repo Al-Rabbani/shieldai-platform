@@ -20,6 +20,7 @@ Exit codes: 0 = ran (even if nothing new), 1 = fatal setup error.
 import asyncio
 import json
 import os
+import uuid
 import sys
 from datetime import datetime, timezone
 
@@ -179,7 +180,16 @@ async def main():
 
     totals = {"new": 0, "dupe": 0, "failed": 0}
     async with async_session_factory() as db:
-        row = (await db.execute(text(TENANT_SQL))).first()
+        # R2.1: tenants is FORCE-RLS protected, so a lookup by slug returns nothing until a
+        # tenant is bound - and binding requires the id this query is trying to find. The
+        # operator supplies it instead; the slug lookup stays as a fallback for the case where
+        # the table is ever readable again (or RLS is relaxed for this operational script).
+        env_tid = os.environ.get("GDS_TENANT_ID", "").strip()
+        if env_tid:
+            tenant_id = uuid.UUID(env_tid)
+            row = (tenant_id,)
+        else:
+            row = (await db.execute(text(TENANT_SQL))).first()
         if not row:
             log("FATAL: GDS tenant not found")
             return 1

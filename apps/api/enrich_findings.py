@@ -258,6 +258,11 @@ async def main() -> int:
     async with async_session_factory() as db:
         tenant_id = (await db.execute(
             text("SELECT id FROM tenants WHERE slug='gds'"))).scalar()
+        # R2.1: tenants is FORCE-RLS protected, so that slug lookup returns nothing unless a
+        # tenant is already bound. Prefer the operator-supplied id, which needs no read at all.
+        env_tid = os.environ.get("GDS_TENANT_ID", "").strip()
+        if env_tid and not tenant_id:
+            tenant_id = uuid.UUID(env_tid)
         if not tenant_id:
             print("FATAL: GDS tenant not found", file=sys.stderr)
             return 2
