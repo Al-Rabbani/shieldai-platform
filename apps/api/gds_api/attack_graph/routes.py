@@ -15,7 +15,7 @@ from gds_api.attack_graph.engine import (
     score_path, build_graph_from_findings, export_graph, graph_stats,
 )
 from gds_api.db import get_db
-from gds_api.security import CurrentUser
+from gds_api.security import CurrentUser, get_current_user
 
 router = APIRouter(prefix="/attack-graph", tags=["attack-graph"])
 
@@ -34,7 +34,7 @@ class MitigateRequest(BaseModel):
 async def build_graph(
     req: BuildGraphRequest,
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = Depends,
+    user: CurrentUser = Depends(get_current_user),
 ) -> dict[str, Any]:
     """Build an attack graph from a set of findings."""
     if not req.findings:
@@ -45,7 +45,7 @@ async def build_graph(
 @router.get("/paths")
 async def list_paths(
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = Depends,
+    user: CurrentUser = Depends(get_current_user),
     limit: int = 20,
 ) -> dict[str, Any]:
     """List all attack paths."""
@@ -79,7 +79,7 @@ async def list_paths(
 async def get_path(
     path_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = Depends,
+    user: CurrentUser = Depends(get_current_user),
 ) -> dict[str, Any]:
     """Get a specific attack path with full node sequence."""
     stmt = select(AttackPath).where(
@@ -108,7 +108,7 @@ async def get_path(
 @router.get("/choke-points")
 async def list_choke_points(
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = Depends,
+    user: CurrentUser = Depends(get_current_user),
     limit: int = 20,
 ) -> dict[str, Any]:
     """List all choke points across graphs."""
@@ -141,7 +141,7 @@ async def list_choke_points(
 async def get_blast_radius(
     node_id: str,
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = Depends,
+    user: CurrentUser = Depends(get_current_user),
 ) -> dict[str, Any]:
     """Calculate blast radius from a specific node."""
     # Fetch all edges for tenant
@@ -164,7 +164,7 @@ async def get_blast_radius(
 async def mitigate_choke_point(
     req: MitigateRequest,
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = Depends,
+    user: CurrentUser = Depends(get_current_user),
 ) -> dict[str, Any]:
     """Mark a choke point as mitigated and recalculate paths."""
     stmt = select(ChokePoint).where(
@@ -189,7 +189,7 @@ async def mitigate_choke_point(
 @router.get("/visualization")
 async def get_visualization(
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = Depends,
+    user: CurrentUser = Depends(get_current_user),
 ) -> dict[str, Any]:
     """Export graph in node/edge format for frontend rendering."""
     node_stmt = select(AttackGraphNode).where(AttackGraphNode.tenant_id == user.tenant_id)
@@ -223,7 +223,7 @@ async def get_visualization(
 @router.get("/stats")
 async def get_stats(
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = Depends,
+    user: CurrentUser = Depends(get_current_user),
 ) -> dict[str, Any]:
     """Graph statistics — total nodes, edges, paths, critical paths, avg risk."""
     node_stmt = select(AttackGraphNode).where(AttackGraphNode.tenant_id == user.tenant_id)

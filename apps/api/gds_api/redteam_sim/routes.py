@@ -15,7 +15,7 @@ from gds_api.redteam_sim.engine import (
     create_campaign, run_campaign,
 )
 from gds_api.db import get_db
-from gds_api.security import CurrentUser
+from gds_api.security import CurrentUser, get_current_user
 
 router = APIRouter(prefix="/redteam", tags=["redteam"])
 
@@ -56,7 +56,7 @@ async def get_profile(profile_name: str) -> dict[str, Any]:
 async def create_sim_campaign(
     req: CreateCampaignRequest,
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = Depends,
+    user: CurrentUser = Depends(get_current_user),
 ) -> dict[str, Any]:
     """Create a new simulation campaign."""
     return await create_campaign(db, user.tenant_id, req.name, req.adversary_profile)
@@ -65,7 +65,7 @@ async def create_sim_campaign(
 @router.get("/campaigns")
 async def list_campaigns(
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = Depends,
+    user: CurrentUser = Depends(get_current_user),
     limit: int = 20,
 ) -> dict[str, Any]:
     """List all simulation campaigns."""
@@ -96,7 +96,7 @@ async def list_campaigns(
 async def get_campaign(
     campaign_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = Depends,
+    user: CurrentUser = Depends(get_current_user),
 ) -> dict[str, Any]:
     """Get campaign with all steps."""
     stmt = select(SimulationCampaign).where(
@@ -134,7 +134,7 @@ async def get_campaign(
 async def run_sim_campaign(
     campaign_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = Depends,
+    user: CurrentUser = Depends(get_current_user),
 ) -> dict[str, Any]:
     """Execute a simulation campaign."""
     try:
@@ -149,7 +149,7 @@ async def run_sim_campaign(
 async def get_campaign_report(
     campaign_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = Depends,
+    user: CurrentUser = Depends(get_current_user),
 ) -> dict[str, Any]:
     """Generate final report for a completed campaign."""
     stmt = select(SimulationCampaign).where(
@@ -180,7 +180,7 @@ async def list_techniques() -> dict[str, Any]:
 @router.get("/stats")
 async def get_stats(
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = Depends,
+    user: CurrentUser = Depends(get_current_user),
 ) -> dict[str, Any]:
     """Overall simulation statistics."""
     stmt = select(SimulationCampaign).where(SimulationCampaign.tenant_id == user.tenant_id)

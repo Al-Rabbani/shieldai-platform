@@ -21,7 +21,7 @@ from gds_api.ai_security.engine import (
     run_full_ai_security_scan,
 )
 from gds_api.db import get_db
-from gds_api.security import CurrentUser
+from gds_api.security import CurrentUser, get_current_user
 
 router = APIRouter(prefix="/ai-security", tags=["ai-security"])
 
@@ -60,7 +60,7 @@ class ModelRiskAssessRequest(BaseModel):
 async def scan_prompt_response(
     req: PromptScanRequest,
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = Depends,
+    user: CurrentUser = Depends(get_current_user),
 ) -> dict[str, Any]:
     """Full AI security scan — injection, jailbreak, hallucination in one call."""
     return await run_full_ai_security_scan(
@@ -90,7 +90,7 @@ async def analyze_hallucination(req: HallucinationAnalyzeRequest) -> dict[str, A
 async def assess_ai_model_risk(
     req: ModelRiskAssessRequest,
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = Depends,
+    user: CurrentUser = Depends(get_current_user),
 ) -> dict[str, Any]:
     """Assess an AI model's risk profile per EU AI Act and NIST AI RMF."""
     result = assess_model_risk(
@@ -121,7 +121,7 @@ async def assess_ai_model_risk(
 @router.get("/attacks")
 async def list_attacks(
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = Depends,
+    user: CurrentUser = Depends(get_current_user),
     limit: int = 50,
 ) -> dict[str, Any]:
     """List detected prompt injection attacks."""
@@ -155,7 +155,7 @@ async def list_attacks(
 async def get_attack(
     attack_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = Depends,
+    user: CurrentUser = Depends(get_current_user),
 ) -> dict[str, Any]:
     """Get details of a specific prompt attack."""
     stmt = select(PromptAttackLog).where(
