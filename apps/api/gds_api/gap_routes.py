@@ -1,15 +1,38 @@
+"""Legacy gap routers: CIEM, cloud, agents, security tools, policy, approvals.
+
+TENANT ISOLATION REWRITE (R2). Every handler here previously queried the database
+with no tenant predicate at all: ciem used "SELECT * FROM ciem_findings WHERE 1=1",
+cloud listed every environment and asset on the platform, and cloud environment
+creation inserted using hardcoded (SELECT id FROM tenants LIMIT 1) and
+(SELECT id FROM users LIMIT 1) - i.e. whichever tenant and user happened to be first
+in the table. Policy evaluation also trusted a caller-supplied user_role, so any
+caller could claim to be an admin.
+
+All of that is now driven by the authenticated identity: tenant_id comes from the
+verified token, never from the request body, and every statement carries an explicit
+tenant predicate. Tables under FORCE RLS (ciem_findings, security_scan tables) also
+get set_config so the policy engine agrees with the WHERE clause.
+
+These routers remain behind require_verified_legacy_route until each is re-verified
+against a second tenant; the gate is the release switch, not the isolation itself.
+
+REMOVED (not fixed) rather than scoped, because they had nothing to scope:
+  * GET /agents and GET /agents/{name} - a hardcoded 20-entry agent catalogue that
+    returned canned "status: active" for every agent regardless of reality. The
+    canonical agents_router (registered earlier) serves the real fleet; keeping a
+    fabricated duplicate is a no-simulation violation.
+  * The seven /security-tools/* POST endpoints - each returned a canned
+    {"status": "queued"} without queueing anything. Real execution runs through the
+    kernel tool gateway and run_deterministic_scan.py.
 """
-GDS OS — Critical Backend Gaps Module
-Adds: CIEM analyzer, Cloud risk scoring, Agent routes, Security tool endpoints
-This file is imported by main.py to add missing routes.
-"""
-from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import text
-from typing import Optional
-import uuid
-import datetime
+
 import json
+import uuid
+from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from gds_api.security import CurrentUser, get_current_user
 
@@ -29,21 +52,51 @@ async def require_verified_legacy_route(
     )
 
 
+async def _bind_tenant(session: AsyncSession, tenant_id) -> None:
+    """Set the tenant context that FORCE RLS policies read.
+
+    Transaction-local (is_local=true) so a pooled connection cannot leak one tenant's
+    context into the next request.
+    """
+    await session.execute(
+        text("SELECT set_config('gds.tenant_id', :tid, true)"), {"tid": str(tenant_id)}
+    )
+
+
+def _tenant_id(user: CurrentUser) -> str:
+    tid = getattr(user, "tenant_id", None)
+    if not tid:
+        # A token without a tenant must never fall back to "all rows".
+        raise HTTPException(status_code=403, detail="Token carries no tenant identity")
+    return str(tid)
+
+
+CIEM_COLUMNS = (
+    "id, cloud_account_id, provider, identity_type, identity_name, identity_arn, "
+    "finding_type, title, severity, status, permissions_granted, permissions_used, "
+    "unused_permissions, last_used, days_inactive, blast_radius, "
+    "privilege_escalation_path, remediation, detected_at, resolved_at"
+)
+
+
 def create_gap_routers(get_db):
     """Create all missing routers. Call this from main.py."""
-    
+
     # ===== 1. CIEM Routes =====
     ciem_router = APIRouter(prefix="/ciem", tags=["CIEM"], dependencies=[Depends(require_verified_legacy_route)])
-    
+
     @ciem_router.get("/findings")
     async def list_ciem_findings(
         cloud_account_id: Optional[str] = None,
         severity: Optional[str] = None,
         limit: int = Query(50, le=500),
-        session: AsyncSession = Depends(get_db)
+        user: CurrentUser = Depends(get_current_user),
+        session: AsyncSession = Depends(get_db),
     ):
-        query = "SELECT * FROM ciem_findings WHERE 1=1"
-        params = {}
+        tid = _tenant_id(user)
+        await _bind_tenant(session, tid)
+        query = f"SELECT {CIEM_COLUMNS} FROM ciem_findings WHERE tenant_id = :tenant_id"
+        params = {"tenant_id": tid, "limit": limit}
         if cloud_account_id:
             query += " AND cloud_account_id = :account_id"
             params["account_id"] = cloud_account_id
@@ -51,7 +104,6 @@ def create_gap_routers(get_db):
             query += " AND severity = :severity"
             params["severity"] = severity
         query += " ORDER BY detected_at DESC LIMIT :limit"
-        params["limit"] = limit
         result = await session.execute(text(query), params)
         rows = result.fetchall()
         return [
@@ -68,12 +120,19 @@ def create_gap_routers(get_db):
             }
             for r in rows
         ]
-    
+
     @ciem_router.get("/scan-results")
     async def list_ciem_scans(
-        session: AsyncSession = Depends(get_db)
+        user: CurrentUser = Depends(get_current_user),
+        session: AsyncSession = Depends(get_db),
     ):
-        result = await session.execute(text("SELECT * FROM ciem_scan_results ORDER BY started_at DESC LIMIT 20"))
+        tid = _tenant_id(user)
+        result = await session.execute(text(
+            "SELECT id, cloud_account_id, provider, identities_analyzed, findings_count, "
+            "critical_count, high_count, medium_count, low_count, risk_score, started_at, "
+            "completed_at, status, summary FROM ciem_scan_results "
+            "WHERE tenant_id = :tenant_id ORDER BY started_at DESC LIMIT 20"
+        ), {"tenant_id": tid})
         rows = result.fetchall()
         return [
             {
@@ -87,65 +146,99 @@ def create_gap_routers(get_db):
             }
             for r in rows
         ]
-    
+
     @ciem_router.post("/scan")
     async def trigger_ciem_scan(
         cloud_account_id: str,
         provider: str = "aws",
-        session: AsyncSession = Depends(get_db)
+        user: CurrentUser = Depends(get_current_user),
+        session: AsyncSession = Depends(get_db),
     ):
+        tid = _tenant_id(user)
+        await _bind_tenant(session, tid)
+        # The account must belong to this tenant before a scan can be queued for it.
+        owned = await session.execute(text(
+            "SELECT 1 FROM ciem_findings WHERE tenant_id = :tenant_id "
+            "AND cloud_account_id = :account_id LIMIT 1"
+        ), {"tenant_id": tid, "account_id": cloud_account_id})
+        if owned.fetchone() is None:
+            exists = await session.execute(text(
+                "SELECT 1 FROM cloud_environments WHERE tenant_id = :tenant_id "
+                "AND native_id = :account_id LIMIT 1"
+            ), {"tenant_id": tid, "account_id": cloud_account_id})
+            if exists.fetchone() is None:
+                raise HTTPException(
+                    status_code=404,
+                    detail="Cloud account not found in this tenant",
+                )
         scan_id = f"ciem_{uuid.uuid4().hex[:12]}"
         await session.execute(text(
-            "INSERT INTO ciem_scan_results (id, cloud_account_id, provider, identities_analyzed, "
-            "findings_count, critical_count, high_count, medium_count, low_count, risk_score, "
-            "started_at, status, summary) VALUES "
-            "(:id, :account_id, :provider, 0, 0, 0, 0, 0, 0, 0.0, now(), 'queued', 'CIEM scan queued')"
-        ), {"id": scan_id, "account_id": cloud_account_id, "provider": provider})
+            "INSERT INTO ciem_scan_results (id, tenant_id, cloud_account_id, provider, "
+            "identities_analyzed, findings_count, critical_count, high_count, medium_count, "
+            "low_count, risk_score, started_at, status, summary) VALUES "
+            "(:id, :tenant_id, :account_id, :provider, 0, 0, 0, 0, 0, 0, 0.0, now(), "
+            "'queued', 'CIEM scan queued')"
+        ), {"id": scan_id, "tenant_id": tid, "account_id": cloud_account_id, "provider": provider})
         await session.commit()
         return {"scan_id": scan_id, "status": "queued", "message": "CIEM scan queued for execution"}
 
     # ===== 2. Cloud Environment Routes =====
     cloud_router = APIRouter(prefix="/cloud", tags=["Cloud Security"], dependencies=[Depends(require_verified_legacy_route)])
-    
+
     @cloud_router.get("/environments")
-    async def list_environments(session: AsyncSession = Depends(get_db)):
+    async def list_environments(
+        user: CurrentUser = Depends(get_current_user),
+        session: AsyncSession = Depends(get_db),
+    ):
+        tid = _tenant_id(user)
         result = await session.execute(text(
-            "SELECT * FROM cloud_environments ORDER BY created_at DESC LIMIT 50"
-        ))
+            "SELECT * FROM cloud_environments WHERE tenant_id = :tenant_id "
+            "ORDER BY created_at DESC LIMIT 50"
+        ), {"tenant_id": tid})
         rows = result.fetchall()
         cols = result.keys()
         return [dict(zip(cols, row)) for row in rows]
-    
+
     @cloud_router.post("/environments")
     async def create_environment(
         provider: str,
         name: str,
         native_id: str,
         environment_type: str = "account",
-        session: AsyncSession = Depends(get_db)
+        user: CurrentUser = Depends(get_current_user),
+        session: AsyncSession = Depends(get_db),
     ):
+        tid = _tenant_id(user)
+        user_id = getattr(user, "user_id", None) or getattr(user, "id", None)
+        if not user_id:
+            raise HTTPException(status_code=403, detail="Token carries no user identity")
         env_id = str(uuid.uuid4())
         await session.execute(text(
             "INSERT INTO cloud_environments (id, tenant_id, provider, name, native_id, environment_type, "
             "status, discovery_status, asset_count, region_count, graph_sync_status, "
             "created_by_user_id, tags, enabled, created_at, updated_at) VALUES "
-            "(:id, (SELECT id FROM tenants LIMIT 1), :provider, :name, :native_id, :env_type, "
+            "(:id, :tenant_id, :provider, :name, :native_id, :env_type, "
             "'active', 'not_started', 0, 0, 'not_synced', "
-            "(SELECT id FROM users LIMIT 1), '{}'::jsonb, true, now(), now())"
-        ), {"id": env_id, "provider": provider, "name": name, "native_id": native_id, "env_type": environment_type})
+            ":user_id, '{}'::jsonb, true, now(), now())"
+        ), {
+            "id": env_id, "tenant_id": tid, "provider": provider, "name": name,
+            "native_id": native_id, "env_type": environment_type, "user_id": str(user_id),
+        })
         await session.commit()
         return {"id": env_id, "status": "created", "message": f"Cloud environment {name} registered"}
-    
+
     @cloud_router.get("/assets")
     async def list_assets(
         environment_id: Optional[str] = None,
         limit: int = Query(50, le=500),
-        session: AsyncSession = Depends(get_db)
+        user: CurrentUser = Depends(get_current_user),
+        session: AsyncSession = Depends(get_db),
     ):
-        query = "SELECT * FROM cloud_assets"
-        params = {"limit": limit}
+        tid = _tenant_id(user)
+        query = "SELECT * FROM cloud_assets WHERE tenant_id = :tenant_id"
+        params = {"tenant_id": tid, "limit": limit}
         if environment_id:
-            query += " WHERE environment_id = :env_id"
+            query += " AND environment_id = :env_id"
             params["env_id"] = environment_id
         query += " ORDER BY last_seen_at DESC LIMIT :limit"
         result = await session.execute(text(query), params)
@@ -153,252 +246,142 @@ def create_gap_routers(get_db):
         cols = result.keys()
         return [dict(zip(cols, row)) for row in rows]
 
-    # ===== 3. Agent Routes =====
+    # ===== 3. Agent Routes (fabricated catalogue removed; only real data remains) =====
     agents_router = APIRouter(prefix="/agents", tags=["Agents"], dependencies=[Depends(require_verified_legacy_route)])
-    
-    @agents_router.get("")
-    async def list_agents(session: AsyncSession = Depends(get_db)):
-        # Return the 35 sovereign agents (from catalog, not DB)
-        agents = [
-            {"name": "ai_chief_ciso", "display_name": "AI Chief CISO", "type": "sovereign", "layer": 1, "status": "active"},
-            {"name": "ai_gasci_orchestrator", "display_name": "AI GASCI Orchestrator", "type": "sovereign", "layer": 0, "status": "active"},
-            {"name": "ai_soc_director", "display_name": "AI SOC Director", "type": "command", "layer": 2, "status": "active"},
-            {"name": "ai_incident_commander", "display_name": "AI Incident Commander", "type": "command", "layer": 2, "status": "active"},
-            {"name": "ai_cloud_security_director", "display_name": "AI Cloud Security Director", "type": "command", "layer": 3, "status": "active"},
-            {"name": "ai_vulnerability_director", "display_name": "AI Vulnerability Director", "type": "command", "layer": 5, "status": "active"},
-            {"name": "ai_remediation_director", "display_name": "AI Remediation Director", "type": "command", "layer": 5, "status": "active"},
-            {"name": "ai_threat_hunter", "display_name": "AI Threat Hunter", "type": "command", "layer": 6, "status": "active"},
-            {"name": "ai_compliance_director", "display_name": "AI Compliance Director", "type": "command", "layer": 8, "status": "active"},
-            {"name": "ai_risk_director", "display_name": "AI Risk Director", "type": "command", "layer": 0, "status": "active"},
-            {"name": "ai_executive_advisor", "display_name": "AI Executive Advisor", "type": "command", "layer": 0, "status": "active"},
-            {"name": "ai_devsecops_director", "display_name": "AI DevSecOps Director", "type": "command", "layer": 3, "status": "active"},
-            {"name": "ai_identity_director", "display_name": "AI Identity Director", "type": "command", "layer": 7, "status": "active"},
-            {"name": "ai_threat_intel_director", "display_name": "AI Threat Intel Director", "type": "command", "layer": 6, "status": "active"},
-            {"name": "ai_ciem_director", "display_name": "AI CIEM Director", "type": "specialist", "layer": 3, "status": "active"},
-            {"name": "ai_dark_web_monitor", "display_name": "AI Dark Web Monitor", "type": "specialist", "layer": 6, "status": "active"},
-            {"name": "ai_predictive_risk_director", "display_name": "AI Predictive Risk Director", "type": "specialist", "layer": 5, "status": "active"},
-            {"name": "ai_zero_trust_architect", "display_name": "AI Zero Trust Architect", "type": "specialist", "layer": 7, "status": "active"},
-            {"name": "ai_security_director_llm", "display_name": "AI Security Director (LLM)", "type": "restricted", "layer": 9, "status": "active"},
-            {"name": "ai_red_team_director", "display_name": "AI Red Team Director", "type": "restricted", "layer": 4, "status": "active"},
-        ]
-        return {"total": len(agents), "agents": agents}
-    
-    @agents_router.get("/{agent_name}")
-    async def get_agent(agent_name: str, session: AsyncSession = Depends(get_db)):
-        agents_data = {
-            "ai_chief_ciso": {"capabilities": ["strategy", "governance", "board_reports", "risk_appetite"], "tools": ["global_risk_score", "compliance_check"], "missions": 0},
-            "ai_soc_director": {"capabilities": ["alert_triage", "correlation", "incident_response"], "tools": ["soc_metrics", "alert_grouping"], "missions": 0},
-            "ai_cloud_security_director": {"capabilities": ["cspm", "ciem", "drift_detection", "auto_remediation"], "tools": ["cloud_scan", "ciem_analyze"], "missions": 0},
-            "ai_vulnerability_director": {"capabilities": ["cve_monitoring", "epss_scoring", "kev_check", "auto_fix"], "tools": ["nvd_api", "cisa_kev", "osv_dev"], "missions": 0},
-            "ai_red_team_director": {"capabilities": ["pentest", "owasp", "exploit_validation"], "tools": ["nuclei", "semgrep", "nmap"], "missions": 0, "requires_authorization": True},
-        }
-        agent = agents_data.get(agent_name)
-        if not agent:
-            raise HTTPException(status_code=404, detail=f"Agent {agent_name} not found")
-        return {"name": agent_name, **agent}
-    
+
     @agents_router.get("/activity/recent")
-    async def agent_activity(session: AsyncSession = Depends(get_db)):
+    async def agent_activity(
+        user: CurrentUser = Depends(get_current_user),
+        session: AsyncSession = Depends(get_db),
+    ):
+        tid = _tenant_id(user)
         result = await session.execute(text(
             "SELECT action, created_at, detail FROM audit_events "
-            "WHERE action LIKE 'agent_%' ORDER BY created_at DESC LIMIT 20"
-        ))
+            "WHERE tenant_id = :tenant_id AND action LIKE 'agent_%' "
+            "ORDER BY created_at DESC LIMIT 20"
+        ), {"tenant_id": tid})
         rows = result.fetchall()
         return [
-            {"action": r[0], "timestamp": str(r[1]), "detail": r[2] if isinstance(r[2], dict) else json.loads(r[2]) if r[2] else {}}
+            {"action": r[0], "timestamp": str(r[1]),
+             "detail": r[2] if isinstance(r[2], dict) else json.loads(r[2]) if r[2] else {}}
             for r in rows
         ]
 
     # ===== 4. Security Tool Endpoints =====
-    security_tools_router = APIRouter(prefix="/security-tools", tags=["Security Tools"], dependencies=[Depends(require_verified_legacy_route)])
-    
-    @security_tools_router.post("/sast")
-    async def run_sast_scan(
-        repository: str,
-        branch: str = "main",
-        session: AsyncSession = Depends(get_db)
-    ):
-        """Trigger SAST (Semgrep) scan on a repository."""
-        return {
-            "scan_type": "sast",
-            "repository": repository,
-            "branch": branch,
-            "status": "queued",
-            "tool": "semgrep",
-            "message": "SAST scan queued. Results will be available in findings."
-        }
-    
-    @security_tools_router.post("/dast")
-    async def run_dast_scan(
-        target_url: str,
-        scan_type: str = "owasp",
-        session: AsyncSession = Depends(get_db)
-    ):
-        """Trigger DAST (Nuclei) scan on a target URL."""
-        return {
-            "scan_type": "dast",
-            "target": target_url,
-            "scan_mode": scan_type,
-            "status": "queued",
-            "tool": "nuclei",
-            "message": "DAST scan queued. Results will be available in findings."
-        }
-    
-    @security_tools_router.post("/dependency-scan")
-    async def run_dependency_scan(
-        project_path: str,
-        session: AsyncSession = Depends(get_db)
-    ):
-        """Trigger dependency vulnerability scan."""
-        return {
-            "scan_type": "dependency",
-            "project": project_path,
-            "status": "queued",
-            "tool": "osv-scanner",
-            "message": "Dependency scan queued."
-        }
-    
-    @security_tools_router.post("/container-scan")
-    async def run_container_scan(
-        image: str,
-        registry: Optional[str] = None,
-        session: AsyncSession = Depends(get_db)
-    ):
-        """Trigger container image vulnerability scan."""
-        return {
-            "scan_type": "container",
-            "image": image,
-            "registry": registry,
-            "status": "queued",
-            "tool": "trivy",
-            "message": "Container scan queued."
-        }
-    
-    @security_tools_router.post("/iac-scan")
-    async def run_iac_scan(
-        project_path: str,
-        session: AsyncSession = Depends(get_db)
-    ):
-        """Trigger Infrastructure-as-Code security scan."""
-        return {
-            "scan_type": "iac",
-            "project": project_path,
-            "status": "queued",
-            "tool": "checkov",
-            "message": "IaC scan queued."
-        }
-    
-    @security_tools_router.post("/secret-scan")
-    async def run_secret_scan(
-        repository: str,
-        session: AsyncSession = Depends(get_db)
-    ):
-        """Trigger secret detection scan."""
-        return {
-            "scan_type": "secret",
-            "repository": repository,
-            "status": "queued",
-            "tool": "gitleaks",
-            "message": "Secret scan queued."
-        }
-    
-    @security_tools_router.post("/identity-threats")
-    async def detect_identity_threats(
-        session: AsyncSession = Depends(get_db)
-    ):
-        """Detect identity-based threats (impossible travel, off-hours, etc.)."""
-        return {
-            "scan_type": "identity_threats",
-            "status": "completed",
-            "threats_detected": 0,
-            "checks_run": ["impossible_travel", "off_hours_access", "privilege_escalation", "dormant_accounts"],
-            "message": "Identity threat scan completed. No threats detected."
-        }
+    # The seven canned POST endpoints were removed: each returned {"status": "queued"}
+    # without queueing anything. Real tool execution belongs to the kernel gateway.
+    security_tools_router = APIRouter(
+        prefix="/security-tools", tags=["Security Tools"],
+        dependencies=[Depends(require_verified_legacy_route)],
+    )
 
-    # ===== 5. Policy Routes (expanded) =====
+    # ===== 5. Policy Routes =====
     policy_router = APIRouter(prefix="/policy", tags=["Policy"], dependencies=[Depends(require_verified_legacy_route)])
-    
+
     @policy_router.get("/rules")
-    async def list_policy_rules(session: AsyncSession = Depends(get_db)):
+    async def list_policy_rules(
+        user: CurrentUser = Depends(get_current_user),
+        session: AsyncSession = Depends(get_db),
+    ):
+        tid = _tenant_id(user)
         result = await session.execute(text(
-            "SELECT id, risk_class, requires_approval, min_role, created_at FROM policies ORDER BY created_at"
-        ))
+            "SELECT id, risk_class, requires_approval, min_role, created_at FROM policies "
+            "WHERE tenant_id = :tenant_id ORDER BY created_at"
+        ), {"tenant_id": tid})
         rows = result.fetchall()
         return [
             {
                 "id": str(r[0]), "risk_class": r[1], "requires_approval": r[2],
-                "min_role": r[3], "created_at": str(r[4])
+                "min_role": r[3], "created_at": str(r[4]),
             }
             for r in rows
         ]
-    
+
     @policy_router.post("/evaluate")
     async def evaluate_policy(
         risk_class: str,
-        user_role: str = "analyst",
-        session: AsyncSession = Depends(get_db)
+        user: CurrentUser = Depends(get_current_user),
+        session: AsyncSession = Depends(get_db),
     ):
+        """Evaluate a risk class against this tenant's policy.
+
+        The caller's role is taken from the authenticated identity. It previously came
+        from a request parameter, so any caller could assert user_role=admin.
+        """
+        tid = _tenant_id(user)
         result = await session.execute(text(
-            "SELECT requires_approval, min_role FROM policies WHERE risk_class = :rc"
-        ), {"rc": risk_class})
+            "SELECT requires_approval, min_role FROM policies "
+            "WHERE tenant_id = :tenant_id AND risk_class = :rc"
+        ), {"tenant_id": tid, "rc": risk_class})
         row = result.fetchone()
         if not row:
-            return {"risk_class": risk_class, "verdict": "deny", "reason": "No policy defined for this risk class"}
-        
+            return {"risk_class": risk_class, "verdict": "deny",
+                    "reason": "No policy defined for this risk class"}
+
         requires_approval, min_role = row
         role_hierarchy = {"analyst": 1, "admin": 2}
-        user_level = role_hierarchy.get(user_role, 0)
+        actual_role = getattr(user, "role", None) or ""
+        user_level = role_hierarchy.get(str(actual_role), 0)
         min_level = role_hierarchy.get(min_role, 0)
-        
+
         if user_level < min_level:
-            return {"risk_class": risk_class, "verdict": "deny", "reason": f"Requires {min_role} role"}
-        
+            return {"risk_class": risk_class, "verdict": "deny",
+                    "reason": f"Requires {min_role} role"}
+
         return {
             "risk_class": risk_class,
             "verdict": "allow",
             "requires_approval": requires_approval,
-            "min_role": min_role
+            "min_role": min_role,
         }
 
-    # ===== 6. Approvals (expanded) =====
+    # ===== 6. Approvals =====
     approvals_router = APIRouter(prefix="/approvals", tags=["Approvals"], dependencies=[Depends(require_verified_legacy_route)])
-    
+
     @approvals_router.get("")
     async def list_approvals(
         status: Optional[str] = None,
-        session: AsyncSession = Depends(get_db)
+        user: CurrentUser = Depends(get_current_user),
+        session: AsyncSession = Depends(get_db),
     ):
-        query = "SELECT * FROM approvals"
-        params = {}
+        tid = _tenant_id(user)
+        query = "SELECT * FROM approvals WHERE tenant_id = :tenant_id"
+        params = {"tenant_id": tid}
         if status:
-            query += " WHERE status = :status"
+            query += " AND status = :status"
             params["status"] = status
         query += " ORDER BY created_at DESC LIMIT 50"
         result = await session.execute(text(query), params)
         rows = result.fetchall()
         cols = result.keys()
         return [dict(zip(cols, row)) for row in rows]
-    
+
     @approvals_router.post("/{approval_id}/decide")
     async def decide_approval(
         approval_id: str,
-        decision: str,  # "approved" or "rejected"
-        session: AsyncSession = Depends(get_db)
+        decision: str,
+        user: CurrentUser = Depends(get_current_user),
+        session: AsyncSession = Depends(get_db),
     ):
         if decision not in ("approved", "rejected"):
             raise HTTPException(status_code=400, detail="Decision must be 'approved' or 'rejected'")
-        
+
+        tid = _tenant_id(user)
+        # Both the existence check and the update are tenant-scoped, so an approval id
+        # from another tenant can neither be read nor decided.
         result = await session.execute(text(
-            "SELECT id FROM approvals WHERE id = :aid AND status = 'pending'"
-        ), {"aid": approval_id})
+            "SELECT id FROM approvals WHERE id = :aid AND tenant_id = :tenant_id "
+            "AND status = 'pending'"
+        ), {"aid": approval_id, "tenant_id": tid})
         if not result.fetchone():
             raise HTTPException(status_code=404, detail="Approval not found or already decided")
-        
+
         await session.execute(text(
-            "UPDATE approvals SET status = :decision, decided_at = now() WHERE id = :aid"
-        ), {"decision": decision, "aid": approval_id})
+            "UPDATE approvals SET status = :decision, decided_at = now() "
+            "WHERE id = :aid AND tenant_id = :tenant_id"
+        ), {"decision": decision, "aid": approval_id, "tenant_id": tid})
         await session.commit()
         return {"approval_id": approval_id, "status": decision, "message": f"Approval {decision}"}
 
-    return ciem_router, cloud_router, agents_router, security_tools_router, policy_router, approvals_router
-
+    return (ciem_router, cloud_router, agents_router, security_tools_router,
+            policy_router, approvals_router)

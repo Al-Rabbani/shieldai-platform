@@ -44,18 +44,18 @@ from gds_api.pentest import routes as pentest_routes
 from gds_api.pentest import ai_routes as pentest_ai_routes
 from gds_api.compliance import autofix_routes as compliance_autofix_routes
 from gds_api.siem import routes as siem_routes
-from gds_api.autofix import routes as autofix_routes
+
 from gds_api.alerts import routes as alert_routes
 from gds_api.compliance import evidence_routes as compliance_evidence_routes
 from gds_api.integrations import routes as ci_cd_routes
 from gds_api.webhooks import routes as webhook_routes
-from gds_api.sso import routes as sso_routes
+
 from gds_api.data_residency import routes as residency_routes
-from gds_api.ai_security import routes as ai_security_routes
-from gds_api.attack_graph import routes as attack_graph_routes
-from gds_api.redteam_sim import routes as redteam_sim_routes
-from gds_api.digital_twin import routes as digital_twin_routes
-from gds_api.marketplace import routes as marketplace_routes
+
+
+
+
+
 from gds_api.agentic.action_triggers import ActionTriggerRouter
 from gds_api.agentic.execution import AgentTaskQueue, AgentFleetManager
 from gds_api.agentic.message_bus import AgentMessageBus
@@ -208,18 +208,18 @@ app.include_router(ai_ml_api.router)
 app.include_router(pentest_routes.router)
 app.include_router(compliance_autofix_routes.router, dependencies=[Depends(require_verified_legacy_route)])
 app.include_router(siem_routes.router)
-app.include_router(autofix_routes.router, dependencies=[Depends(require_verified_legacy_route)])
+# RETIRED (unbuilt persistence schema, rebuilt later): app.include_router(autofix_routes.router, dependencies=[Depends(require_verified_legacy_route)])
 app.include_router(alert_routes.router)
 app.include_router(compliance_evidence_routes.router, dependencies=[Depends(require_verified_legacy_route)])
 app.include_router(ci_cd_routes.router, dependencies=[Depends(require_verified_legacy_route)])
 app.include_router(webhook_routes.router, dependencies=[Depends(require_verified_legacy_route)])
-app.include_router(sso_routes.router, dependencies=[Depends(require_verified_legacy_route)])
+# RETIRED (unbuilt persistence schema, rebuilt later): app.include_router(sso_routes.router, dependencies=[Depends(require_verified_legacy_route)])
 app.include_router(residency_routes.router, dependencies=[Depends(require_verified_legacy_route)])
-app.include_router(ai_security_routes.router, dependencies=[Depends(require_verified_legacy_route)])
-app.include_router(attack_graph_routes.router, dependencies=[Depends(require_verified_legacy_route)])
-app.include_router(redteam_sim_routes.router, dependencies=[Depends(require_verified_legacy_route)])
-app.include_router(digital_twin_routes.router, dependencies=[Depends(require_verified_legacy_route)])
-app.include_router(marketplace_routes.router, dependencies=[Depends(require_verified_legacy_route)])
+# RETIRED (unbuilt persistence schema, rebuilt later): app.include_router(ai_security_routes.router, dependencies=[Depends(require_verified_legacy_route)])
+# RETIRED (unbuilt persistence schema, rebuilt later): app.include_router(attack_graph_routes.router, dependencies=[Depends(require_verified_legacy_route)])
+# RETIRED (unbuilt persistence schema, rebuilt later): app.include_router(redteam_sim_routes.router, dependencies=[Depends(require_verified_legacy_route)])
+# RETIRED (unbuilt persistence schema, rebuilt later): app.include_router(digital_twin_routes.router, dependencies=[Depends(require_verified_legacy_route)])
+# RETIRED (unbuilt persistence schema, rebuilt later): app.include_router(marketplace_routes.router, dependencies=[Depends(require_verified_legacy_route)])
 # ─── Agentic Layer (Phase 5) ──────────────────────────────
 _agentic_queue = AgentTaskQueue()
 _agentic_bus = AgentMessageBus()
