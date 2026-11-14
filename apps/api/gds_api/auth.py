@@ -1,7 +1,8 @@
+import logging
 from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from gds_api.audit import record_audit_event
@@ -25,6 +26,8 @@ from gds_api.security import (
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
+_log = logging.getLogger(__name__)
+
 # A named reference (not an inline Depends(...) call) so the test suite can override
 # just this dependency via app.dependency_overrides - real login flows still get real
 # rate limiting; gds_api.rate_limit itself is exercised directly and for real in
@@ -39,6 +42,12 @@ refresh_rate_limit = ip_rate_limit("refresh", max_requests=10, window_seconds=60
 
 
 async def _issue_session(db: AsyncSession, response: Response, *, user: User) -> None:
+    # R2.1: user_sessions is FORCE-RLS protected and its policy applies the tenant predicate
+    # to INSERT as well as SELECT. Login reaches here before any tenant is known, so bind the
+    # tenant resolved from the authenticated user row first, or the insert is rejected.
+    await db.execute(
+        text("SELECT set_config('gds.tenant_id', :tid, false)"), {"tid": str(user.tenant_id)}
+    )
     refresh_token = generate_refresh_token()
     db.add(
         UserSession(
@@ -62,6 +71,12 @@ async def register(
     from gds_api.seed_data import ROLE_PERMISSIONS
 
     # Check if email already exists
+    # R2.1 auth bootstrap: users is FORCE-RLS protected and login has no principal yet.
+    # Bind the submitted address so the users policy exposes exactly that one row; any other
+    # user remains invisible even though this pre-auth path runs unauthenticated.
+    await db.execute(
+        text("SELECT set_config('gds.login_email', :e, false)"), {"e": body.email.lower()}
+    )
     result = await db.execute(select(User).where(User.email == body.email))
     if result.scalar_one_or_none():
         raise HTTPException(status.HTTP_409_CONFLICT, "Email already registered")
@@ -71,6 +86,11 @@ async def register(
     tenant = Tenant(id=uuid.uuid4(), name=body.full_name or body.email, slug=f"{slug}-{uuid.uuid4().hex[:6]}")
     db.add(tenant)
     await db.flush()
+    # R2.1: roles and users are FORCE-RLS protected, so the inserts below need this new
+    # tenant bound. The id is known from construction, before anything is read back.
+    await db.execute(
+        text("SELECT set_config('gds.tenant_id', :tid, false)"), {"tid": str(tenant.id)}
+    )
 
     # Create platform_owner role for this tenant
     role = Role(
@@ -112,6 +132,12 @@ async def register(
 async def login(
     body: LoginRequest, response: Response, db: AsyncSession = Depends(get_db)
 ) -> MeResponse:
+    # R2.1 auth bootstrap: refresh resolves the user by email before a principal
+    # exists, so expose only the row for the submitted address.
+    await db.execute(
+        text("SELECT set_config('gds.login_email', :e, false)"),
+        {"e": body.email.lower()},
+    )
     result = await db.execute(
         select(User, Role).join(Role, User.role_id == Role.id).where(User.email == body.email)
     )
@@ -119,15 +145,27 @@ async def login(
     password_ok = row is not None and verify_password(body.password, row[0].password_hash)
 
     if row is None or not row[0].is_active or not password_ok:
-        tenant_id = row[0].tenant_id if row is not None else None
-        await record_audit_event(
-            db,
-            tenant_id=tenant_id,
-            user_id=row[0].id if row is not None else None,
-            action="auth.login.failure",
-            detail={"email": body.email},
-        )
-        await db.commit()
+        # R2.1: audit_events is FORCE-RLS protected, so the failure event can only be written
+        # with a tenant bound. When the address is unknown there is no tenant to attribute it
+        # to; writing one anyway would violate the policy and turn a 401 into a 500, which both
+        # hides the real outcome and signals account existence through the status code. In that
+        # case the attempt is recorded to the application log instead, and the response stays a
+        # uniform 401 either way.
+        if row is not None:
+            await db.execute(
+                text("SELECT set_config('gds.tenant_id', :tid, false)"),
+                {"tid": str(row[0].tenant_id)},
+            )
+            await record_audit_event(
+                db,
+                tenant_id=row[0].tenant_id,
+                user_id=row[0].id,
+                action="auth.login.failure",
+                detail={"email": body.email},
+            )
+            await db.commit()
+        else:
+            _log.warning("login failure for unknown address", extra={"email_domain": body.email.split("@")[-1]})
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid email or password")
 
     user, role = row

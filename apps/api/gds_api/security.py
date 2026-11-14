@@ -105,6 +105,16 @@ async def get_current_user(request: Request, db: AsyncSession = Depends(get_db))
     # Role/permissions are loaded fresh on every request (not trusted from the JWT) so a
     # role change or deactivation takes effect immediately, not just after token expiry.
     user_id = uuid.UUID(payload["sub"])
+    # R2.1 auth bootstrap: users and roles are FORCE-RLS protected and this lookup happens
+    # BEFORE the tenant is known (the tenant comes FROM this row). The token subject is the
+    # only identity available, so bind it as the principal: the users/roles policies allow
+    # exactly the row whose id matches. Nothing broader is exposed.
+    from sqlalchemy import text as _boot_text
+
+    await db.execute(
+        _boot_text("SELECT set_config('gds.principal_id', :pid, false)"),
+        {"pid": str(user_id)},
+    )
     result = await db.execute(
         select(User, Role).join(Role, User.role_id == Role.id).where(User.id == user_id)
     )
