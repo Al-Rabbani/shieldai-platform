@@ -347,5 +347,10 @@ except Exception as e:
     print(f'[GDS] Agentic Planner skipped: {e}')
 
 # GDS Agent Kernel Router
+# Canonical, tenant-scoped CIEM router (migration 004 added tenant_id + FORCE RLS
+# to ciem_findings). Registered WITHOUT the legacy quarantine dependency because
+# this handler enforces permission scope and sets gds.tenant_id explicitly.
+from gds_api.cloud.ciem.routes import router as _ciem_canonical_router
+app.include_router(_ciem_canonical_router)
 app.include_router(kernel_router)
 app.include_router(ci_router)

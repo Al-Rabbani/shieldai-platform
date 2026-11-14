@@ -7,7 +7,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from gds_api.db import get_db
@@ -204,7 +204,14 @@ async def list_ciem_findings(
     user: CurrentUser = Depends(require_permission("cloud:read")),
 ):
     """List CIEM findings with filters."""
-    q = select(CIEMFinding).order_by(CIEMFinding.detected_at.desc()).limit(limit).offset(offset)
+    # ciem_findings is FORCE-RLS (migration 004); without tenant context every
+    # row is filtered out. Scope this transaction to the caller
+    # s tenant before querying.
+    await db.execute(
+        text("SELECT set_config('gds.tenant_id', :tid, true)"),
+        {"tid": str(user.tenant_id)},
+    )
+    q = select(CIEMFinding).where(CIEMFinding.tenant_id == user.tenant_id).order_by(CIEMFinding.detected_at.desc()).limit(limit).offset(offset)
     if cloud_account_id:
         q = q.where(CIEMFinding.cloud_account_id == cloud_account_id)
     if severity:
