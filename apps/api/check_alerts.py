@@ -53,15 +53,21 @@ except SecurityScopeError as e:
 alert_levels = {"critical", "high"}
 window_alerts = {sev: n for sev, n in windowed["by_severity"].items() if sev in alert_levels}
 
-# Notification dispatch: the notifications table is not RLS-managed, so the
-# recipient and tenant are the provisioned, verified values — never selected
-# by LIMIT 1. Scoped reads and the recipient share the same tenant.
+# Notification dispatch: notifications IS tenant-isolated (RLS policy from migration 006,
+# enforced from 009). The recipient and tenant remain the provisioned, verified values -
+# never selected by LIMIT 1 - and the tenant is bound on the connection below so the
+# insert satisfies the policy.
 if window_alerts:
     from sqlalchemy import create_engine, text
     DB_URL = os.getenv("DATABASE_URL", "")
     if DB_URL:
         engine = create_engine(DB_URL)
         with engine.connect() as conn:
+            # RLS: bind the provisioned tenant before the first write. Session-level
+            # (is_local=false) so it survives the commit below; the connection is closed
+            # when this block ends, so the context cannot outlive the job.
+            conn.execute(text("SELECT set_config('gds.tenant_id', :tid, false)"),
+                         {"tid": alert_tenant})
             for severity, count in sorted(window_alerts.items()):
                 conn.execute(text(
                     "INSERT INTO notifications (id, tenant_id, user_id, type, message, read_at, created_at) "
