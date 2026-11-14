@@ -74,7 +74,9 @@ else
 fi
 
 echo "  rolling back to $PREV"
-git checkout "$PREV" >/dev/null 2>&1
+# Restore the BRANCH, not the bare sha. Rolling back to a commit leaves the repo
+# detached, so a later commit would be orphaned off the tip.
+git checkout "$PREV_BRANCH" >/dev/null 2>&1 || git checkout "$PREV" >/dev/null 2>&1
 stamp_release "$PREV"
 supervisorctl restart gds-os gds-worker gds-kernel >/dev/null 2>&1
 sleep 5
