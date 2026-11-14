@@ -1,11 +1,13 @@
 {
   "name": "shieldai-platform",
   "version": "2.0.0",
-  "description": "ShieldAI â AI-Powered Application Security Platform",
+  "description": "ShieldAI \u00e2\u0080\u0094 AI-Powered Application Security Platform",
   "private": true,
   "scripts": {
-    "test": "echo \"No tests configured\" && exit 0",
-    "lint": "eslint functions/"
+    "test": "npm run test:backend && npm run test:frontend",
+    "lint": "eslint functions/",
+    "test:frontend": "node --test tests/frontend-assurance.test.cjs",
+    "test:backend": "python3 -m unittest discover -s tests -v"
   },
   "dependencies": {
     "axios": "^1.6.0",

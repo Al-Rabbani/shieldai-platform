@@ -1,9 +1,7 @@
-"""Real connectivity checks against every infrastructure service.
+"""Dependency health checks with protocol verification and bounded timeouts.
 
-Temporal and NATS don't expose a lightweight unauthenticated HTTP health endpoint on the
-ports this project binds, so they're checked with a plain TCP connect — enough to prove
-the container is up and accepting connections. Full protocol-level clients (temporalio,
-nats-py) get added when those services are actually used, starting Phase 3.
+Public results deliberately omit raw exception text, which can contain credentials
+or internal connection details. Process liveness and dependency readiness are separate.
 """
 
 import asyncio
@@ -42,7 +40,7 @@ async def _timed(name: str, check: Callable[[], Awaitable[str]]) -> ServiceHealt
         return ServiceHealth(
             name=name,
             status="unhealthy",
-            detail=f"{type(exc).__name__}: {exc}",
+            detail=f"{type(exc).__name__}: dependency check failed",
             latency_ms=round((time.perf_counter() - start) * 1000, 1),
         )
 
@@ -104,11 +102,32 @@ async def _tcp_check(host: str, port: int) -> str:
 
 
 async def _check_temporal() -> str:
-    return await _tcp_check(settings.temporal_host, settings.temporal_port)
+    # A listening Docker proxy is not proof that the workflow service is ready.
+    # Client.connect performs the real Temporal gRPC system-info handshake.
+    from gds_api.temporal_client import get_temporal_client
+
+    await get_temporal_client()
+    return "Temporal gRPC handshake verified"
 
 
 async def _check_nats() -> str:
-    return await _tcp_check(settings.nats_host, settings.nats_port)
+    reader, writer = await asyncio.open_connection(settings.nats_host, settings.nats_port)
+    try:
+        greeting = await reader.readline()
+        if not greeting.startswith(b"INFO "):
+            raise RuntimeError("NATS protocol greeting unavailable")
+        writer.write(b"PING\r\n")
+        await writer.drain()
+        for _ in range(8):
+            reply = (await reader.readline()).strip()
+            if reply == b"PONG":
+                return "NATS protocol PING/PONG verified"
+            if not reply or reply.startswith(b"-ERR"):
+                raise RuntimeError("NATS protocol check rejected")
+        raise RuntimeError("NATS protocol PONG unavailable")
+    finally:
+        writer.close()
+        await asyncio.wait_for(writer.wait_closed(), timeout=1.0)
 
 
 CHECKS: dict[str, Callable[[], Awaitable[str]]] = {

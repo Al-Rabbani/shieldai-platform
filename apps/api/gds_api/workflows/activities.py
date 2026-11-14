@@ -19,6 +19,8 @@ know about them.
 import ipaddress
 import json
 import uuid
+from temporalio.exceptions import ApplicationError
+from gds_api.workflows.identifiers import parse_mission_id
 from datetime import UTC, datetime
 from typing import Any
 
@@ -305,9 +307,9 @@ _CHAT_REPORT_SYSTEM_PROMPT = (
 @activity.defn
 async def assess_mission(mission_id: str) -> dict[str, str]:
     async with async_session_factory() as db:
-        mission = await db.get(Mission, uuid.UUID(mission_id))
+        mission = await db.get(Mission, parse_mission_id(mission_id))
         if mission is None:
-            raise ValueError(f"Mission {mission_id} not found")
+            raise ApplicationError("Mission not found", type="MissionNotFound", non_retryable=True)
 
         raw = await model_router.complete(
             db,
@@ -343,9 +345,9 @@ async def decide_next_step(payload: dict[str, Any]) -> dict[str, Any]:
     mission_id = payload["mission_id"]
 
     async with async_session_factory() as db:
-        mission = await db.get(Mission, uuid.UUID(mission_id))
+        mission = await db.get(Mission, parse_mission_id(mission_id))
         if mission is None:
-            raise ValueError(f"Mission {mission_id} not found")
+            raise ApplicationError("Mission not found", type="MissionNotFound", non_retryable=True)
 
         prior_tasks = (
             (
@@ -710,7 +712,7 @@ async def mark_mission_failed(payload: dict[str, Any]) -> None:
     error_message_safe = str(payload.get("error_message_safe", ""))[:500]
 
     async with async_session_factory() as db:
-        mission = await db.get(Mission, uuid.UUID(mission_id))
+        mission = await db.get(Mission, parse_mission_id(mission_id))
         if mission is None:
             return
         if mission.status in ("completed", "failed", "cancelled"):
@@ -794,9 +796,9 @@ async def synthesize_report(payload: dict[str, Any]) -> None:
     hit_iteration_limit = bool(payload.get("hit_iteration_limit", False))
 
     async with async_session_factory() as db:
-        mission = await db.get(Mission, uuid.UUID(mission_id))
+        mission = await db.get(Mission, parse_mission_id(mission_id))
         if mission is None:
-            raise ValueError(f"Mission {mission_id} not found")
+            raise ApplicationError("Mission not found", type="MissionNotFound", non_retryable=True)
 
         tasks = (
             (

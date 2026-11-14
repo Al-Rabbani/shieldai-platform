@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 
 from fastapi import Depends, FastAPI
+from gds_api.gap_routes import require_verified_legacy_route
 from fastapi.middleware.cors import CORSMiddleware
 from prometheus_client import REGISTRY, make_asgi_app
 
@@ -174,7 +175,7 @@ try:
 except Exception as e:
     print(f"Bridge router failed (non-fatal): {e}")
 
-app.include_router(reasoning_router)
+app.include_router(reasoning_router, dependencies=[Depends(require_verified_legacy_route)])
 app.include_router(auth.router)
 app.include_router(audit.router)
 app.include_router(policy.router)
@@ -205,20 +206,20 @@ app.include_router(remediation.router)
 app.include_router(security_tools_api.router)
 app.include_router(ai_ml_api.router)
 app.include_router(pentest_routes.router)
-app.include_router(compliance_autofix_routes.router)
+app.include_router(compliance_autofix_routes.router, dependencies=[Depends(require_verified_legacy_route)])
 app.include_router(siem_routes.router)
-app.include_router(autofix_routes.router)
+app.include_router(autofix_routes.router, dependencies=[Depends(require_verified_legacy_route)])
 app.include_router(alert_routes.router)
-app.include_router(compliance_evidence_routes.router)
-app.include_router(ci_cd_routes.router)
-app.include_router(webhook_routes.router)
-app.include_router(sso_routes.router)
-app.include_router(residency_routes.router)
-app.include_router(ai_security_routes.router)
-app.include_router(attack_graph_routes.router)
-app.include_router(redteam_sim_routes.router)
-app.include_router(digital_twin_routes.router)
-app.include_router(marketplace_routes.router)
+app.include_router(compliance_evidence_routes.router, dependencies=[Depends(require_verified_legacy_route)])
+app.include_router(ci_cd_routes.router, dependencies=[Depends(require_verified_legacy_route)])
+app.include_router(webhook_routes.router, dependencies=[Depends(require_verified_legacy_route)])
+app.include_router(sso_routes.router, dependencies=[Depends(require_verified_legacy_route)])
+app.include_router(residency_routes.router, dependencies=[Depends(require_verified_legacy_route)])
+app.include_router(ai_security_routes.router, dependencies=[Depends(require_verified_legacy_route)])
+app.include_router(attack_graph_routes.router, dependencies=[Depends(require_verified_legacy_route)])
+app.include_router(redteam_sim_routes.router, dependencies=[Depends(require_verified_legacy_route)])
+app.include_router(digital_twin_routes.router, dependencies=[Depends(require_verified_legacy_route)])
+app.include_router(marketplace_routes.router, dependencies=[Depends(require_verified_legacy_route)])
 # ─── Agentic Layer (Phase 5) ──────────────────────────────
 _agentic_queue = AgentTaskQueue()
 _agentic_bus = AgentMessageBus()
@@ -290,6 +291,23 @@ async def health() -> dict[str, object]:
             for s in services
         },
     }
+
+
+@app.get("/health/ready")
+async def health_ready():
+    """Fail closed for load balancers when any required dependency is unavailable."""
+    from fastapi.responses import JSONResponse
+
+    services = await check_all_services()
+    ready = bool(services) and all(service.status == "healthy" for service in services)
+    return JSONResponse(
+        status_code=200 if ready else 503,
+        content={
+            "status": "ready" if ready else "not_ready",
+            "timestamp": datetime.now(UTC).isoformat(),
+            "services": {service.name: service.status for service in services},
+        },
+    )
 
 
 @app.get("/health/live")

@@ -1,0 +1,487 @@
+{
+  "scope": "Anonymous GET routes without path parameters; no authenticated tenant or write-path certification",
+  "checked": 118,
+  "statuses": {
+    "200": 2,
+    "401": 116
+  },
+  "public_allowlist": [
+    "/billing/plans",
+    "/bridge/health"
+  ],
+  "unexpected": [],
+  "results": [
+    {
+      "path": "/bridge/health",
+      "status": 200
+    },
+    {
+      "path": "/bridge/agents",
+      "status": 401
+    },
+    {
+      "path": "/bridge/missions",
+      "status": 401
+    },
+    {
+      "path": "/reasoning/missions",
+      "status": 401
+    },
+    {
+      "path": "/reasoning/agents",
+      "status": 401
+    },
+    {
+      "path": "/auth/me",
+      "status": 401
+    },
+    {
+      "path": "/audit",
+      "status": 401
+    },
+    {
+      "path": "/approvals",
+      "status": 401
+    },
+    {
+      "path": "/evidence",
+      "status": 401
+    },
+    {
+      "path": "/notifications",
+      "status": 401
+    },
+    {
+      "path": "/missions",
+      "status": 401
+    },
+    {
+      "path": "/agents",
+      "status": 401
+    },
+    {
+      "path": "/agents/planned",
+      "status": 401
+    },
+    {
+      "path": "/agents/activity",
+      "status": 401
+    },
+    {
+      "path": "/findings",
+      "status": 401
+    },
+    {
+      "path": "/incidents",
+      "status": 401
+    },
+    {
+      "path": "/knowledge",
+      "status": 401
+    },
+    {
+      "path": "/knowledge/search",
+      "status": 401
+    },
+    {
+      "path": "/workflows",
+      "status": 401
+    },
+    {
+      "path": "/build-guide/status",
+      "status": 401
+    },
+    {
+      "path": "/memory/overview",
+      "status": 401
+    },
+    {
+      "path": "/memory/graph",
+      "status": 401
+    },
+    {
+      "path": "/red-team/status",
+      "status": 401
+    },
+    {
+      "path": "/red-team/targets",
+      "status": 401
+    },
+    {
+      "path": "/red-team/engagements",
+      "status": 401
+    },
+    {
+      "path": "/conversations",
+      "status": 401
+    },
+    {
+      "path": "/capabilities",
+      "status": 401
+    },
+    {
+      "path": "/capabilities/categories",
+      "status": 401
+    },
+    {
+      "path": "/repositories",
+      "status": 401
+    },
+    {
+      "path": "/workspaces",
+      "status": 401
+    },
+    {
+      "path": "/engineering-sessions",
+      "status": 401
+    },
+    {
+      "path": "/mission-plans",
+      "status": 401
+    },
+    {
+      "path": "/executive/report",
+      "status": 401
+    },
+    {
+      "path": "/cloud/providers",
+      "status": 401
+    },
+    {
+      "path": "/cloud/environments",
+      "status": 401
+    },
+    {
+      "path": "/cloud/discovery-jobs",
+      "status": 401
+    },
+    {
+      "path": "/cloud/assets",
+      "status": 401
+    },
+    {
+      "path": "/cloud/snapshots",
+      "status": 401
+    },
+    {
+      "path": "/cloud/changes",
+      "status": 401
+    },
+    {
+      "path": "/cloud/policies",
+      "status": 401
+    },
+    {
+      "path": "/cloud/benchmarks",
+      "status": 401
+    },
+    {
+      "path": "/cloud/posture/evaluations",
+      "status": 401
+    },
+    {
+      "path": "/cloud/posture/results",
+      "status": 401
+    },
+    {
+      "path": "/cloud/findings",
+      "status": 401
+    },
+    {
+      "path": "/cloud/posture/coverage/registry",
+      "status": 401
+    },
+    {
+      "path": "/monitoring/schedules",
+      "status": 401
+    },
+    {
+      "path": "/monitoring/results",
+      "status": 401
+    },
+    {
+      "path": "/remediation/plans",
+      "status": 401
+    },
+    {
+      "path": "/security-tools/status",
+      "status": 401
+    },
+    {
+      "path": "/ai-ml/status",
+      "status": 401
+    },
+    {
+      "path": "/pentest/authorizations",
+      "status": 401
+    },
+    {
+      "path": "/pentest/status",
+      "status": 401
+    },
+    {
+      "path": "/compliance/autofix/jobs",
+      "status": 401
+    },
+    {
+      "path": "/compliance/autofix/frameworks",
+      "status": 401
+    },
+    {
+      "path": "/siem/events",
+      "status": 401
+    },
+    {
+      "path": "/siem/correlation/rules",
+      "status": 401
+    },
+    {
+      "path": "/siem/correlation/incidents",
+      "status": 401
+    },
+    {
+      "path": "/siem/stats",
+      "status": 401
+    },
+    {
+      "path": "/siem/search",
+      "status": 401
+    },
+    {
+      "path": "/autofix/jobs",
+      "status": 401
+    },
+    {
+      "path": "/autofix/templates",
+      "status": 401
+    },
+    {
+      "path": "/alerts/rules",
+      "status": 401
+    },
+    {
+      "path": "/alerts/events",
+      "status": 401
+    },
+    {
+      "path": "/compliance/evidence",
+      "status": 401
+    },
+    {
+      "path": "/compliance/evidence/legal-holds",
+      "status": 401
+    },
+    {
+      "path": "/ci-cd/pipelines",
+      "status": 401
+    },
+    {
+      "path": "/ci-cd/gate-results",
+      "status": 401
+    },
+    {
+      "path": "/ci-cd/platforms",
+      "status": 401
+    },
+    {
+      "path": "/webhooks/endpoints",
+      "status": 401
+    },
+    {
+      "path": "/webhooks/events",
+      "status": 401
+    },
+    {
+      "path": "/webhooks/supported-sources",
+      "status": 401
+    },
+    {
+      "path": "/sso/providers",
+      "status": 401
+    },
+    {
+      "path": "/sso/sessions",
+      "status": 401
+    },
+    {
+      "path": "/data-residency/zones",
+      "status": 401
+    },
+    {
+      "path": "/data-residency/rules",
+      "status": 401
+    },
+    {
+      "path": "/data-residency/movements",
+      "status": 401
+    },
+    {
+      "path": "/data-residency/summary",
+      "status": 401
+    },
+    {
+      "path": "/data-residency/presets",
+      "status": 401
+    },
+    {
+      "path": "/ai-security/attacks",
+      "status": 401
+    },
+    {
+      "path": "/ai-security/owasp-llm",
+      "status": 401
+    },
+    {
+      "path": "/ai-security/eu-ai-act",
+      "status": 401
+    },
+    {
+      "path": "/attack-graph/paths",
+      "status": 401
+    },
+    {
+      "path": "/attack-graph/choke-points",
+      "status": 401
+    },
+    {
+      "path": "/attack-graph/visualization",
+      "status": 401
+    },
+    {
+      "path": "/attack-graph/stats",
+      "status": 401
+    },
+    {
+      "path": "/redteam/profiles",
+      "status": 401
+    },
+    {
+      "path": "/redteam/campaigns",
+      "status": 401
+    },
+    {
+      "path": "/redteam/techniques",
+      "status": 401
+    },
+    {
+      "path": "/redteam/stats",
+      "status": 401
+    },
+    {
+      "path": "/digital-twin/environments",
+      "status": 401
+    },
+    {
+      "path": "/digital-twin/experiments",
+      "status": 401
+    },
+    {
+      "path": "/digital-twin/chaos-types",
+      "status": 401
+    },
+    {
+      "path": "/marketplace/developers",
+      "status": 401
+    },
+    {
+      "path": "/marketplace/listings",
+      "status": 401
+    },
+    {
+      "path": "/marketplace/certifications",
+      "status": 401
+    },
+    {
+      "path": "/marketplace/subscriptions",
+      "status": 401
+    },
+    {
+      "path": "/marketplace/invoices",
+      "status": 401
+    },
+    {
+      "path": "/marketplace/partners",
+      "status": 401
+    },
+    {
+      "path": "/marketplace/partners/tiers",
+      "status": 401
+    },
+    {
+      "path": "/marketplace/stats",
+      "status": 401
+    },
+    {
+      "path": "/marketplace/categories",
+      "status": 401
+    },
+    {
+      "path": "/marketplace/pricing-models",
+      "status": 401
+    },
+    {
+      "path": "/actions/tasks",
+      "status": 401
+    },
+    {
+      "path": "/actions/fleet/status",
+      "status": 401
+    },
+    {
+      "path": "/metrics/summary",
+      "status": 401
+    },
+    {
+      "path": "/ciem/findings",
+      "status": 401
+    },
+    {
+      "path": "/ciem/scan-results",
+      "status": 401
+    },
+    {
+      "path": "/agents/activity/recent",
+      "status": 401
+    },
+    {
+      "path": "/policy/rules",
+      "status": 401
+    },
+    {
+      "path": "/billing/plans",
+      "status": 200
+    },
+    {
+      "path": "/billing/subscription",
+      "status": 401
+    },
+    {
+      "path": "/billing/invoices",
+      "status": 401
+    },
+    {
+      "path": "/kernel/status",
+      "status": 401
+    },
+    {
+      "path": "/kernel/processes",
+      "status": 401
+    },
+    {
+      "path": "/kernel/tools",
+      "status": 401
+    },
+    {
+      "path": "/kernel/audit",
+      "status": 401
+    },
+    {
+      "path": "/kernel/stats",
+      "status": 401
+    },
+    {
+      "path": "/kernel/memory/global-stats",
+      "status": 401
+    }
+  ]
+}
