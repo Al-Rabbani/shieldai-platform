@@ -58,7 +58,9 @@ async def list_security_findings(
     rows = (
         await db.execute(
             text(
-                "SELECT id, scanner, title, severity, status, target, " 
+                "SELECT id, scanner, title, severity, status, target, "
+                "source, external_id, cve, cvss, epss, kev_listed, reachability, "
+                "exploitability, exposure, risk_class, confidence, business_impact, " 
                 "remediation, detected_at, resolved_at " 
                 "FROM security_findings WHERE tenant_id = :tid " 
                 "ORDER BY detected_at DESC NULLS LAST LIMIT 500"
