@@ -26,7 +26,9 @@ async function callFunction(name: string, payload: any): Promise<any> {
     });
     return await res.json().catch(() => ({ success: false }));
   } catch (e) {
-    console.warn(`[PostScanPipeline] Failed to call ${name}:`, (e as Error).message);
+    // semgrep unsafe-formatstring: same shape as above. A function name containing
+    // "%" must not become the format head.
+    console.warn("[PostScanPipeline] Failed to call:", name, (e as Error).message);
     return { success: false, error: (e as Error).message };
   }
 }

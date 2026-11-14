@@ -393,7 +393,10 @@ Deno.serve(async (req: Request) => {
         }
         if (record.exploited_in_wild) kevFindings.push(record.title);
       } catch (e) {
-        console.error(`[AutoTriage v4] Write error for ${record.title}:`, e);
+        // semgrep unsafe-formatstring: a title containing "%s" would be read as a
+        // format specifier and consume the error object, producing a misleading log.
+        // Keep the format head static and pass the title as an argument.
+        console.error("[AutoTriage v4] Write error:", { title: record.title }, e);
       }
     }
 
