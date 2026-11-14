@@ -84,13 +84,17 @@ async def register(
     # Create new tenant
     slug = (body.full_name or body.email.split("@")[0]).lower().replace(" ", "-")[:50]
     tenant = Tenant(id=uuid.uuid4(), name=body.full_name or body.email, slug=f"{slug}-{uuid.uuid4().hex[:6]}")
-    db.add(tenant)
-    await db.flush()
-    # R2.1: roles and users are FORCE-RLS protected, so the inserts below need this new
-    # tenant bound. The id is known from construction, before anything is read back.
+    # R2.1: tenants, roles and users are all FORCE-RLS protected. The tenant id is generated here,
+    # so bind it BEFORE the insert rather than after. This ordering matters for a subtle reason:
+    # the ORM emits INSERT ... RETURNING, and PostgreSQL applies the table's SELECT policy to the
+    # returned row in addition to the INSERT policy. Binding afterwards therefore fails the
+    # RETURNING clause even though the insert itself would satisfy tenants_registration_insert.
+    # With the id bound, both the registration-insert policy and the own-select policy are met.
     await db.execute(
         text("SELECT set_config('gds.tenant_id', :tid, false)"), {"tid": str(tenant.id)}
     )
+    db.add(tenant)
+    await db.flush()
 
     # Create platform_owner role for this tenant
     role = Role(
@@ -175,6 +179,12 @@ async def login(
     )
     await db.commit()
 
+    # R2.1: tenants is FORCE-RLS protected and the commit above returned this session's
+    # connection to the pool (NullPool discards it), so any tenant context set earlier is gone.
+    # Re-bind before the read, or this lookup returns nothing and the response 500s.
+    await db.execute(
+        text("SELECT set_config('gds.tenant_id', :tid, false)"), {"tid": str(user.tenant_id)}
+    )
     tenant = await db.get(Tenant, user.tenant_id)
     if tenant is None:
         # The tenant_id FK constraint should make this unreachable; fail loudly rather
@@ -251,6 +261,10 @@ async def logout(
 async def me(
     current_user: CurrentUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)
 ) -> MeResponse:
+    await db.execute(
+        text("SELECT set_config('gds.tenant_id', :tid, false)"),
+        {"tid": str(current_user.tenant_id)},
+    )
     tenant = await db.get(Tenant, current_user.tenant_id)
     if tenant is None:
         raise HTTPException(
