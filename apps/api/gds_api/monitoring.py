@@ -40,6 +40,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 
 from gds_api.db import get_db
 from gds_api.models import Base
+from gds_api.tenant_binding import bind_tenant
 from gds_api.security import CurrentUser, require_permission
 
 
@@ -143,7 +144,9 @@ class ScanScheduleCreate(BaseModel):
 
 
 class ScanScheduleOut(BaseModel):
-    id: str
+    # These were declared str while the ORM returns UUID/datetime, so every response failed
+    # validation (a schedule could be created but never read back).
+    id: uuid.UUID
     name: str
     monitor_type: str
     target_config: dict[str, Any]
@@ -151,22 +154,23 @@ class ScanScheduleOut(BaseModel):
     auto_triage: bool
     auto_escalate: bool
     status: str
-    last_run_at: str | None
-    next_run_at: str | None
+    last_run_at: datetime | None
+    next_run_at: datetime | None
     last_run_findings: int
     total_runs: int
     total_findings: int
     last_error: str | None
+    created_at: datetime
 
     model_config = {"from_attributes": True}
 
 
 class MonitoringResultOut(BaseModel):
-    id: str
-    schedule_id: str
+    id: uuid.UUID
+    schedule_id: uuid.UUID
     monitor_type: str
-    started_at: str
-    completed_at: str | None
+    started_at: datetime
+    completed_at: datetime | None
     duration_seconds: float | None
     findings_created: int
     findings_triaged: int
@@ -184,6 +188,10 @@ async def list_schedules(
     current_user: CurrentUser = Depends(require_permission("monitoring:read")),
     db: AsyncSession = Depends(get_db),
 ) -> list[ScanSchedule]:
+    # scan_schedules/monitoring_results are FORCE RLS. Without an explicit bind this session
+    # reads zero rows and reports an empty schedule list instead of failing loudly.
+    await bind_tenant(db, current_user.tenant_id)
+
     result = await db.execute(
         select(ScanSchedule)
         .where(ScanSchedule.tenant_id == current_user.tenant_id)
@@ -198,6 +206,10 @@ async def create_schedule(
     current_user: CurrentUser = Depends(require_permission("monitoring:write")),
     db: AsyncSession = Depends(get_db),
 ) -> ScanSchedule:
+    # scan_schedules/monitoring_results are FORCE RLS. Without an explicit bind this session
+    # reads zero rows and reports an empty schedule list instead of failing loudly.
+    await bind_tenant(db, current_user.tenant_id)
+
     if req.monitor_type not in [m.value for m in MonitorType]:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Unknown monitor type: {req.monitor_type}")
     if req.interval_minutes < 5:
@@ -214,8 +226,9 @@ async def create_schedule(
         next_run_at=datetime.now(UTC),
     )
     db.add(schedule)
-    await db.commit()
+    await db.flush()
     await db.refresh(schedule)
+    await db.commit()
     return schedule
 
 
@@ -226,6 +239,10 @@ async def update_schedule(
     current_user: CurrentUser = Depends(require_permission("monitoring:write")),
     db: AsyncSession = Depends(get_db),
 ) -> ScanSchedule:
+    # scan_schedules/monitoring_results are FORCE RLS. Without an explicit bind this session
+    # reads zero rows and reports an empty schedule list instead of failing loudly.
+    await bind_tenant(db, current_user.tenant_id)
+
     schedule = await db.get(ScanSchedule, schedule_id)
     if schedule is None or schedule.tenant_id != current_user.tenant_id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Schedule not found")
@@ -234,8 +251,9 @@ async def update_schedule(
         if hasattr(schedule, key) and key not in ("id", "tenant_id", "created_at"):
             setattr(schedule, key, value)
 
-    await db.commit()
+    await db.flush()
     await db.refresh(schedule)
+    await db.commit()
     return schedule
 
 
@@ -245,6 +263,10 @@ async def delete_schedule(
     current_user: CurrentUser = Depends(require_permission("monitoring:write")),
     db: AsyncSession = Depends(get_db),
 ) -> None:
+    # scan_schedules/monitoring_results are FORCE RLS. Without an explicit bind this session
+    # reads zero rows and reports an empty schedule list instead of failing loudly.
+    await bind_tenant(db, current_user.tenant_id)
+
     schedule = await db.get(ScanSchedule, schedule_id)
     if schedule is None or schedule.tenant_id != current_user.tenant_id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Schedule not found")
@@ -259,6 +281,10 @@ async def list_results(
     current_user: CurrentUser = Depends(require_permission("monitoring:read")),
     db: AsyncSession = Depends(get_db),
 ) -> list[MonitoringResult]:
+    # scan_schedules/monitoring_results are FORCE RLS. Without an explicit bind this session
+    # reads zero rows and reports an empty schedule list instead of failing loudly.
+    await bind_tenant(db, current_user.tenant_id)
+
     query = select(MonitoringResult).where(MonitoringResult.tenant_id == current_user.tenant_id)
     if schedule_id:
         query = query.where(MonitoringResult.schedule_id == schedule_id)
@@ -273,6 +299,10 @@ async def get_result(
     current_user: CurrentUser = Depends(require_permission("monitoring:read")),
     db: AsyncSession = Depends(get_db),
 ) -> MonitoringResult:
+    # scan_schedules/monitoring_results are FORCE RLS. Without an explicit bind this session
+    # reads zero rows and reports an empty schedule list instead of failing loudly.
+    await bind_tenant(db, current_user.tenant_id)
+
     result = await db.get(MonitoringResult, result_id)
     if result is None or result.tenant_id != current_user.tenant_id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Result not found")
@@ -285,6 +315,10 @@ async def trigger_manual_run(
     current_user: CurrentUser = Depends(require_permission("monitoring:write")),
     db: AsyncSession = Depends(get_db),
 ) -> MonitoringResult:
+    # scan_schedules/monitoring_results are FORCE RLS. Without an explicit bind this session
+    # reads zero rows and reports an empty schedule list instead of failing loudly.
+    await bind_tenant(db, current_user.tenant_id)
+
     """Manually trigger a monitoring run outside its schedule."""
     schedule = await db.get(ScanSchedule, schedule_id)
     if schedule is None or schedule.tenant_id != current_user.tenant_id:

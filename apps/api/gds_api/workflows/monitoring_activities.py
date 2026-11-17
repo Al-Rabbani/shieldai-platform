@@ -17,11 +17,14 @@ Each function:
 
 from __future__ import annotations
 
+import json
+
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from sqlalchemy import select
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from gds_api.db import async_session_factory
@@ -165,11 +168,12 @@ async def run_monitoring_cycle(
                 result.duration_seconds = (result.completed_at - result.started_at).total_seconds()
 
                 # Update schedule stats
+                # Hand-rolled hour/minute arithmetic raised ValueError whenever the interval
+                # carried past 23:00 (or past minute 59), which aborted the whole cycle AFTER
+                # real findings had been collected, so a successful scan was recorded as an
+                # error and its rows rolled back.
                 schedule.last_run_at = datetime.now(UTC)
-                schedule.next_run_at = datetime.now(UTC).replace(
-                    minute=schedule.last_run_at.minute + schedule.interval_minutes % 60,
-                    hour=schedule.last_run_at.hour + schedule.interval_minutes // 60,
-                )
+                schedule.next_run_at = schedule.last_run_at + timedelta(minutes=schedule.interval_minutes)
                 schedule.total_runs += 1
                 schedule.total_findings += findings_created
                 schedule.last_run_findings = findings_created
@@ -471,29 +475,64 @@ async def _run_malware_check(
 async def _run_dependency_scan(
     db: AsyncSession, *, tenant_id: uuid.UUID, config: dict[str, Any]
 ) -> tuple[int, int]:
-    """Run SCA on own codebase dependencies via OSV.dev."""
-    from gds_api.tool_gateway import _scan_own_dependencies
+    """Run SCA on own codebase dependencies via OSV.dev.
 
-    ecosystem = config.get("ecosystem", "pypi")
-    result = await _scan_own_dependencies(ecosystem=ecosystem)
+    Two defects fixed here. It called the gateway handler with ecosystem=, which the handler
+    (params: dict) does not accept, so every run raised TypeError and the schedule recorded an
+    error. And it wrote into `findings`, which nothing in the product reads, while the finding
+    store the platform actually serves is `security_findings`, so a clean scan and a failed one
+    looked identical. Rows are now written where they are read, deduplicated on the advisory id
+    plus package, and the tenant is bound first because both tables are FORCE RLS.
+    """
+    from gds_api.platform_data import dependency_advisories
+    from gds_api.tenant_binding import bind_tenant
+
+    await bind_tenant(db, tenant_id)
+    result = await dependency_advisories(
+        requirements_path=config.get("requirements_path", "/opt/gds-os/apps/api/requirements.txt")
+    )
+    if not result.get("success"):
+        raise RuntimeError(f"dependency scan unavailable: {result.get('code')}: {result.get('error')}")
 
     findings_created = 0
     critical_count = 0
-    for vuln in result.get("vulnerabilities", []):
-        severity = vuln.get("severity", "medium")
-        finding = Finding(
-            tenant_id=tenant_id,
-            source="dependency_scan",
-            external_id=vuln.get("id", ""),
-            title=f"Dependency vulnerability: {vuln.get('package', 'Unknown')}",
-            description=vuln.get("summary", ""),
-            severity=severity,
-            status=FindingStatus.OBSERVED.value,
-            raw_data=vuln,
+    for adv in result.get("advisories", []):
+        external_id = f"{adv['id']}:{adv['package']}"
+        existing = await db.execute(
+            text(
+                "SELECT 1 FROM security_findings WHERE tenant_id = :t AND external_id = :e "
+                "AND status NOT IN ('resolved', 'false_positive') LIMIT 1"
+            ),
+            {"t": str(tenant_id), "e": external_id},
         )
-        db.add(finding)
+        if existing.first():
+            continue
+        await db.execute(
+            text(
+                "INSERT INTO security_findings (tenant_id, scanner, title, severity, target, details, "
+                "remediation, status, detected_at, source, external_id, cve, cvss, raw_data) VALUES "
+                "(:tenant_id, 'osv', :title, :severity, :target, CAST(:details AS jsonb), :remediation, "
+                "'open', now(), 'dependency_scan', :external_id, :cve, :cvss, CAST(:raw AS jsonb))"
+            ),
+            {
+                "tenant_id": str(tenant_id),
+                "title": f"{adv['package']} {adv['installed_version']}: {adv.get('summary') or adv['id']}"[:400],
+                "severity": adv["severity"],
+                "target": f"{adv['package']}=={adv['installed_version']}",
+                "details": json.dumps(adv),
+                "remediation": (
+                    f"Upgrade {adv['package']} from {adv['installed_version']} to {adv['fixed_version']}"
+                    if adv.get("fixed_version")
+                    else f"No fixed version published for {adv['package']}; assess compensating controls"
+                ),
+                "external_id": external_id,
+                "cve": adv.get("cve"),
+                "cvss": adv.get("cvss"),
+                "raw": json.dumps(adv),
+            },
+        )
         findings_created += 1
-        if severity == "critical":
+        if adv["severity"] == "critical":
             critical_count += 1
 
     await db.commit()

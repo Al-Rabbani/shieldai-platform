@@ -616,6 +616,119 @@ async def scan_dependencies(*, requirements_path: str = "/opt/gds-os/apps/api/re
     }
 
 
+_osv_detail_cache: dict[str, dict[str, Any]] = {}
+
+
+async def _osv_detail(client: httpx.AsyncClient, vuln_id: str) -> dict[str, Any]:
+    """Fetch one OSV record. The batch endpoint returns ids only, no severity or fix version."""
+    if vuln_id in _osv_detail_cache:
+        return _osv_detail_cache[vuln_id]
+    try:
+        resp = await client.get(f"https://api.osv.dev/v1/vulns/{vuln_id}")
+    except Exception:  # noqa: BLE001 - a missing detail must not fabricate a clean result
+        return {}
+    if resp.status_code != 200:
+        return {}
+    data = resp.json()
+    _osv_detail_cache[vuln_id] = data
+    return data
+
+
+def _osv_severity(record: dict[str, Any]) -> tuple[str, float | None]:
+    """OSV carries severity either as a label or a CVSS vector. Return (label, score).
+
+    Labels are used verbatim when present. When only a vector exists the score is left None
+    rather than guessed: a made-up CVSS number is worse than an honest blank.
+    """
+    label = str((record.get("database_specific") or {}).get("severity") or "").lower()
+    score: float | None = None
+    for entry in record.get("severity") or []:
+        raw = entry.get("score") or ""
+        if raw.startswith("CVSS:"):
+            break
+        try:
+            score = float(raw)
+        except (TypeError, ValueError):
+            pass
+    if label in {"critical", "high", "medium", "moderate", "low"}:
+        return ("medium" if label == "moderate" else label), score
+    if score is not None:
+        if score >= 9.0:
+            return "critical", score
+        if score >= 7.0:
+            return "high", score
+        if score >= 4.0:
+            return "medium", score
+        return "low", score
+    return "unknown", None
+
+
+def _osv_fixed_version(record: dict[str, Any]) -> str | None:
+    for affected in record.get("affected") or []:
+        for rng in affected.get("ranges") or []:
+            for event in rng.get("events") or []:
+                if event.get("fixed"):
+                    return str(event["fixed"])
+    return None
+
+
+def _osv_cve(record: dict[str, Any]) -> str | None:
+    for alias in record.get("aliases") or []:
+        if str(alias).startswith("CVE-"):
+            return str(alias)
+    return record.get("id") if str(record.get("id", "")).startswith("CVE-") else None
+
+
+async def dependency_advisories(
+    *, requirements_path: str = "/opt/gds-os/apps/api/requirements.txt", max_advisories: int = 60
+) -> dict[str, Any]:
+    """Structured OSV advisories for the pinned requirements, with severity and fix version.
+
+    scan_dependencies() only counts ids. This resolves each record so a monitoring run can store
+    a finding a human can act on, and so a re-test or a fix has something real to work from.
+    """
+    scan = await scan_dependencies(requirements_path=requirements_path)
+    if not scan.get("success"):
+        return scan
+    advisories: list[dict[str, Any]] = []
+    async with httpx.AsyncClient(timeout=45) as client:
+        for pkg in scan.get("vulnerable", []):
+            for vuln_id in pkg.get("advisory_ids", []):
+                if len(advisories) >= max_advisories:
+                    break
+                record = await _osv_detail(client, vuln_id)
+                if not record:
+                    continue
+                severity, score = _osv_severity(record)
+                advisories.append(
+                    {
+                        "id": record.get("id", vuln_id),
+                        "cve": _osv_cve(record),
+                        "package": pkg["package"],
+                        "installed_version": pkg["version"],
+                        "fixed_version": _osv_fixed_version(record),
+                        "severity": severity,
+                        "cvss": score,
+                        "summary": record.get("summary") or record.get("details", "")[:300],
+                        "published": record.get("published"),
+                        "aliases": record.get("aliases") or [],
+                    }
+                )
+    by_severity: dict[str, int] = {}
+    for adv in advisories:
+        by_severity[adv["severity"]] = by_severity.get(adv["severity"], 0) + 1
+    return {
+        "success": True,
+        "tool": "dependency_advisories",
+        "source": f"OSV.dev (batch + per-record detail) over {requirements_path}",
+        "packages_scanned": scan.get("packages_scanned"),
+        "advisories_resolved": len(advisories),
+        "advisories_reported_by_scan": scan.get("advisories_total"),
+        "by_severity": by_severity,
+        "advisories": advisories,
+    }
+
+
 async def threat_indicator(*, indicator: str, indicator_type: str = "unknown") -> dict[str, Any]:
     """No local indicator feed exists; refuse rather than return a false 'no match'."""
     if not indicator:
