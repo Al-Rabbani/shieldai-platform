@@ -672,6 +672,14 @@ def list_tools() -> list[str]:
     return list(TOOL_REGISTRY.keys())
 
 
+# ---- Repository capabilities -----------------------------------------------------
+# The ten names capabilities/catalog.py declares as repository.* and that
+# repository_api._REPOSITORY_CAPABILITY_TOOLS maps to. They were declared but unregistered,
+# so the broker's lookup raised KeyError and the endpoints returned 500.
+from gds_api.repository.tools import REPOSITORY_TOOL_HANDLERS  # noqa: E402
+
+TOOL_REGISTRY.update(REPOSITORY_TOOL_HANDLERS)
+
 # ---- Real tool specs (risk_class + description) ---------------------------------
 # gds_api.workflows' decide prompt and _resolve_task_risk_class() read
 # spec.risk_class / spec.description off every TOOL_REGISTRY function. Those fields
