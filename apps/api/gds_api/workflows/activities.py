@@ -339,9 +339,10 @@ async def _bind_if_given(db: AsyncSession, tenant_id: str | None) -> None:
 async def assess_mission(
     mission_id: str, tenant_id: str | None = None
 ) -> dict[str, str]:
+    mission_uuid = _activity_record_uuid(mission_id, "mission")
     async with async_session_factory() as db:
         await _bind_if_given(db, tenant_id)
-        mission = await db.get(Mission, _activity_record_uuid(mission_id, "mission"))
+        mission = await db.get(Mission, mission_uuid)
         if mission is not None:
             await bind_tenant(db, mission.tenant_id)
         if mission is None:
@@ -381,9 +382,10 @@ async def decide_next_step(payload: dict[str, Any]) -> dict[str, Any]:
     mission_id = payload.get("mission_id")
     tenant_id = payload.get("tenant_id")
 
+    mission_uuid = _activity_record_uuid(mission_id, "mission")
     async with async_session_factory() as db:
         await _bind_if_given(db, tenant_id)
-        mission = await db.get(Mission, _activity_record_uuid(mission_id, "mission"))
+        mission = await db.get(Mission, mission_uuid)
         if mission is not None:
             await bind_tenant(db, mission.tenant_id)
         if mission is None:
@@ -469,9 +471,10 @@ async def decide_next_step(payload: dict[str, Any]) -> dict[str, Any]:
 
 @activity.defn
 async def evaluate_task(task_id: str, tenant_id: str | None = None) -> dict[str, Any]:
+    task_uuid = _activity_record_uuid(task_id, "task")
     async with async_session_factory() as db:
         await _bind_if_given(db, tenant_id)
-        task = await db.get(MissionTask, _activity_record_uuid(task_id, "task"))
+        task = await db.get(MissionTask, task_uuid)
         if task is None:
             raise ValueError(f"Task {task_id} not found")
         mission = await db.get(Mission, task.mission_id)
@@ -563,9 +566,10 @@ async def evaluate_task(task_id: str, tenant_id: str | None = None) -> dict[str,
 
 @activity.defn
 async def check_approval(approval_id: str, tenant_id: str | None = None) -> str:
+    approval_uuid = _activity_record_uuid(approval_id, "approval")
     async with async_session_factory() as db:
         await _bind_if_given(db, tenant_id)
-        approval = await db.get(Approval, _activity_record_uuid(approval_id, "approval"))
+        approval = await db.get(Approval, approval_uuid)
         if approval is None:
             raise ValueError(f"Approval {approval_id} not found")
         return approval.status
@@ -573,9 +577,10 @@ async def check_approval(approval_id: str, tenant_id: str | None = None) -> str:
 
 @activity.defn
 async def execute_task(task_id: str, tenant_id: str | None = None) -> dict[str, Any]:
+    task_uuid = _activity_record_uuid(task_id, "task")
     async with async_session_factory() as db:
         await _bind_if_given(db, tenant_id)
-        task = await db.get(MissionTask, _activity_record_uuid(task_id, "task"))
+        task = await db.get(MissionTask, task_uuid)
         if task is None:
             raise ValueError(f"Task {task_id} not found")
         mission = await db.get(Mission, task.mission_id)
@@ -746,9 +751,10 @@ async def execute_task(task_id: str, tenant_id: str | None = None) -> dict[str, 
 
 @activity.defn
 async def deny_task(task_id: str, tenant_id: str | None = None) -> None:
+    task_uuid = _activity_record_uuid(task_id, "task")
     async with async_session_factory() as db:
         await _bind_if_given(db, tenant_id)
-        task = await db.get(MissionTask, _activity_record_uuid(task_id, "task"))
+        task = await db.get(MissionTask, task_uuid)
         if task is None:
             raise ValueError(f"Task {task_id} not found")
         task.status = "denied"
@@ -771,9 +777,10 @@ async def mark_mission_failed(payload: dict[str, Any]) -> None:
     tenant_id = payload.get("tenant_id")
     error_message_safe = str(payload.get("error_message_safe", ""))[:500]
 
+    mission_uuid = _activity_record_uuid(mission_id, "mission")
     async with async_session_factory() as db:
         await _bind_if_given(db, tenant_id)
-        mission = await db.get(Mission, _activity_record_uuid(mission_id, "mission"))
+        mission = await db.get(Mission, mission_uuid)
         if mission is not None:
             await bind_tenant(db, mission.tenant_id)
         if mission is None:
@@ -859,9 +866,10 @@ async def synthesize_report(payload: dict[str, Any]) -> None:
     tenant_id = payload.get("tenant_id")
     hit_iteration_limit = bool(payload.get("hit_iteration_limit", False))
 
+    mission_uuid = _activity_record_uuid(mission_id, "mission")
     async with async_session_factory() as db:
         await _bind_if_given(db, tenant_id)
-        mission = await db.get(Mission, _activity_record_uuid(mission_id, "mission"))
+        mission = await db.get(Mission, mission_uuid)
         if mission is not None:
             await bind_tenant(db, mission.tenant_id)
         if mission is None:

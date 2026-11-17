@@ -38,6 +38,11 @@ def load(relative, names, extra):
     return namespace
 
 
+async def _noop_bind_tenant(session, tenant_id):
+    """Stand-in for the real binder: these tests never open a session."""
+    return str(tenant_id)
+
+
 class ActivityIdentifierTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         self.opens = 0
@@ -45,8 +50,10 @@ class ActivityIdentifierTests(unittest.IsolatedAsyncioTestCase):
             self.opens += 1
             raise AssertionError('Database session must not open for invalid input')
         self.ns = load('gds_api/workflows/activities.py',
-                       ['_activity_record_uuid', *ACTIVITIES],
-                       {'async_session_factory': forbidden_db})
+                       ['_activity_record_uuid', '_bind_if_given', *ACTIVITIES],
+                       {'async_session_factory': forbidden_db,
+                        'bind_tenant': _noop_bind_tenant,
+                        'AsyncSession': object})
 
     async def test_every_record_activity_rejects_legacy_id_before_database(self):
         for name, kind in ACTIVITIES.items():
@@ -136,7 +143,15 @@ class WorkflowStartIdentifierTests(unittest.IsolatedAsyncioTestCase):
         for kind, prefix in (('direct', 'mission'), ('chat', 'conversation-turn')):
             row = await self.ns['start_mission_workflow'](self.db, mission, kind=kind)
             args, kwargs = self.started[-1]
-            self.assertEqual(args[1], str(identity))
+            # The handler travels positionally; the database id travels in the SDK's args=[...].
+
+            # Both are valid Temporal call shapes; this codebase uses args=[...], so the
+
+            # identity is asserted where it actually travels.
+
+            self.assertEqual(args[0], 'direct-handler' if kind == 'direct' else 'chat-handler')
+
+            self.assertEqual(kwargs['args'][0], str(identity))
             self.assertEqual(kwargs['id'], f'{prefix}-{identity}')
             self.assertEqual(row.mission_id, identity)
             self.assertEqual(row.tenant_id, mission.tenant_id)
