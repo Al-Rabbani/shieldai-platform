@@ -56,6 +56,55 @@ def resolve_capability_for_tool(tool_name: str) -> str | None:
     return matches[0] if len(matches) == 1 else None
 
 
+# The reasoning fleet and the governed agent registry are the same 23 roles under two names: the prompt
+# agents (/reasoning/agents) present them to the model, while the broker authorises against
+# gds_api.agents.registry, whose entries carry the team the capability catalogue checks. Without this
+# pairing the broker saw an unknown name and refused ("The requesting agent could not be resolved"), and
+# with no name at all it refused a team-scoped capability ("This capability requires a specific agent").
+# The pairing is declared here, per role, and never inferred at call time.
+REASONING_AGENT_REGISTERED_MAP: dict[str, str] = {
+    "ai-chief-ciso": "executive_advisor",
+    "ai-soc-director": "blue_team",
+    "ai-triage-agent": "blue_team",
+    "ai-incident-commander": "incident_response",
+    "ai-vuln-director": "vulnerability_management",
+    "ai-threat-hunter": "threat_hunting",
+    "ai-threat-intel-director": "threat_intelligence",
+    "ai-dark-web-monitor": "threat_intelligence",
+    "ai-cloud-director": "security_architecture",
+    "ai-zero-trust-architect": "security_architecture",
+    "ai-ciem-director": "identity_access_management",
+    "ai-identity-director": "identity_access_management",
+    "ai-compliance-director": "compliance_grc",
+    "ai-risk-director": "risk_business_intelligence",
+    "ai-predictive-risk": "risk_business_intelligence",
+    "ai-report-agent": "risk_business_intelligence",
+    "ai-remediation-director": "defensive_remediation_autofix",
+    "ai-autofix-agent": "defensive_remediation_autofix",
+    "ai-devsecops-director": "devsecops",
+    "ai-supply-chain-agent": "devsecops",
+    "ai-security-llm": "api_application_security",
+    "ai-recon-agent": "red_team",
+    "ai-redteam-director": "penetration_testing_coordinator",
+}
+
+
+def resolve_requesting_agent(agent_id: str | None) -> str | None:
+    """The registered agent that acts for this reasoning agent, or None if it has no registered role.
+
+    None is returned rather than a guess: an unregistered identity must not borrow another role's
+    authority, and the caller reports it as AGENT_NOT_REGISTERED.
+    """
+    from gds_api.agents.registry import AGENT_REGISTRY
+
+    if not agent_id:
+        return None
+    if agent_id in AGENT_REGISTRY:
+        return agent_id
+    key = REASONING_AGENT_REGISTERED_MAP.get(agent_id)
+    return key if key in AGENT_REGISTRY else None
+
+
 async def execute_governed_tool(
     *,
     tenant_id: Any,
@@ -88,6 +137,19 @@ async def execute_governed_tool(
             "execution_mode": "not_executed",
         }
 
+    requesting_agent_id = resolve_requesting_agent(agent_id)
+    if requesting_agent_id is None:
+        return {
+            "success": False,
+            "error": (
+                f"Reasoning agent '{agent_id}' has no registered agent role, so it cannot be "
+                "authorised to request a capability"
+            ),
+            "code": "AGENT_NOT_REGISTERED",
+            "tool": tool_name,
+            "execution_mode": "not_executed",
+        }
+
     capability_key = resolve_capability_for_tool(tool_name)
     if capability_key is None:
         return {
@@ -109,12 +171,7 @@ async def execute_governed_tool(
             tenant_id=tid,
             user_id=uid,
             mission_id=mid,
-            # The reasoning fleet (ai-vuln-director and the other 22) lives in the prompt registry, not
-            # in the agents table, so passing its name made the broker refuse with "The requesting agent
-            # could not be resolved" (DENY). The human who called /reasoning/mission is the real actor
-            # here, and the agent that acted is recorded in the purpose and the mission objective, so
-            # attribution survives without pretending an unregistered agent exists.
-            requesting_agent_id=None,
+            requesting_agent_id=requesting_agent_id,
             supervising_agent_id=None,
             capability_key=capability_key,
             requested_tool_id=tool_name,

@@ -59,3 +59,34 @@ def test_parameter_translation_table_still_covers_the_header_tools():
     """A tool whose params are renamed must stay renamed, or the real handler gets the wrong field."""
     assert PARAM_MAP["check_url_security_headers"]["target"] == "url"
     assert PARAM_MAP["subfinder_scan"]["target"] == "domain"
+
+
+def test_every_reasoning_agent_has_a_declared_registered_role():
+    """The broker authorises against gds_api.agents.registry, so each prompt agent needs a real role."""
+    from gds_api.agents.registry import AGENT_REGISTRY as REGISTERED
+    from gds_api.reasoning.governed_tools import REASONING_AGENT_REGISTERED_MAP as MAP
+    from gds_api.reasoning.prompts import AGENT_REGISTRY as PROMPT_AGENTS
+
+    assert set(PROMPT_AGENTS) == set(MAP), sorted(set(PROMPT_AGENTS) ^ set(MAP))
+    missing = sorted({key for key in MAP.values()} - set(REGISTERED))
+    assert missing == [], f"mapping points at unregistered agents: {missing}"
+
+
+def test_mapped_role_can_actually_be_authorised_for_findings():
+    """A pairing that resolves but is not on the capability's team would still be denied at runtime."""
+    from gds_api.agents.registry import AGENT_REGISTRY as REGISTERED
+    from gds_api.capabilities.catalog import CAPABILITY_REGISTRY
+    from gds_api.reasoning.governed_tools import resolve_requesting_agent
+
+    capability = CAPABILITY_REGISTRY["finding.list_open"]
+    role = resolve_requesting_agent("ai-vuln-director")
+    assert role == "vulnerability_management"
+    agent = REGISTERED[role]
+    assert agent.name in capability.allowed_agent_ids or agent.team in capability.allowed_team_types
+
+
+def test_unregistered_identity_is_refused_rather_than_borrowing_authority():
+    from gds_api.reasoning.governed_tools import resolve_requesting_agent
+
+    assert resolve_requesting_agent("ai-not-a-real-agent") is None
+    assert resolve_requesting_agent(None) is None

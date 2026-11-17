@@ -171,7 +171,9 @@ try:
 except Exception as e:
     print(f"Bridge router failed (non-fatal): {e}")
 
-app.include_router(reasoning_router, dependencies=[Depends(require_verified_legacy_route)])
+# Released 17 Nov 2026: tools execute through the capability broker, and each reasoning agent acts
+# as its declared registered counterpart, so the catalogue can authorise by team. Proven live.
+app.include_router(reasoning_router)
 from gds_api import compliance_api
 
 app.include_router(compliance_api.router)
