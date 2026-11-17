@@ -18,6 +18,7 @@ except ImportError:
 
 # Import tool gateway functions directly (this is what the module actually exports)
 from gds_api.tool_gateway import execute_tool, list_tools, TOOL_REGISTRY
+from gds_api.reasoning.governed_tools import execute_governed_tool
 from gds_api.reasoning.prompts import get_agent_prompt, AGENT_REGISTRY
 from gds_api.reasoning.tool_definitions import get_tool_definitions, get_tool_names
 from gds_api.reasoning.kernel_agent_loop import run_kernel_agent
@@ -49,6 +50,10 @@ class AgentResult:
 
 # Tool name mapping: OpenAI function name → TOOL_REGISTRY key
 TOOL_NAME_MAP = {
+    # Declared agent tool name -> real registry tool. Measured 17 Nov 2026: get_findings is the name 19
+    # agents are given for reading findings, and no registry key carries it, so every reasoning mission
+    # that tried to read a finding failed as CAPABILITY_NOT_MAPPED instead of reading real rows.
+    "get_findings": "list_open_findings",
     "security_headers_check": "check_url_security_headers",
     "cisa_kev_check": "check_cisa_kev",
     "osv_check": "search_osv",
@@ -84,9 +89,15 @@ class AgenticLoop:
     MAX_ITERATIONS = 10
     MODEL = "gpt-4.1"
     
-    def __init__(self, agent_id: str, model: str = None):
+    def __init__(self, agent_id: str, model: str = None, *, tenant_id=None, user_id=None,
+                 mission_id=None):
         self.agent_id = agent_id
         self.model = model or self.MODEL
+        # Governed execution context, carried explicitly. The loop cannot invent a tenant, a user or a
+        # mission, and without all three the broker refuses the call - which is the correct outcome.
+        self.tenant_id = tenant_id
+        self.user_id = user_id
+        self.mission_id = mission_id
         self.client = AsyncOpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
         self.tool_registry = TOOL_REGISTRY
         self.execute_tool_fn = execute_tool
@@ -242,9 +253,34 @@ analyze them and decide the next step. When done, provide a summary.
         )
     
     async def _execute_tool(self, tool_name: str, args: dict) -> dict:
-        """Legacy loop cannot manufacture an authenticated broker execution context."""
-        return {"success": False, "error": "Use the governed workflow executor",
-                "code": "GOVERNED_CAPABILITY_REQUIRED", "execution_mode": "not_executed"}
+        """Execute through the capability broker, exactly as the mission engine does.
+
+        Replaced a blanket refusal ("Use the governed workflow executor") that made every reasoning
+        mission unable to read a single finding. The broker still decides; this supplies the
+        authenticated context, not a bypass.
+        """
+        # store_finding has its own verified service-scope writer (fail closed without a configured
+        # scope) rather than a capability-registry tool, so it is dispatched here instead of the broker.
+        if tool_name == "store_finding":
+            return await self._store_finding(args)
+
+        # The model speaks the agent-facing names from tool_definitions while the registry speaks its
+        # own keys, so both the name and its parameters are translated before governance sees them.
+        # Measured: without this the broker was asked for "get_findings" and refused it as unmapped
+        # while the real tool list_open_findings sat there unused.
+        resolved_name = TOOL_NAME_MAP.get(tool_name, tool_name)
+        rename = PARAM_MAP.get(resolved_name) or {}
+        resolved_args = {rename.get(k, k): v for k, v in (args or {}).items()}
+
+        return await execute_governed_tool(
+            tenant_id=self.tenant_id,
+            user_id=self.user_id,
+            mission_id=self.mission_id,
+            agent_id=self.agent_id,
+            tool_name=resolved_name,
+            args=resolved_args,
+            purpose=f"reasoning agent {self.agent_id} called {tool_name}",
+        )
 
     async def _store_finding(self, args: dict) -> dict:
         """Store a security finding through the verified service scope (Phase C).

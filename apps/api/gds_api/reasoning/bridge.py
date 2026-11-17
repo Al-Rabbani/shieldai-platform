@@ -12,6 +12,7 @@ logger = logging.getLogger("gds.reasoning.bridge")
 sys.path.insert(0, "/opt/gds-os/apps/api")
 
 from gds_api.reasoning.agent_loop import AgenticLoop, AgentResult
+from gds_api.reasoning.governed_tools import open_reasoning_mission, set_mission_outcome
 from gds_api.reasoning.prompts import AGENT_REGISTRY, list_agents
 
 
@@ -30,7 +31,7 @@ class ReasoningBridge:
         self.mission_tenants = {}
     
     async def execute_task(self, agent_id: str, goal: str, context: dict = None,
-                          tenant_id: str = None) -> AgentResult:
+                          tenant_id: str = None, user_id: str = None) -> AgentResult:
         """Execute a task using the LLM reasoning loop.
         
         Args:
@@ -43,11 +44,26 @@ class ReasoningBridge:
         """
         logger.info(f"Bridge executing task: agent={agent_id}, goal={goal[:100]}")
         
-        # Create the agentic loop for this agent
-        loop = AgenticLoop(agent_id=agent_id)
+        # A governed tool call needs a real mission row (capability_requests.mission_id is an FK), so
+        # the mission is created before the loop runs and closed whatever happens next.
+        mission_uuid = None
+        if tenant_id and user_id:
+            mission_uuid = await open_reasoning_mission(
+                tenant_id=tenant_id, user_id=user_id, goal=goal, agent_id=agent_id)
+
+        loop = AgenticLoop(agent_id=agent_id, tenant_id=tenant_id, user_id=user_id,
+                           mission_id=mission_uuid)
         
-        # Run the reasoning loop
-        result = await loop.run(goal, context)
+        try:
+            result = await loop.run(goal, context)
+        except Exception as exc:
+            if mission_uuid:
+                await set_mission_outcome(mission_id=mission_uuid, tenant_id=tenant_id,
+                                          success=False, summary=f"{type(exc).__name__}: {exc}")
+            raise
+        if mission_uuid:
+            await set_mission_outcome(mission_id=mission_uuid, tenant_id=tenant_id,
+                                      success=result.success, summary=result.summary or "")
         
         # Store result
         mission_id = f"mission_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}_{agent_id}"
@@ -112,10 +128,10 @@ class ReasoningBridge:
         return agent_id
     
     async def run_with_auto_select(self, goal: str, context: dict = None,
-                                   tenant_id: str = None) -> AgentResult:
+                                   tenant_id: str = None, user_id: str = None) -> AgentResult:
         """Auto-select the best agent and execute the goal."""
         agent_id = await self.auto_select_agent(goal)
-        return await self.execute_task(agent_id, goal, context, tenant_id=tenant_id)
+        return await self.execute_task(agent_id, goal, context, tenant_id=tenant_id, user_id=user_id)
     
     def get_mission_status(self, mission_id: str, tenant_id: str = None) -> dict:
         """Get status of a mission owned by tenant_id.

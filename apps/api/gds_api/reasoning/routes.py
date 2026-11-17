@@ -40,6 +40,14 @@ class MissionRequest(BaseModel):
     context: Optional[dict] = None
 
 
+def _uid(user: CurrentUser) -> str:
+    """The authenticated user id, for the broker's actor record. Never inferred."""
+    uid = getattr(user, "id", None) or getattr(user, "user_id", None)
+    if not uid:
+        raise HTTPException(403, "Token carries no user identity")
+    return str(uid)
+
+
 def _tenant(user: CurrentUser) -> str:
     """Tenant identity from the verified token. Never falls back to a global scope."""
     tid = getattr(user, "tenant_id", None)
@@ -55,10 +63,10 @@ async def create_mission(req: MissionRequest, user: CurrentUser = Depends(get_cu
     try:
         if req.agent_id:
             result = await reasoning_bridge.execute_task(
-                req.agent_id, req.goal, req.context, tenant_id=tid)
+                req.agent_id, req.goal, req.context, tenant_id=tid, user_id=_uid(user))
         else:
             result = await reasoning_bridge.run_with_auto_select(
-                req.goal, req.context, tenant_id=tid)
+                req.goal, req.context, tenant_id=tid, user_id=_uid(user))
 
         return {
             "success": result.success,
@@ -109,7 +117,7 @@ async def get_agents(user: CurrentUser = Depends(get_current_user)):
 async def auto_execute(req: MissionRequest, user: CurrentUser = Depends(get_current_user)):
     """Auto-select the best agent and execute the goal."""
     result = await reasoning_bridge.run_with_auto_select(
-        req.goal, req.context, tenant_id=_tenant(user))
+        req.goal, req.context, tenant_id=_tenant(user), user_id=_uid(user))
     return {
         "success": result.success,
         "selected_agent": result.agent_id,
