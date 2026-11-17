@@ -74,17 +74,24 @@ class BoundaryTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result['code'],'GOVERNED_CAPABILITY_REQUIRED')
 
     async def test_legacy_loop_has_no_direct_scanner_bypass(self):
-        ns=load_nodes('gds_api/reasoning/agent_loop.py',[],{})
-        # Extract the real class method without importing the provider/database stack.
+        """The loop may reach a tool only through the capability broker.
+
+        This guard used to assert that every call returned GOVERNED_CAPABILITY_REQUIRED, which held only
+        while the loop refused to execute anything at all. The refusal has been replaced by governed
+        execution, so the invariant is now: no direct dispatcher, no direct registry call, and the
+        agent-facing names must still be translated before governance sees them.
+        """
         import ast
         from test_runtime_boundaries import ROOT
-        tree=ast.parse((ROOT/'gds_api/reasoning/agent_loop.py').read_text())
-        cls=next(n for n in tree.body if isinstance(n,ast.ClassDef) and n.name=='AgenticLoop')
-        method=next(n for n in cls.body if getattr(n,'name',None)=='_execute_tool')
-        exec(compile(ast.Module(body=[method],type_ignores=[]),'agent_loop','exec'),ns)
-        for tool in ('aws_iam_scan','store_finding','get_findings','nmap_scan'):
-            result=await ns['_execute_tool'](None,tool,{})
-            self.assertEqual(result['code'],'GOVERNED_CAPABILITY_REQUIRED')
+        src = (ROOT/'gds_api/reasoning/agent_loop.py').read_text()
+        tree = ast.parse(src)
+        cls = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name=='AgenticLoop')
+        method = next(n for n in cls.body if getattr(n,'name',None)=='_execute_tool')
+        body = ast.get_source_segment(src, method)
+        self.assertIn('execute_governed_tool(', body)
+        self.assertNotIn('await execute_tool(', body)   # the closed direct dispatcher
+        self.assertNotIn('TOOL_REGISTRY[', body)        # no direct handler invocation
+        self.assertIn('TOOL_NAME_MAP.get(tool_name', body)
 
     async def test_kernel_rpc_cannot_run_raw_tools_or_grant_approval(self):
         class HTTPException(Exception):
