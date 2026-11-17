@@ -688,6 +688,13 @@ from gds_api.scanner_actions import SCANNER_TOOL_HANDLERS  # noqa: E402
 
 TOOL_REGISTRY.update(SCANNER_TOOL_HANDLERS)
 
+# ---- Declared identity capabilities ---------------------------------------------
+# check_credential_leaks and detect_identity_threats are declared in the catalogue and were
+# never registered, so the broker raised KeyError and both returned 500.
+from gds_api.threat_actions import IDENTITY_TOOL_HANDLERS  # noqa: E402
+
+TOOL_REGISTRY.update(IDENTITY_TOOL_HANDLERS)
+
 # ---- Real tool specs (risk_class + description) ---------------------------------
 # gds_api.workflows' decide prompt and _resolve_task_risk_class() read
 # spec.risk_class / spec.description off every TOOL_REGISTRY function. Those fields
