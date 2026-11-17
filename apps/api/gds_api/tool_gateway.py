@@ -542,7 +542,15 @@ async def _purge_mission_memory(params: dict) -> dict:
     )
 
 # === Tool registry ===
+async def _discover_cloud_environment(payload=None, **kwargs):  # noqa: ANN001
+    """Run a real cloud discovery job through the provider adapter."""
+    from gds_api.cloud.discovery_runner import discover_cloud_environment
+
+    return await discover_cloud_environment(payload, **kwargs)
+
+
 TOOL_REGISTRY = {
+    "discover_cloud_environment": _discover_cloud_environment,
     "nmap_scan": _nmap_scan,
     "nuclei_scan": _nuclei_scan,
     "semgrep_scan": _semgrep_scan,
