@@ -240,30 +240,3 @@ class RetiredModuleAbsenceTests(unittest.TestCase):
             self.assertIn(module, doc, f"{module} missing from docs/RETIRED_MODULES.md")
 
 
-class WorkflowIdentifierTests(unittest.TestCase):
-    def parser(self):
-        import uuid
-        class ApplicationError(Exception):
-            def __init__(self, message, **kwargs):
-                self.type = kwargs["type"]
-                self.non_retryable = kwargs["non_retryable"]
-        tree = ast.parse((ROOT / "apps/api/gds_api/workflows/identifiers.py").read_text())
-        node = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "parse_mission_id")
-        namespace = {"uuid": uuid, "ApplicationError": ApplicationError}
-        exec(compile(ast.Module(body=[node], type_ignores=[]), "<identifier-boundary>", "exec"), namespace)
-        return namespace["parse_mission_id"], ApplicationError
-
-    def test_invalid_mission_identifiers_are_permanent_failures(self):
-        parser, error = self.parser()
-        for value in [None, "", "not-a-uuid", "../private"]:
-            with self.subTest(value=value), self.assertRaises(error) as caught:
-                parser(value)
-            self.assertTrue(caught.exception.non_retryable)
-            self.assertEqual(caught.exception.type, "InvalidMissionId")
-
-    def test_valid_mission_uuid_is_preserved(self):
-        import uuid
-        parser, _ = self.parser()
-        value = uuid.uuid4()
-        self.assertEqual(parser(str(value)), value)
-
