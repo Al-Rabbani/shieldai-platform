@@ -390,10 +390,9 @@ async def _prioritise_finding(params: dict) -> dict:
     priority = platform_data.derive_priority(detail["finding"])
     return {"success": True, "tool": "prioritise_finding", "finding_id": params.get("finding_id", ""), **priority}
 async def _check_threat_indicator(params: dict) -> dict:
-    """No local indicator feed exists; refuse instead of a fabricated 'no match'."""
-    return await platform_data.threat_indicator(
-        indicator=params.get("indicator", ""), indicator_type=params.get("type", "unknown")
-    )
+    """Real multi-source indicator lookup. Was a refusal with no feed behind it."""
+    return await tool_actions.threat_indicator(params.get("indicator", ""), params.get("type", "unknown"))
+
 async def _triage_finding(params: dict) -> dict:
     """Triage a real finding. Returns stored fields plus a documented priority rule."""
     detail = await platform_data.finding_detail(params.get("finding_id", ""))
@@ -421,15 +420,13 @@ async def _list_open_findings(params: dict) -> dict:
         target=params.get("target"),
     )
 async def _create_incident_from_findings(params: dict) -> dict:
-    """Not wired: creating an incident is a governed write that needs an approval."""
-    return {
-        "success": False,
-        "tool": "create_incident_from_findings",
-        "code": "NOT_IMPLEMENTED",
-        "error": "incident creation from findings is not wired to a governed write path; "
-        "it previously returned a fabricated incident id INC-AUTO-001",
-        "requested_finding_ids": params.get("finding_ids", []),
-    }
+    """Create a real incident from real findings. Was a fabricated INC-AUTO-001."""
+    return await tool_actions.create_incident_from_findings(
+        params.get("finding_ids"),
+        params.get("title"),
+        actor_id=params.get("_actor_id"),
+    )
+
 async def _list_open_incidents(params: dict) -> dict:
     """Open incidents from the live incidents table. Was a hardcoded empty list."""
     return await platform_data.open_incidents(limit=platform_data.bounded_limit(params.get("limit"), 50))
@@ -512,35 +509,25 @@ async def _assess_attack_surface(params: dict) -> dict:
     }
 
 async def _validate_finding(params: dict) -> dict:
-    """Not wired: a real re-test needs a scanner run. Was a hardcoded still_present: False."""
-    detail = await platform_data.finding_detail(params.get("finding_id", ""))
-    return {
-        "success": False,
-        "tool": "validate_finding",
-        "code": "NOT_IMPLEMENTED",
-        "error": "no re-test path is wired to this tool, so no validated/still_present verdict is "
-        "issued; it previously returned a fabricated clean result",
-        "finding_lookup": detail,
-    }
+    """Re-test the finding for real. Was a hardcoded still_present: False."""
+    return await tool_actions.retest_finding(params.get("finding_id"))
+
 async def _auto_fix_finding(params: dict) -> dict:
-    """Not wired: remediation runs through MissionPlan. Was a hardcoded fixed: True."""
-    return {
-        "success": False,
-        "tool": "auto_fix_finding",
-        "code": "NOT_IMPLEMENTED",
-        "error": "automated remediation is not wired to this tool; it previously returned "
-        "fixed: True without touching anything",
-        "finding_id": params.get("finding_id", ""),
-    }
+    """Produce a real branch and commit for a dependency fix. Was a hardcoded fixed: True."""
+    return await tool_actions.autofix_finding(params.get("finding_id"))
+
 async def _coordinate_pentest_engagement(params: dict) -> dict:
-    """Not wired: engagements are created by the authorised-target flow, not here."""
-    return {
-        "success": False,
-        "tool": "coordinate_pentest_engagement",
-        "code": "NOT_IMPLEMENTED",
-        "error": "engagement creation is not wired to this tool; it previously returned a "
-        "fabricated engagement id PENTEST-001",
-    }
+    """Open an engagement for authorised targets only. Was a fabricated PENTEST-001."""
+    return await tool_actions.coordinate_pentest_engagement(
+        params.get("name"),
+        params.get("targets") or params.get("target"),
+        rules_of_engagement=params.get("rules_of_engagement"),
+        allowed_techniques=params.get("allowed_techniques"),
+        prohibited_techniques=params.get("prohibited_techniques"),
+        mission_id=params.get("mission_id"),
+        actor_id=params.get("_actor_id"),
+    )
+
 async def _get_current_time(params: dict) -> dict:
     """Get current time."""
     from datetime import datetime, timezone
@@ -549,15 +536,11 @@ async def _get_current_time(params: dict) -> dict:
 
 
 async def _purge_mission_memory(params: dict) -> dict:
-    """Not wired: destructive purge is not available to the reasoning loop."""
-    return {
-        "success": False,
-        "tool": "purge_mission_memory",
-        "code": "NOT_IMPLEMENTED",
-        "error": "destructive memory purge is not exposed as a tool; it previously reported "
-        "purged: True without deleting anything",
-        "mission_id": params.get("mission_id", ""),
-    }
+    """Approval-gated real purge. Was a hardcoded purged: True that deleted nothing."""
+    return await tool_actions.purge_mission_memory(
+        params.get("mission_id"), actor_id=params.get("_actor_id")
+    )
+
 # === Tool registry ===
 TOOL_REGISTRY = {
     "nmap_scan": _nmap_scan,
@@ -637,6 +620,10 @@ async def _execute_registered_tool(
     # bind_tenant never sets ambient state, and this scope resets on exit.
     scope = use_tenant(tenant_id) if tenant_id else nullcontext()
     try:
+        if actor_id and isinstance(payload, dict):
+            # Handlers that record provenance (approvals, engagement authorisation) need the
+            # acting principal; it used to be dropped between the governance layer and the handler.
+            payload.setdefault("_actor_id", actor_id)
         with scope:
             result = await handler(payload) if asyncio.iscoroutinefunction(handler) else handler(payload)
         logger.info(f"tool_completed: tool={tool_name} success={result.get('success', True)}")
@@ -673,6 +660,7 @@ def list_tools() -> list[str]:
 # are hand-written here from their real behaviour, at the same scale.
 from gds_api.capabilities.definitions import RiskClass  # noqa: E402
 from gds_api import platform_data
+from gds_api import tool_actions  # noqa: E402
 from gds_api.tenant_binding import bind_tenant, use_tenant
 
 _RISK_CLASS_LABEL: dict[str, str] = {
