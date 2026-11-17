@@ -172,6 +172,9 @@ except Exception as e:
     print(f"Bridge router failed (non-fatal): {e}")
 
 app.include_router(reasoning_router, dependencies=[Depends(require_verified_legacy_route)])
+from gds_api import compliance_api
+
+app.include_router(compliance_api.router)
 app.include_router(auth.router)
 app.include_router(audit.router)
 app.include_router(policy.router)
