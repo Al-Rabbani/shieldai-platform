@@ -85,12 +85,19 @@ async def dispatch_email(to_email: str, subject: str, body: str) -> dict[str, An
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             resp = await client.post("https://api.resend.com/emails", json=payload, headers=headers)
-            return {
+            # Surface the provider's own reason. Previously a failed send returned only
+            # status_code and response, so callers printing item["error"] reported
+            # "FAILED (None)" - a delivery failure with no diagnosable cause. A 403 for an
+            # unverified sending domain is exactly the kind of thing this must name.
+            result = {
                 "channel": "email",
                 "success": resp.is_success,
                 "status_code": resp.status_code,
-                "response": resp.text,
+                "response": resp.text[:500],
             }
+            if not resp.is_success:
+                result["error"] = f"HTTP {resp.status_code}: {resp.text[:300]}"
+            return result
     except Exception as e:
         logger.warning("Email dispatch failed", error=str(e))
         return {"channel": "email", "success": False, "error": str(e)}
