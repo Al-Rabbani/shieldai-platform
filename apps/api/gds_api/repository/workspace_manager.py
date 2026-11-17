@@ -36,6 +36,7 @@ from gds_api.repository.worktree_manager import (
     unlock_worktree,
     verify_worktree,
 )
+from gds_api.tenant_binding import bind_tenant
 
 # All real workspace directories live under one real, well-known root - never scattered
 # across the OS temp directory unlabeled, so an operator can always find (and, if this
@@ -168,7 +169,13 @@ async def create_workspace(
             "ref": ref,
         },
     )
+    _rebind_tenant = workspace.tenant_id
     await db.commit()
+    # db.py uses NullPool, so the commit hands the connection back to the pool and the next
+    # statement runs on a fresh, unbound connection. `workspaces` is FORCE-RLS, so refreshing
+    # the row just written raised "Could not refresh instance" and the very first
+    # repository.read of any mission failed. Re-bind before touching the row again.
+    await bind_tenant(db, _rebind_tenant)
     await db.refresh(workspace)
     await publish_mission_event(
         str(mission_id),
@@ -259,7 +266,13 @@ async def heartbeat_workspace(
         max_expiry = workspace.created_at + timedelta(seconds=ws_policy.maximum_ttl_seconds)
         proposed_expiry = now + timedelta(seconds=ws_policy.default_ttl_seconds)
         workspace.expires_at = min(proposed_expiry, max_expiry)
+    _rebind_tenant = workspace.tenant_id
     await db.commit()
+    # db.py uses NullPool, so the commit hands the connection back to the pool and the next
+    # statement runs on a fresh, unbound connection. `workspaces` is FORCE-RLS, so refreshing
+    # the row just written raised "Could not refresh instance" and the very first
+    # repository.read of any mission failed. Re-bind before touching the row again.
+    await bind_tenant(db, _rebind_tenant)
     await db.refresh(workspace)
     return workspace
 
@@ -287,7 +300,13 @@ async def lock_workspace(
         action="workspace.locked",
         detail={"workspace_id": str(workspace_id), "reason": reason},
     )
+    _rebind_tenant = workspace.tenant_id
     await db.commit()
+    # db.py uses NullPool, so the commit hands the connection back to the pool and the next
+    # statement runs on a fresh, unbound connection. `workspaces` is FORCE-RLS, so refreshing
+    # the row just written raised "Could not refresh instance" and the very first
+    # repository.read of any mission failed. Re-bind before touching the row again.
+    await bind_tenant(db, _rebind_tenant)
     await db.refresh(workspace)
     await publish_mission_event(
         str(workspace.mission_id),
@@ -309,7 +328,13 @@ async def unlock_workspace(
         raise WorkspaceNotFound(f"Repository for workspace {workspace_id} no longer exists")
     await unlock_worktree(repo.working_directory, workspace.workspace_path)
     workspace.state = "READY"
+    _rebind_tenant = workspace.tenant_id
     await db.commit()
+    # db.py uses NullPool, so the commit hands the connection back to the pool and the next
+    # statement runs on a fresh, unbound connection. `workspaces` is FORCE-RLS, so refreshing
+    # the row just written raised "Could not refresh instance" and the very first
+    # repository.read of any mission failed. Re-bind before touching the row again.
+    await bind_tenant(db, _rebind_tenant)
     await db.refresh(workspace)
     return workspace
 
@@ -359,7 +384,13 @@ async def destroy_workspace(
         action="workspace.destroyed",
         detail={"workspace_id": str(workspace_id), "forced": force},
     )
+    _rebind_tenant = workspace.tenant_id
     await db.commit()
+    # db.py uses NullPool, so the commit hands the connection back to the pool and the next
+    # statement runs on a fresh, unbound connection. `workspaces` is FORCE-RLS, so refreshing
+    # the row just written raised "Could not refresh instance" and the very first
+    # repository.read of any mission failed. Re-bind before touching the row again.
+    await bind_tenant(db, _rebind_tenant)
     await db.refresh(workspace)
     await publish_mission_event(
         str(workspace.mission_id),
@@ -423,7 +454,13 @@ async def recover_workspace(
     else:
         workspace.state = "FAILED"
         workspace.failure_reason = "real git worktree no longer exists or is prunable"
+    _rebind_tenant = workspace.tenant_id
     await db.commit()
+    # db.py uses NullPool, so the commit hands the connection back to the pool and the next
+    # statement runs on a fresh, unbound connection. `workspaces` is FORCE-RLS, so refreshing
+    # the row just written raised "Could not refresh instance" and the very first
+    # repository.read of any mission failed. Re-bind before touching the row again.
+    await bind_tenant(db, _rebind_tenant)
     await db.refresh(workspace)
     return workspace
 
