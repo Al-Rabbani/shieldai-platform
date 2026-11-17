@@ -1,69 +1,88 @@
 #!/usr/bin/env bash
-# Backup freshness + integrity watcher (R2).
+# Backup freshness, integrity, manifest and off-host watcher.
 #
-# Gap this closes: gds-backup.sh verifies its own dump with pg_restore -l, but nothing
-# reported the outcome. A nightly job that silently stops producing dumps - or produces a
-# zero-byte one - leaves the platform believing it is backed up when it is not.
-#
-# Checks the newest dump's age and size, then raises ONE notification per condition. The
-# notifications table is tenant-isolated by FORCE RLS, so the tenant is bound before the
-# write, the same way check_alerts.py does.
+# Gaps this closes, measured 17 Nov 2026:
+#   * the notification row this script wrote was never dispatched - check_alerts.py does not look at
+#     it - so a backup fault sat in an in-app list the owner had to go looking for. Alerts now go
+#     out through gds_api.backup_ops (in-app row + email + Slack).
+#   * nothing checked whether a copy existed anywhere other than this host.
+#   * one state file served every condition, so a second condition could mask or replay the first.
 set -uo pipefail
 
-BACKUP_DIR=/var/backups/gds/daily
+BACKUP_DIR=${BACKUP_DIR:-/var/backups/gds/daily}
 MAX_AGE_HOURS="${MAX_AGE_HOURS:-26}"
 MIN_BYTES="${MIN_BYTES:-100000}"
-STATE=/var/lib/gds-backup-watch.last
+STATEDIR=/var/lib/gds-backup-watch.state
+mkdir -p "$STATEDIR"
 
-fail() {
-    local reason="$1"
-    echo "[$(date -Is)] ALERT: $reason"
-    # Only notify once per distinct reason, so a persistent fault does not flood the owner.
-    if [ -f "$STATE" ] && [ "$(cat "$STATE")" = "$reason" ]; then
+# alert <slug> <reason>: one notification per distinct condition, cleared when it recovers.
+alert() {
+    local slug="$1" reason="$2"
+    echo "[$(date -Is)] ALERT[$slug]: $reason"
+    if [ -f "$STATEDIR/$slug" ] && [ "$(cat "$STATEDIR/$slug")" = "$reason" ]; then
         echo "[$(date -Is)] (already reported: $reason)"
         return 0
     fi
-    echo "$reason" > "$STATE"
-    cd /opt/gds-os/apps/api || return 1
-    set -a; . /opt/.env; set +a
-    TENANT="${SECURITY_ALERT_TENANT_ID:-}"; RECIP="${SECURITY_ALERT_RECIPIENT_USER_ID:-}"
-    if [ -z "$TENANT" ] || [ -z "$RECIP" ]; then
-        echo "[$(date -Is)] cannot notify: SECURITY_ALERT_TENANT_ID / RECIPIENT not configured"
-        return 0
-    fi
-    PYTHONPATH=/opt/gds-os/apps/api venv/bin/python - "$TENANT" "$RECIP" "$reason" <<'PY'
-import os, sys, uuid
-from sqlalchemy import create_engine, text
-tenant, recip, reason = sys.argv[1], sys.argv[2], sys.argv[3]
-eng = create_engine(os.environ["DATABASE_URL"])
-with eng.connect() as c:
-    c.execute(text("SELECT set_config('gds.tenant_id', :t, false)"), {"t": tenant})
-    c.execute(text("INSERT INTO notifications (id,tenant_id,user_id,type,message,read_at,created_at) "
-                   "VALUES (:i,:t,:u,'alert',:m,NULL,NOW())"),
-              {"i": str(uuid.uuid4()), "t": tenant, "u": recip,
-               "m": f"BACKUP ALERT: {reason}"})
-    c.commit()
-print("[backup-watch] notification written")
-PY
+    echo "$reason" > "$STATEDIR/$slug"
+    ( cd /opt/gds-os/apps/api && set -a && . /opt/.env && set +a && PYTHONPATH=. \
+        venv/bin/python -m gds_api.backup_ops alert --reason "$reason" ) >> /var/log/gds-backup-watch.log 2>&1
 }
 
-[ -d "$BACKUP_DIR" ] || { fail "backup directory $BACKUP_DIR is missing"; exit 1; }
+rc=0
+
+if [ ! -d "$BACKUP_DIR" ]; then
+    alert dir "backup directory $BACKUP_DIR is missing"
+    exit 1
+fi
 
 NEWEST=$(ls -t "$BACKUP_DIR"/*.dump 2>/dev/null | head -1)
-[ -n "$NEWEST" ] || { fail "no dump files in $BACKUP_DIR"; exit 1; }
+if [ -z "$NEWEST" ]; then
+    alert nodump "no dump files in $BACKUP_DIR"
+    exit 1
+fi
 
 SIZE=$(stat -c%s "$NEWEST" 2>/dev/null || echo 0)
-AGE_H=$(( ( $(date +%s) - $(stat -c%Y "$NEWEST" 2>/dev/null || echo 0) ) / 3600 ))
+AGE_H=$(( ( $(date +%s) - $(stat -c %Y "$NEWEST" 2>/dev/null || echo 0) ) / 3600 ))
 
 if [ "$SIZE" -lt "$MIN_BYTES" ]; then
-    fail "newest dump $(basename "$NEWEST") is only ${SIZE}B (min ${MIN_BYTES}B)"
-    exit 1
-fi
-if [ "$AGE_H" -ge "$MAX_AGE_HOURS" ]; then
-    fail "newest dump $(basename "$NEWEST") is ${AGE_H}h old (max ${MAX_AGE_HOURS}h)"
-    exit 1
+    alert trunc "newest dump $(basename "$NEWEST") is only ${SIZE}B (min ${MIN_BYTES}B)"
+    rc=1
+else
+    rm -f "$STATEDIR/trunc"
 fi
 
-# Healthy: clear the de-duplication marker so a future failure notifies again.
-rm -f "$STATE"
-echo "[$(date -Is)] ok: $(basename "$NEWEST") ${SIZE}B ${AGE_H}h old"
+if [ "$AGE_H" -ge "$MAX_AGE_HOURS" ]; then
+    alert stale "newest dump $(basename "$NEWEST") is ${AGE_H}h old (max ${MAX_AGE_HOURS}h)"
+    rc=1
+else
+    rm -f "$STATEDIR/stale"
+fi
+
+if [ ! -f "$NEWEST.counts.json" ]; then
+    alert manifest "no count manifest beside $(basename "$NEWEST"): the restore drill cannot verify it"
+    rc=1
+else
+    rm -f "$STATEDIR/manifest"
+fi
+
+set -a; . /opt/.env 2>/dev/null || true; set +a
+if [ -z "${OFFHOST_TARGET:-}" ]; then
+    alert offhost "no off-host backup target configured (OFFHOST_TARGET unset): every dump exists only on this host"
+    rc=1
+else
+    if [ -f /var/lib/gds-offhost.last ]; then
+        OH_AGE=$(( ( $(date +%s) - $(stat -c %Y /var/lib/gds-offhost.last) ) / 3600 ))
+        if [ "$OH_AGE" -ge "$MAX_AGE_HOURS" ]; then
+            alert offhost "off-host copy is ${OH_AGE}h old (max ${MAX_AGE_HOURS}h)"
+            rc=1
+        else
+            rm -f "$STATEDIR/offhost"
+        fi
+    else
+        alert offhost "OFFHOST_TARGET is configured but no successful copy has ever been recorded"
+        rc=1
+    fi
+fi
+
+echo "[$(date -Is)] done rc=$rc newest=$(basename "$NEWEST") ${SIZE}B ${AGE_H}h old"
+exit $rc
