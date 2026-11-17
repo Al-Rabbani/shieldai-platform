@@ -123,20 +123,34 @@ async def list_repositories(
 async def get_repository_policy(
     db: AsyncSession, *, tenant_id: uuid.UUID, repository_id: uuid.UUID
 ) -> RepositoryPolicy:
+    """The repository's policy, created from ORM defaults if the row is missing.
+
+    Raising RepositoryNotFound here made every repository inserted by any path other than
+    register_repository (scripts, the autofix runner, manual SQL) permanently unusable: all ten
+    repository capabilities refused it with REPOSITORY_NOT_FOUND even though the repository and its
+    workspace were valid. The defaults are conservative - read, search and worktree creation
+    allowed; branch, patch, commit, push and pull request denied - so self-healing cannot widen
+    access, it only restores the documented default for a repository that had no policy at all.
+    """
     await get_repository(db, tenant_id=tenant_id, repository_id=repository_id)
     policy = await db.get(RepositoryPolicy, repository_id)
     if policy is None:
-        raise RepositoryNotFound(f"Repository {repository_id} has no policy row")
+        policy = RepositoryPolicy(repository_id=repository_id)
+        db.add(policy)
+        await db.flush()
     return policy
 
 
 async def get_workspace_policy(
     db: AsyncSession, *, tenant_id: uuid.UUID, repository_id: uuid.UUID
 ) -> WorkspacePolicy:
+    """The repository's workspace policy, created from ORM defaults if the row is missing."""
     await get_repository(db, tenant_id=tenant_id, repository_id=repository_id)
     policy = await db.get(WorkspacePolicy, repository_id)
     if policy is None:
-        raise RepositoryNotFound(f"Repository {repository_id} has no workspace policy row")
+        policy = WorkspacePolicy(repository_id=repository_id)
+        db.add(policy)
+        await db.flush()
     return policy
 
 
