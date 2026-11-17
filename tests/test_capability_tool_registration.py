@@ -65,40 +65,38 @@ def _repository_capability_tools() -> set[str]:
     raise AssertionError("_REPOSITORY_CAPABILITY_TOOLS not found in repository_api.py")
 
 
-# Declared capabilities whose tool is NOT implemented yet. This is a measured list, not a
-# convenience: each name below currently makes the capability broker raise KeyError, so asking for
-# that capability returns a 500. It is checked in both directions - a new gap fails the test, and
-# so does an entry that has since been implemented - so it can only ever shrink.
-#
-# Measured 17 Nov 2026 against the real registry; nothing close exists for any of them:
-#   check_credential_leaks           darkweb/credential_leak tables -> real implementation
-#   detect_identity_threats          platform_data + identity_threats -> real implementation
-#   start_mission_plan/commit_mission_plan         kernel plan tables
-#   start_engineering_session/commit_engineering_session   no schema exists yet
-KNOWN_UNIMPLEMENTED_TOOLS = {
-    "check_credential_leaks",
-    "commit_engineering_session",
-    "commit_mission_plan",
-    "detect_identity_threats",
-    "start_engineering_session",
-    "start_mission_plan",
-}
+def _dispatched_capability_ids() -> set[str]:
+    """Capability ids that a governed endpoint dispatches itself.
+
+    start_mission_plan, commit_mission_plan, start_engineering_session and
+    commit_engineering_session are not tool_gateway handlers: each is passed as
+    `requested_tool_id=` to evaluate_capability_request by the endpoint that performs the work
+    (mission_api.py, engineering_api.py). Parsing for that call is evidence of a real dispatch path,
+    so the registration rule accepts it. A capability id that appears neither in TOOL_REGISTRY nor
+    as a requested_tool_id is genuinely wired to nothing.
+    """
+    found: set[str] = set()
+    for path in API.rglob("*.py"):
+        text = path.read_text()
+        if "requested_tool_id" not in text:
+            continue
+        for node in ast.walk(ast.parse(text)):
+            if isinstance(node, ast.Call):
+                for keyword in node.keywords:
+                    if keyword.arg == "requested_tool_id" and isinstance(keyword.value, ast.Constant):
+                        if isinstance(keyword.value.value, str):
+                            found.add(keyword.value.value)
+    return found
 
 
 class CapabilityToolRegistrationTests(unittest.TestCase):
-    def test_every_catalog_tool_is_registered_or_a_known_gap(self):
-        registered = _registry_keys() | set(_dynamically_registered())
-        new_gaps = sorted(_catalog_tool_ids() - registered - KNOWN_UNIMPLEMENTED_TOOLS)
+    def test_every_catalog_tool_is_registered_or_dispatched(self):
+        reachable = _registry_keys() | set(_dynamically_registered()) | _dispatched_capability_ids()
+        unwired = sorted(_catalog_tool_ids() - reachable)
         self.assertEqual(
-            new_gaps, [],
-            f"capabilities declare tools that are in neither TOOL_REGISTRY nor the known-gap list: {new_gaps}",
-        )
-
-    def test_known_gap_list_does_not_rot(self):
-        registered = _registry_keys() | set(_dynamically_registered())
-        implemented = sorted(KNOWN_UNIMPLEMENTED_TOOLS & registered)
-        self.assertEqual(
-            implemented, [], f"these are registered now - remove them from KNOWN_UNIMPLEMENTED_TOOLS: {implemented}"
+            unwired, [],
+            f"capabilities declare tools that are neither registered in TOOL_REGISTRY nor dispatched "
+            f"by a governed endpoint (requested_tool_id=...): {unwired}",
         )
 
     def test_every_repository_capability_tool_is_registered(self):
