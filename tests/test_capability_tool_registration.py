@@ -71,10 +71,6 @@ def _repository_capability_tools() -> set[str]:
 # so does an entry that has since been implemented - so it can only ever shrink.
 #
 # Measured 17 Nov 2026 against the real registry; nothing close exists for any of them:
-#   sast_scan                        semgrep is installed on the VPS (1.172.0) -> real implementation
-#   iac_scan / container_scan        trivy -> real implementation
-#   dast_scan                        nuclei -> real implementation
-#   generate_sbom                    syft/trivy sbom -> real implementation
 #   check_credential_leaks           darkweb/credential_leak tables -> real implementation
 #   detect_identity_threats          platform_data + identity_threats -> real implementation
 #   start_mission_plan/commit_mission_plan         kernel plan tables
@@ -83,12 +79,7 @@ KNOWN_UNIMPLEMENTED_TOOLS = {
     "check_credential_leaks",
     "commit_engineering_session",
     "commit_mission_plan",
-    "container_scan",
-    "dast_scan",
     "detect_identity_threats",
-    "generate_sbom",
-    "iac_scan",
-    "sast_scan",
     "start_engineering_session",
     "start_mission_plan",
 }
