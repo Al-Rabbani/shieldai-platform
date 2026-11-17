@@ -24,7 +24,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from gds_api.audit import record_audit_event
 from gds_api.cloud.posture.registry import PolicyDefinition, get_policy
 from gds_api.evidence import create_evidence
+from gds_api.logging_config import get_logger
 from gds_api.finding_lifecycle import FindingStatus, validate_finding_transition
+_logger = get_logger("gds_api.cloud.posture.findings")
+
 from gds_api.models import (
     CloudFindingContext,
     CloudFindingStatusHistory,
@@ -201,16 +204,36 @@ async def _create_finding(
         "explanation": record.explanation,
         "facts": _bounded_facts(dict(record.facts)),
     }
-    evidence = await create_evidence(
-        db,
-        tenant_id=tenant_id,
-        user_id=user_id,
-        subject_type="cloud_finding",
-        subject_id=str(finding.id),
-        content=json.dumps(evidence_summary, default=str).encode(),
-        content_type="application/json",
-        filename=f"cloud-finding-{finding.id}.json",
-    )
+    # Evidence storage must never be able to suppress a security finding. Measured failure this
+    # exposed: the MinIO client authenticated with the wrong access key, create_evidence raised
+    # InvalidAccessKeyId, and the whole evaluation aborted with EVALUATION_FAILED while three real
+    # misconfigurations (CloudTrail, Config recorder, GuardDuty all absent) were never recorded.
+    # A finding is the security signal; its evidence bundle is supporting material. So a storage
+    # failure is caught, recorded on the run's warnings, and the finding is still created with
+    # evidence_id=None - an honest, visible gap rather than a silently missing finding.
+    evidence_id: uuid.UUID | None = None
+    try:
+        evidence = await create_evidence(
+            db,
+            tenant_id=tenant_id,
+            user_id=user_id,
+            subject_type="cloud_finding",
+            subject_id=str(finding.id),
+            content=json.dumps(evidence_summary, default=str).encode(),
+            content_type="application/json",
+            filename=f"cloud-finding-{finding.id}.json",
+        )
+        evidence_id = evidence.id
+    except Exception as exc:  # noqa: BLE001 - storage trouble is recorded, never fatal to the finding
+        warning = (
+            f"evidence upload failed for finding {finding.id} "
+            f"(policy {record.policy_id}): {type(exc).__name__}: {exc}"
+        )[:300]
+        try:
+            setattr(run, "warnings", list(getattr(run, "warnings", None) or []) + [warning])
+        except Exception:  # noqa: BLE001 - the warning must not itself break the finding
+            pass
+        _logger.warning("cloud.finding_evidence_failed", finding_id=str(finding.id), detail=warning)
 
     context = CloudFindingContext(
         tenant_id=tenant_id,
@@ -225,7 +248,7 @@ async def _create_finding(
         last_evaluated_at=now,
         last_evaluation_run_id=run.id,
         last_evaluation_record_id=record.id,
-        evidence_id=evidence.id,
+        evidence_id=evidence_id,
     )
     db.add(context)
     await db.flush()
@@ -375,6 +398,96 @@ async def _handle_pass(
             "evaluation_run_id": str(run.id),
         },
     )
+
+
+async def _context_for(
+    db: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    environment_id: uuid.UUID,
+    policy_id: str,
+    asset_id: uuid.UUID | None,
+) -> "CloudFindingContext | None":
+    """The existing context row for this (policy, asset) pair, if the pair has ever failed."""
+    from sqlalchemy import select as _select
+
+    from gds_api.models import CloudFindingContext
+
+    # Real column names on cloud_finding_contexts: cloud_asset_id / cloud_environment_id.
+    asset_clause = (
+        CloudFindingContext.cloud_asset_id.is_(None)
+        if asset_id is None
+        else CloudFindingContext.cloud_asset_id == asset_id
+    )
+    return (
+        await db.execute(
+            _select(CloudFindingContext).where(
+                CloudFindingContext.tenant_id == tenant_id,
+                CloudFindingContext.cloud_environment_id == environment_id,
+                CloudFindingContext.policy_id == policy_id,
+                asset_clause,
+            )
+        )
+    ).scalars().first()
+
+
+async def apply_evaluation_result(
+    db: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    environment_id: uuid.UUID,
+    provider: str,
+    record: "CloudPolicyEvaluation",
+    policy: "PolicyDefinition",
+    run: "CloudPostureEvaluationRun",
+    user_id: uuid.UUID | None,
+) -> None:
+    """Turn one persisted evaluation into a real finding transition.
+
+    WHY THIS EXISTS: `run_environment_evaluation` wrote CloudPolicyEvaluation rows and nothing
+    ever called `_handle_fail`/`_handle_pass`, so the whole finding lifecycle in this module was
+    unreachable. Measured on the live account: an evaluation reported 3 failures (CloudTrail, Config
+    recorder and GuardDuty all absent) with findings_created = 0, so three genuine misconfigurations
+    never reached the register and no operator would ever have seen them.
+
+    Only FAIL and PASS act: INDETERMINATE/NOT_APPLICABLE/UNSUPPORTED/SKIPPED carry no verdict and
+    must never open or resolve a finding.
+    """
+    from gds_api.cloud.posture.taxonomy import EvaluationResult
+
+    verdict = getattr(record, "result", None)
+    if verdict not in (EvaluationResult.FAIL.value, EvaluationResult.PASS.value):
+        return
+
+    context = await _context_for(
+        db,
+        tenant_id=tenant_id,
+        environment_id=environment_id,
+        policy_id=record.policy_id,
+        asset_id=getattr(record, "asset_id", None),
+    )
+
+    if verdict == EvaluationResult.FAIL.value:
+        await _handle_fail(
+            db,
+            tenant_id=tenant_id,
+            environment_id=environment_id,
+            provider=provider,
+            record=record,
+            policy=policy,
+            context=context,
+            run=run,
+            user_id=user_id,
+        )
+    else:
+        await _handle_pass(
+            db,
+            tenant_id=tenant_id,
+            record=record,
+            context=context,
+            run=run,
+            user_id=user_id,
+        )
 
 
 async def correlate_findings(

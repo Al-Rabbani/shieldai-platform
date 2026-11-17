@@ -16,12 +16,17 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import select
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from gds_api.cloud.adapter import get_adapter
 from gds_api.cloud.assets import upsert_asset
-from gds_api.models import CloudAsset, CloudConnectionProfile, CloudDiscoveryJob
+from gds_api.models import (
+    CloudAsset,
+    CloudConnectionProfile,
+    CloudDiscoveryJob,
+    CloudInventorySnapshot,
+)
 
 
 class DiscoveryRunError(Exception):
@@ -140,6 +145,61 @@ async def run_discovery(
         if isinstance(detail, dict) and category != "regions"
     }
 
+    # A real inventory snapshot for this run. Without it every environment-level policy found
+    # snapshot=None and fell through to INDETERMINATE, because the evaluator refuses to treat
+    # absence as a finding without a completeness record. Measured on the live account: CloudTrail,
+    # Config recorder and GuardDuty all sat indeterminate although none is enabled - three real
+    # findings suppressed by a missing row, not by any uncertainty about the account.
+    snapshot_id = None
+    try:
+        counts_rows = (
+            await db.execute(
+                select(CloudAsset.normalized_category, func.count())
+                .where(
+                    CloudAsset.tenant_id == tenant_id,
+                    CloudAsset.environment_id == job.environment_id,
+                    CloudAsset.discovery_job_id == job.id,
+                )
+                .group_by(CloudAsset.normalized_category)
+            )
+        ).all()
+        failed_categories = sorted(
+            {
+                str(category).split(":", 1)[0]
+                for category, detail in report.items()
+                if isinstance(detail, dict) and detail.get("error")
+            }
+        )
+        snapshot = CloudInventorySnapshot(
+            tenant_id=tenant_id,
+            environment_id=job.environment_id,
+            provider=profile.provider,
+            discovery_job_id=job.id,
+            started_at=job.started_at or datetime.now(timezone.utc),
+            completed_at=datetime.now(timezone.utc),
+            status="completed" if not errors else "partially_completed",
+            resource_counts_by_category={str(cat): int(n) for cat, n in counts_rows},
+            relationship_count=0,
+            regions_covered=list(region_info.get("regions") or []) if isinstance(region_info, dict) else [],
+            failed_scopes=failed_categories,
+            warnings=warnings,
+            completeness_status="complete" if not errors else "partial",
+        )
+        db.add(snapshot)
+        await db.flush()
+        snapshot_id = snapshot.id
+        await db.execute(
+            update(CloudAsset)
+            .where(
+                CloudAsset.tenant_id == tenant_id,
+                CloudAsset.environment_id == job.environment_id,
+                CloudAsset.discovery_job_id == job.id,
+            )
+            .values(inventory_snapshot_id=snapshot.id)
+        )
+    except Exception as exc:  # noqa: BLE001 - the assets are already stored; never lose them for this
+        warnings.append(f"inventory snapshot not recorded: {type(exc).__name__}: {exc}"[:250])
+
     summary = (
         f"discovered {discovered} assets ({created} new, {updated} updated) "
         f"from provider {profile.provider} scope {scope}"
@@ -167,7 +227,7 @@ async def run_discovery(
         "created": created, "updated": updated,
         "assets_in_environment": len(stored), "summary": summary,
         "errors": errors, "warnings": warnings, "assets_by_category": yielded_by_category,
-        "regions": region_info,
+        "regions": region_info, "inventory_snapshot_id": str(snapshot_id) if snapshot_id else None,
     }
 
 

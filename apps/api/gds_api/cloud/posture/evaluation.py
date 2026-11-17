@@ -180,6 +180,35 @@ def _result_for(
     return _APPLICABILITY_TO_RESULT[applicability.state]
 
 
+async def _failed_collection_categories(
+    db: AsyncSession, *, tenant_id: uuid.UUID, environment_id: uuid.UUID
+) -> dict[str, str]:
+    """Collector categories whose most recent discovery run recorded a real failure.
+
+    Distinct from "found nothing": the run now writes contained category failures onto the job,
+    so a policy that matches no asset can say which of the two happened.
+    """
+    from gds_api.models import CloudDiscoveryJob
+
+    job = (
+        await db.execute(
+            select(CloudDiscoveryJob)
+            .where(
+                CloudDiscoveryJob.tenant_id == tenant_id,
+                CloudDiscoveryJob.environment_id == environment_id,
+            )
+            .order_by(CloudDiscoveryJob.created_at.desc())
+            .limit(1)
+        )
+    ).scalars().first()
+    failures: dict[str, str] = {}
+    for entry in (job.errors or []) if job is not None else []:
+        if isinstance(entry, str) and ":" in entry:
+            category, _, message = entry.partition(":")
+            failures[category.split(":", 1)[0].strip()] = message.strip()
+    return failures
+
+
 async def run_environment_evaluation(
     db: AsyncSession,
     *,
@@ -199,6 +228,9 @@ async def run_environment_evaluation(
     )
     assets = await _environment_assets(db, tenant_id=tenant_id, environment_id=environment.id)
     snapshot = await latest_snapshot(db, tenant_id=tenant_id, environment_id=environment.id)
+    failed_categories = await _failed_collection_categories(
+        db, tenant_id=tenant_id, environment_id=environment.id
+    )
 
     run.assets_considered = len(assets)
     run.policies_considered = len(policies)
@@ -210,6 +242,57 @@ async def run_environment_evaluation(
             targets = [a for a in assets if a.provider_category in policy.asset_categories]
         else:
             targets = []
+
+        if not targets:
+            # A policy whose categories matched no asset used to produce NO row at all: on the real
+            # account 6 of 12 policies vanished from the run while skipped/not_applicable counters
+            # stayed at 0, so the report understated what had been looked at. Record the real reason.
+            categories = tuple(policy.asset_categories or ())
+            blocked = {c: failed_categories[c] for c in categories if c in failed_categories}
+            if blocked:
+                result = EvaluationResult.INDETERMINATE
+                applicability_state = ApplicabilityState.APPLICABLE.value
+                explanation = (
+                    f"No asset of category {', '.join(sorted(blocked))} was discovered, and the most "
+                    "recent discovery run recorded a failure collecting "
+                    f"{', '.join(sorted(blocked))}: {sorted(blocked.values())[0]} - absence cannot be "
+                    "confirmed, so this policy is not reported as passing."
+                )
+                data_state = "missing"
+            else:
+                result = EvaluationResult.NOT_APPLICABLE
+                applicability_state = ApplicabilityState.NOT_APPLICABLE.value
+                explanation = (
+                    f"No asset of category {', '.join(categories) or '(none declared)'} exists in this "
+                    f"environment ({len(assets)} assets were considered), so the policy has nothing to "
+                    "evaluate. Recorded so the run accounts for every policy it considered."
+                )
+                data_state = "complete"
+            run.evaluations_attempted += 1
+            counter_name = _RESULT_TO_RUN_COUNTER[result]
+            setattr(run, counter_name, getattr(run, counter_name) + 1)
+            db.add(
+                CloudPolicyEvaluation(
+                    tenant_id=tenant_id,
+                    evaluation_run_id=run.id,
+                    environment_id=environment.id,
+                    asset_id=None,
+                    policy_id=policy.policy_id,
+                    policy_version=policy.version,
+                    result=result.value,
+                    severity=policy.severity.value,
+                    applicability_state=applicability_state,
+                    applicability_reason=explanation,
+                    facts={},
+                    explanation=explanation,
+                    duration_ms=0.0,
+                    evaluator_version=EVALUATOR_VERSION,
+                    data_state=data_state,
+                    snapshot_id=snapshot.id if snapshot is not None else None,
+                    error_category=None,
+                )
+            )
+            continue
 
         for asset in targets:
             start = datetime.now(UTC)
@@ -269,6 +352,20 @@ async def run_environment_evaluation(
                 error_category=error_category,
             )
             db.add(record)
+            # Give the record its id, then let the real finding lifecycle act on it.
+            await db.flush()
+            from gds_api.cloud.posture.findings import apply_evaluation_result
+
+            await apply_evaluation_result(
+                db,
+                tenant_id=tenant_id,
+                environment_id=environment.id,
+                provider=environment.provider,
+                record=record,
+                policy=policy,
+                run=run,
+                user_id=getattr(run, "initiated_by_user_id", None),
+            )
     await db.flush()
 
 
