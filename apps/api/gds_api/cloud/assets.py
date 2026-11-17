@@ -65,7 +65,11 @@ def _bounded_metadata(raw: dict[str, object]) -> dict[str, object]:
     except (TypeError, ValueError):
         return {"_truncated": True, "_reason": "raw metadata was not JSON-serializable"}
     if len(serialized.encode("utf-8")) <= _MAX_RAW_METADATA_BYTES:
-        return redacted
+        # Return the round-tripped value, not `redacted`. Proving the dict *can* be serialized
+        # and then handing back the original was a real bug: provider metadata carries datetime
+        # objects, so the flush failed with "Object of type datetime is not JSON serializable"
+        # and no discovered asset could ever be stored.
+        return json.loads(serialized)
     return {
         "_truncated": True,
         "_reason": "raw metadata exceeded the real per-asset size bound",
