@@ -93,8 +93,14 @@ async def run_discovery(
         scope = env.native_id
 
     discovered = created = updated = 0
+    report: dict[str, dict[str, object]] = {}
     try:
-        async for normalized in adapter.discover_assets(profile, scope):
+        try:
+            stream = adapter.discover_assets(profile, scope, report)
+        except TypeError:
+            # An adapter that does not take the optional report still gets to run.
+            stream = adapter.discover_assets(profile, scope)
+        async for normalized in stream:
             asset, was_created, _changes = await upsert_asset(
                 db,
                 tenant_id=tenant_id,
@@ -112,13 +118,41 @@ async def run_discovery(
                         errors=[reason], assets_discovered=discovered)
         return {"success": False, "status": "failed", "reason": reason, "assets": discovered}
 
+    # What the adapter contained, made visible. A category that failed and a category that found
+    # nothing used to look identical on this row, so a run that skipped everything regional still
+    # reported "completed, errors=[]". Region source and per-category yields now travel with the job.
+    errors = [
+        f"{category}: {detail['error']}"
+        for category, detail in sorted(report.items())
+        if isinstance(detail, dict) and detail.get("error")
+    ]
+    warnings = []
+    region_info = report.get("regions")
+    if isinstance(region_info, dict):
+        warnings.append(
+            f"regions from {region_info.get('source')}: {region_info.get('yielded')} region(s)"
+        )
+        if region_info.get("error"):
+            warnings.append(f"region resolution: {region_info['error']}")
+    yielded_by_category = {
+        category: detail.get("yielded")
+        for category, detail in report.items()
+        if isinstance(detail, dict) and category != "regions"
+    }
+
     summary = (
         f"discovered {discovered} assets ({created} new, {updated} updated) "
         f"from provider {profile.provider} scope {scope}"
     )
+    if errors:
+        summary += f"; {len(errors)} categor(ies) failed and are listed in errors"
+
     _set_if_present(
         job, status="completed", completed_at=datetime.now(timezone.utc),
         assets_discovered=discovered, assets_updated=updated,
+        errors=errors or None,
+        warnings=warnings or None,
+        regions=(region_info.get("regions") if isinstance(region_info, dict) else None),
     )
     stored = (
         await db.execute(
@@ -132,6 +166,8 @@ async def run_discovery(
         "success": True, "status": "completed", "assets_discovered": discovered,
         "created": created, "updated": updated,
         "assets_in_environment": len(stored), "summary": summary,
+        "errors": errors, "warnings": warnings, "assets_by_category": yielded_by_category,
+        "regions": region_info,
     }
 
 

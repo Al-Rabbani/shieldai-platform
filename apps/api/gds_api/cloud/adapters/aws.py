@@ -313,11 +313,14 @@ class AWSProviderAdapter(ProviderAdapter):
     # ------------------------------------------------------------------
 
     async def discover_assets(
-        self, profile: CloudConnectionProfile, scope_native_id: str
+        self,
+        profile: CloudConnectionProfile,
+        scope_native_id: str,
+        report: dict[str, dict[str, object]] | None = None,
     ) -> AsyncIterator[NormalizedCloudAsset]:
         from gds_api.cloud.adapters.aws_discovery import discover_assets as _discover
 
-        async for asset in _discover(profile, scope_native_id):
+        async for asset in _discover(profile, scope_native_id, report):
             yield asset
 
     async def discover_relationships(

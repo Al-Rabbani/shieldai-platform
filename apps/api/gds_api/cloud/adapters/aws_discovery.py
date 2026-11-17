@@ -21,6 +21,7 @@ service beyond that list is attempted here, per Section 8's own instruction.
 from __future__ import annotations
 
 import asyncio
+import os
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
@@ -36,10 +37,21 @@ _logger = get_logger("gds_api.cloud.adapters.aws")
 
 
 async def _safe_assets(
-    agen: AsyncIterator[NormalizedCloudAsset], category: str
+    agen: AsyncIterator[NormalizedCloudAsset],
+    category: str,
+    report: dict[str, dict[str, object]] | None = None,
 ) -> AsyncIterator[NormalizedCloudAsset]:
+    """Contain a failing category without aborting the stream - and say so.
+
+    Containment alone is not enough: a category that fails mid-stream looked identical to a
+    category that simply found nothing, and the job recorded errors=[] either way. When a
+    report dict is supplied the outcome per category is recorded, so the caller can put the
+    real failures on the job row.
+    """
+    yielded = 0
     try:
         async for item in agen:
+            yielded += 1
             yield item
     except Exception as exc:  # noqa: BLE001 - contained per-category, never aborts the stream
         error = _classify(exc)
@@ -49,6 +61,15 @@ async def _safe_assets(
             error_category=error.category.value,
             message=error.sanitized_message,
         )
+        if report is not None:
+            report[category] = {
+                "yielded": yielded,
+                "error": error.sanitized_message,
+                "error_category": error.category.value,
+            }
+        return
+    if report is not None:
+        report[category] = {"yielded": yielded, "error": None, "error_category": None}
 
 
 async def _safe_relationships(
@@ -67,10 +88,69 @@ async def _safe_relationships(
         )
 
 
-async def _list_regions(session: Any) -> list[str]:
-    ec2 = session.client("ec2", config=_BOTO_CONFIG)
-    result = await asyncio.to_thread(ec2.describe_regions, AllRegions=False)
-    return sorted(str(r["RegionName"]) for r in result.get("Regions", []))
+async def _list_regions(
+    session: Any, report: dict[str, dict[str, object]] | None = None
+) -> list[str]:
+    """Regions to discover, never an empty list caused by a missing region parameter.
+
+    ROOT CAUSE of every discovery run reporting 3 assets and errors=[]: `session.client("ec2")`
+    was built with no region, so describe_regions raised "You must specify a region", the caller
+    caught it, set regions=[], and the 20 regional collectors each iterated over nothing. The
+    account looked fully enumerated while nothing regional had been looked at.
+
+    Order: AWS_DISCOVERY_REGIONS (explicit, comma-separated) > describe_regions using an explicit
+    bootstrap region > that bootstrap region alone. The last step is deliberately bounded: a
+    botocore static list would mean ~30 regions x 20 collectors of calls, most denied, so the run
+    would trade a silent gap for a slow noisy one. Whatever happens is recorded in the report.
+    """
+
+    def _record(source: str, regions: list[str], error: str | None = None) -> list[str]:
+        if report is not None:
+            report["regions"] = {
+                "yielded": len(regions),
+                "error": error,
+                "source": source,
+                "regions": regions,
+            }
+        return regions
+
+    explicit = os.environ.get("AWS_DISCOVERY_REGIONS", "").strip()
+    if explicit:
+        regions = sorted({r.strip() for r in explicit.split(",") if r.strip()})
+        if regions:
+            return _record("AWS_DISCOVERY_REGIONS", regions)
+
+    bootstrap = (
+        os.environ.get("AWS_REGION")
+        or os.environ.get("AWS_DEFAULT_REGION")
+        or "us-east-1"
+    ).strip()
+
+    try:
+        ec2 = session.client("ec2", region_name=bootstrap, config=_BOTO_CONFIG)
+        result = await asyncio.to_thread(ec2.describe_regions, AllRegions=False)
+        regions = sorted(str(r["RegionName"]) for r in result.get("Regions", []))
+        if regions:
+            return _record(f"describe_regions via {bootstrap}", regions)
+        return _record(
+            f"describe_regions via {bootstrap}",
+            [bootstrap],
+            "describe_regions returned no regions; falling back to the bootstrap region",
+        )
+    except Exception as exc:  # noqa: BLE001 - disclosed, and bounded to the bootstrap region
+        error = _classify(exc)
+        _logger.warning(
+            "cloud.aws_discovery_regions_failed",
+            error_category=error.category.value,
+            message=error.sanitized_message,
+            bootstrap_region=bootstrap,
+        )
+        # Fall back to the one region we know we can address, so regional coverage is not zero.
+        return _record(
+            f"bootstrap region after describe_regions failed: {bootstrap}",
+            [bootstrap],
+            f"describe_regions failed ({error.sanitized_message}); regional discovery limited to {bootstrap}",
+        )
 
 
 # ----------------------------------------------------------------------------
@@ -664,32 +744,25 @@ _REGIONAL_DISCOVERERS = (
 
 
 async def discover_assets(
-    profile: CloudConnectionProfile, scope_native_id: str
+    profile: CloudConnectionProfile,
+    scope_native_id: str,
+    report: dict[str, dict[str, object]] | None = None,
 ) -> AsyncIterator[NormalizedCloudAsset]:
     session = await asyncio.to_thread(_build_session, profile)
     account_id = scope_native_id
 
     org_assets = _safe_assets(
-        _discover_organisation_and_accounts(session, account_id), "organisation"
+        _discover_organisation_and_accounts(session, account_id), "organisation", report
     )
     async for asset in org_assets:
         yield asset
     iam_assets = _safe_assets(
-        _discover_iam_identity_summary(session, account_id), "iam_identity_summary"
+        _discover_iam_identity_summary(session, account_id), "iam_identity_summary", report
     )
     async for asset in iam_assets:
         yield asset
 
-    try:
-        regions = await _list_regions(session)
-    except Exception as exc:  # noqa: BLE001 - no regions known means no regional discovery this run, disclosed
-        error = _classify(exc)
-        _logger.warning(
-            "cloud.aws_discovery_regions_failed",
-            error_category=error.category.value,
-            message=error.sanitized_message,
-        )
-        regions = []
+    regions = await _list_regions(session, report)
 
     for region in regions:
         yield NormalizedCloudAsset(
@@ -702,13 +775,15 @@ async def discover_assets(
             account_or_subscription_or_project=account_id,
         )
 
-    async for asset in _safe_assets(_discover_s3_buckets(session, account_id), "s3_bucket"):
+    async for asset in _safe_assets(
+        _discover_s3_buckets(session, account_id), "s3_bucket", report
+    ):
         yield asset
 
     for category, discoverer in _REGIONAL_DISCOVERERS:
         for region in regions:
             category_assets = _safe_assets(
-                discoverer(session, region, account_id), f"{category}:{region}"
+                discoverer(session, region, account_id), f"{category}:{region}", report
             )
             async for asset in category_assets:
                 yield asset

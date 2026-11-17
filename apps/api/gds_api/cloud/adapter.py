@@ -138,8 +138,18 @@ class ProviderAdapter(ABC):
 
     @abstractmethod
     def discover_assets(
-        self, profile: CloudConnectionProfile, scope_native_id: str
-    ) -> AsyncIterator[NormalizedCloudAsset]: ...
+        self,
+        profile: CloudConnectionProfile,
+        scope_native_id: str,
+        report: dict[str, dict[str, object]] | None = None,
+    ) -> AsyncIterator[NormalizedCloudAsset]:
+        """Enumerate real resources for one scope.
+
+        `report` is an optional out-parameter: adapters that contain per-category failures
+        record them there so the caller can put the real reasons on the discovery job instead
+        of reporting a clean run that silently skipped work.
+        """
+        ...
 
     @abstractmethod
     def discover_relationships(
