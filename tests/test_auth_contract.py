@@ -175,8 +175,28 @@ class TestRouteContract:
 BASE_URL = os.environ.get("GDS_TEST_BASE_URL", "http://127.0.0.1:8000")
 
 
+def _host_env(name):
+    """A setting from the process environment, else from the host config file.
+
+    The full suite is normally run without sourcing /opt/.env, and requiring the caller to remember
+    made all 63 live cases SKIP on the very host where they matter. Reading the deployed config is
+    enough to run them; on CI the file does not exist and the cases still skip honestly.
+    """
+    value = os.environ.get(name)
+    if value:
+        return value
+    try:
+        for line in open("/opt/.env", encoding="utf-8", errors="ignore"):
+            if line.startswith(f"{name}="):
+                return line.split("=", 1)[1].strip().strip('"').strip("'")
+    except OSError:
+        return None
+    return None
+
+
 def _pair_from_env():
-    user, tenant = os.environ.get("SECURITY_ALERT_RECIPIENT_USER_ID"), os.environ.get("SECURITY_ALERT_TENANT_ID")
+    user = _host_env("SECURITY_ALERT_RECIPIENT_USER_ID")
+    tenant = _host_env("SECURITY_ALERT_TENANT_ID")
     if not user or not tenant:
         return None, None
     return uuid.UUID(user), uuid.UUID(tenant)
