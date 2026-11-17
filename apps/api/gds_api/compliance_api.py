@@ -16,7 +16,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from gds_api.db import get_db
-from gds_api.security import CurrentUser
+from gds_api.security import CurrentUser, get_current_user
 
 router = APIRouter(prefix="/compliance", tags=["compliance"])
 
@@ -34,7 +34,7 @@ def score_of(passing: int, failing: int) -> float:
 
 @router.get("/frameworks")
 async def list_frameworks(
-    user: CurrentUser,
+    user: CurrentUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     rows = (await db.execute(text(
@@ -77,7 +77,7 @@ async def list_frameworks(
 
 @router.get("/assessments")
 async def list_assessments(
-    user: CurrentUser,
+    user: CurrentUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
     framework: str | None = Query(None),
     status: str | None = Query(None),
