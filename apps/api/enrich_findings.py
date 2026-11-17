@@ -21,6 +21,7 @@ import asyncio
 import json
 import os
 import pathlib
+import re
 import sys
 import time
 
@@ -30,6 +31,12 @@ from sqlalchemy import text
 KEV_URL = ("https://www.cisa.gov/sites/default/files/feeds/"
            "known_exploited_vulnerabilities.json")
 EPSS_URL = "https://api.first.org/data/v1/epss"
+NVD_URL = "https://services.nvd.nist.gov/rest/json/cves/2.0"
+NVD_CACHE = pathlib.Path("/var/cache/gds/nvd")
+NVD_CACHE_TTL = 7 * 24 * 3600
+# Prefer a v3.1 score, then v3.0, then v4.0, then v2. Whichever is used is recorded alongside the
+# number, because a v4 base score and a v3.1 base score are different measurements of the same CVE.
+NVD_PRIORITY = ("cvssMetricV31", "cvssMetricV30", "cvssMetricV40", "cvssMetricV2")
 CACHE = pathlib.Path("/var/cache/gds/kev.json")
 CACHE_TTL = 24 * 3600
 
@@ -45,6 +52,69 @@ def extract_cve(details: dict) -> str | None:
         if isinstance(alias, str) and alias.upper().startswith("CVE-"):
             return alias.upper()
     return None
+
+
+CVE_TEXT = re.compile(r"CVE-\d{4}-\d{4,}", re.IGNORECASE)
+
+
+def extract_cve_from_text(*parts: object) -> str | None:
+    """A CVE named in the finding's own text, when the scanner did not record it structurally.
+
+    Only answers when exactly one distinct CVE appears anywhere in the supplied text. Two
+    different ids is ambiguous, and picking either would be a guess.
+    """
+    found: set[str] = set()
+    for part in parts:
+        if not isinstance(part, str):
+            continue
+        found.update(match.upper() for match in CVE_TEXT.findall(part))
+    return found.pop() if len(found) == 1 else None
+
+
+def pick_nvd_metric(payload: dict) -> dict | None:
+    """The base score NVD published for this CVE, with the version it was measured under.
+
+    This reads a published number; it never computes one. That matters here because OSV publishes
+    CVSS v4 vectors for these advisories while the platform's own scorer only implements v3.1 -
+    deriving a v3.1 number from a v4 vector would be fabricating a measurement.
+    """
+    if not isinstance(payload, dict):
+        return None
+    vulns = payload.get("vulnerabilities") or []
+    if not vulns:
+        return None
+    metrics = (vulns[0].get("cve") or {}).get("metrics") or {}
+    for key in NVD_PRIORITY:
+        for entry in metrics.get(key) or []:
+            data = entry.get("cvssData") or {}
+            score = data.get("baseScore")
+            if isinstance(score, (int, float)):
+                return {
+                    "score": float(score),
+                    "version": data.get("version"),
+                    "vector": data.get("vectorString"),
+                    "metric": key,
+                }
+    return None
+
+
+def _nvd_cache_path(cve: str) -> pathlib.Path:
+    return NVD_CACHE / f"{cve}.json"
+
+
+def load_cached_nvd(cve: str) -> dict | None:
+    path = _nvd_cache_path(cve)
+    if path.exists() and (time.time() - path.stat().st_mtime) < NVD_CACHE_TTL:
+        try:
+            return json.loads(path.read_text())
+        except ValueError:
+            return None
+    return None
+
+
+def store_cached_nvd(cve: str, payload: dict) -> None:
+    NVD_CACHE.mkdir(parents=True, exist_ok=True)
+    _nvd_cache_path(cve).write_text(json.dumps(payload))
 
 
 def kev_ids(payload: dict) -> set[str]:
@@ -83,11 +153,104 @@ def fetch_epss(cves: list[str]) -> dict[str, float]:
     return out
 
 
+async def cvss_backfill(args) -> int:
+    """Fill CVSS from the score NVD published, for CVE-bearing findings that have none.
+
+    Measured before writing this: 237 open findings carried a CVE with cvss NULL while every one of
+    them already had EPSS and a KEV answer. The old selection never revisited a row that was missing
+    only CVSS, and it accepted a score only if the scanner had already put a number in details.
+    Rows NVD has no metric for are marked with a timestamp and left NULL, retried after seven days
+    rather than being written as 0.
+    """
+    from datetime import datetime, timezone
+
+    from gds_api.db import async_session_factory
+    from gds_api.tenant_binding import bind_tenant
+
+    tenant = args.tenant_id
+    select_sql = text(
+        "SELECT id, cve FROM security_findings "
+        "WHERE tenant_id = :t AND status = 'open' AND cve IS NOT NULL AND cvss IS NULL "
+        "AND (raw_data->'cvss_lookup'->>'at' IS NULL "
+        "     OR (raw_data->'cvss_lookup'->>'at')::timestamptz < now() - interval '7 days') "
+        "ORDER BY id LIMIT :n"
+    )
+    async with async_session_factory() as s:
+        await bind_tenant(s, tenant)
+        rows = (await s.execute(select_sql, {"t": tenant, "n": args.limit})).mappings().all()
+    print(f"cvss_backfill candidates={len(rows)}")
+    if not rows:
+        return 0
+
+    api_key = os.environ.get("NVD_API_KEY", "").strip()
+    # NVD allows 5 requests per 30s without a key, 50 with one.
+    delay = 0.8 if api_key else 6.5
+    headers = {"apiKey": api_key} if api_key else {}
+
+    scored: list[tuple[int, dict]] = []
+    unanswered: list[int] = []
+    with httpx.Client(timeout=45, headers=headers) as client:
+        for index, row in enumerate(rows, start=1):
+            cve = row["cve"]
+            payload = load_cached_nvd(cve)
+            if payload is None:
+                try:
+                    response = client.get(NVD_URL, params={"cveId": cve})
+                    payload = response.json() if response.status_code == 200 else {"_status": response.status_code}
+                except Exception as exc:  # noqa: BLE001 - a feed outage is recorded, never guessed around
+                    payload = {"_error": f"{type(exc).__name__}: {exc}"[:200]}
+                store_cached_nvd(cve, payload)
+                time.sleep(delay)
+            metric = pick_nvd_metric(payload)
+            if metric:
+                scored.append((row["id"], metric))
+            else:
+                unanswered.append(row["id"])
+            if index % 25 == 0:
+                print(f"  looked_up={index} scored={len(scored)} no_metric={len(unanswered)}")
+
+    now = datetime.now(timezone.utc).isoformat()
+    async with async_session_factory() as s:
+        await bind_tenant(s, tenant)
+        for finding_id, metric in scored:
+            patch = json.dumps({"cvss_lookup": {
+                "at": now, "result": "scored", "source": "nvd",
+                "metric": metric["metric"], "version": metric["version"], "vector": metric["vector"],
+            }})
+            await s.execute(text(
+                "UPDATE security_findings SET cvss = :score, "
+                "raw_data = COALESCE(raw_data, '{}'::jsonb) || CAST(:patch AS jsonb) "
+                "WHERE id = :id AND tenant_id = :t"),
+                {"score": metric["score"], "patch": patch, "id": finding_id, "t": tenant})
+        for finding_id in unanswered:
+            patch = json.dumps({"cvss_lookup": {"at": now, "result": "no_metric_published", "source": "nvd"}})
+            await s.execute(text(
+                "UPDATE security_findings SET "
+                "raw_data = COALESCE(raw_data, '{}'::jsonb) || CAST(:patch AS jsonb) "
+                "WHERE id = :id AND tenant_id = :t"),
+                {"patch": patch, "id": finding_id, "t": tenant})
+        await s.commit()
+        # NullPool: rebind before reading, or FORCE RLS shows zero rows and it reads as "all done".
+        await bind_tenant(s, tenant)
+        still = (await s.execute(text(
+            "SELECT COUNT(*) FILTER (WHERE cvss IS NULL AND cve IS NOT NULL) AS cvss_gap "
+            "FROM security_findings WHERE tenant_id = :t AND status = 'open'"),
+            {"t": tenant})).mappings().one()
+    print(f"cvss_backfill scored={len(scored)} no_metric_published={len(unanswered)} "
+          f"remaining_cvss_gap={still['cvss_gap']}")
+    return 0
+
+
 async def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--tenant-id", default=os.environ.get("GDS_TENANT_ID"))
     ap.add_argument("--limit", type=int, default=500)
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument(
+        "--cvss-backfill",
+        action="store_true",
+        help="fill CVSS for CVE-bearing findings from the score NVD published, then exit",
+    )
     args = ap.parse_args()
     if not args.tenant_id:
         print("no tenant id (pass --tenant-id or set GDS_TENANT_ID)", file=sys.stderr)
@@ -96,18 +259,24 @@ async def main() -> int:
     from gds_api.db import async_session_factory
     from gds_api.tenant_binding import bind_tenant
 
+    if args.cvss_backfill:
+        return await cvss_backfill(args)
+
     tenant = args.tenant_id
     async with async_session_factory() as s:
         await bind_tenant(s, tenant)
         rows = (await s.execute(text(
-            "SELECT id, details FROM security_findings "
+            "SELECT id, title, details FROM security_findings "
             "WHERE tenant_id = :t AND status = 'open' "
             "AND (cve IS NULL OR epss IS NULL OR kev_listed IS NULL) "
             "ORDER BY detected_at DESC LIMIT :n"), {"t": tenant, "n": args.limit})).mappings().all()
 
     candidates = []
     for row in rows:
-        cve = extract_cve(row["details"] or {})
+        details = row["details"] or {}
+        cve = extract_cve(details) or extract_cve_from_text(
+            row["title"], json.dumps(details)[:4000]
+        )
         if cve:
             candidates.append((row["id"], cve, row["details"] or {}))
     cves = sorted({c for _, c, _ in candidates})
