@@ -549,7 +549,15 @@ async def _discover_cloud_environment(payload=None, **kwargs):  # noqa: ANN001
     return await discover_cloud_environment(payload, **kwargs)
 
 
+async def _evaluate_cloud_posture(payload=None, **kwargs):  # noqa: ANN001
+    """Run a real cloud posture evaluation for one environment."""
+    from gds_api.cloud.posture.evaluation_runner import evaluate_cloud_posture
+
+    return await evaluate_cloud_posture(payload, **kwargs)
+
+
 TOOL_REGISTRY = {
+    "evaluate_cloud_posture": _evaluate_cloud_posture,
     "discover_cloud_environment": _discover_cloud_environment,
     "nmap_scan": _nmap_scan,
     "nuclei_scan": _nuclei_scan,
