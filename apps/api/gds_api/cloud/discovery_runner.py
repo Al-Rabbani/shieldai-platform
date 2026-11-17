@@ -231,6 +231,40 @@ async def run_discovery(
     }
 
 
+
+def _provider_not_connected(provider: str) -> dict:
+    """Say exactly which provider is unconnected and what connecting it requires."""
+    from gds_api.cloud.providers import get_provider, list_providers
+
+    registered = sorted(p.provider_id for p in list_providers())
+    definition = get_provider(provider) if provider else None
+    if definition is None:
+        return {
+            "status": "error",
+            "code": "UNKNOWN_PROVIDER",
+            "provider": provider or None,
+            "registered_providers": registered,
+            "detail": f"'{provider}' is not a registered cloud provider",
+        }
+    return {
+        "status": "error",
+        "code": "PROVIDER_NOT_CONNECTED",
+        "provider": definition.provider_id,
+        "display_name": definition.display_name,
+        "detail": (
+            f"no {definition.display_name} environment is registered for this tenant, so discovery "
+            "has nothing to scan - the provider itself is implemented and registered"
+        ),
+        "required_to_connect": [
+            "register a cloud environment for this provider (native_id is the account, "
+            "subscription or project identifier)",
+            "register a read-only connection profile for it",
+        ],
+        "supported_authentication_mechanisms": list(definition.supported_authentication_mechanisms),
+        "registered_providers": registered,
+    }
+
+
 async def discover_cloud_environment(payload: dict | None = None, **kwargs: object) -> dict:
     """Capability tool: create the discovery job, run it against the provider, report the outcome.
 
@@ -251,26 +285,62 @@ async def discover_cloud_environment(payload: dict | None = None, **kwargs: obje
                    or kwargs.get("mission_id"))
     raw_user = (payload.get("initiated_by_user_id") or payload.get("user_id")
                 or payload.get("_actor_id") or kwargs.get("user_id"))
-    if not tenant_raw or not env_raw:
+    provider_raw = str(payload.get("provider") or kwargs.get("provider") or "").strip().lower()
+    if not tenant_raw:
         return {"status": "error", "code": "MISSING_ARGUMENT",
-                "detail": "tenant_id and environment_id are required to run discovery"}
+                "detail": "tenant_id is required to run discovery"}
+    if not env_raw and not provider_raw:
+        return {"status": "error", "code": "MISSING_ARGUMENT",
+                "detail": "environment_id or provider is required to run discovery"}
 
     tenant_id = uuid.UUID(str(tenant_raw))
-    env_id = uuid.UUID(str(env_raw))
+    env_id = uuid.UUID(str(env_raw)) if env_raw else None
     mission_id = uuid.UUID(str(raw_mission)) if raw_mission else None
 
     async with async_session_factory() as session:
         await bind_tenant(session, tenant_id)
-        env = (
-            await session.execute(
-                select(CloudEnvironment).where(
-                    CloudEnvironment.id == env_id, CloudEnvironment.tenant_id == tenant_id
+        if env_id is not None:
+            env = (
+                await session.execute(
+                    select(CloudEnvironment).where(
+                        CloudEnvironment.id == env_id, CloudEnvironment.tenant_id == tenant_id
+                    )
                 )
-            )
-        ).scalars().first()
-        if env is None:
-            return {"status": "error", "code": "ENVIRONMENT_NOT_FOUND",
-                    "detail": f"no cloud environment {env_id} for this tenant"}
+            ).scalars().first()
+            if env is None:
+                return {"status": "error", "code": "ENVIRONMENT_NOT_FOUND",
+                        "detail": f"no cloud environment {env_id} for this tenant"}
+        else:
+            # A provider-only request is how an agent asks "scan my Azure estate". Before this, it
+            # answered "environment_id is required", which named an argument rather than the real
+            # cause and hid the fact that the provider was never connected at all.
+            candidates = (
+                await session.execute(
+                    select(CloudEnvironment).where(
+                        CloudEnvironment.tenant_id == tenant_id,
+                        CloudEnvironment.provider == provider_raw,
+                    )
+                )
+            ).scalars().all()
+            if not candidates:
+                return _provider_not_connected(provider_raw)
+            if len(candidates) > 1:
+                return {
+                    "status": "error",
+                    "code": "AMBIGUOUS_ENVIRONMENT",
+                    "provider": provider_raw,
+                    "detail": (
+                        f"this tenant has {len(candidates)} {provider_raw} environments; "
+                        "name one with environment_id"
+                    ),
+                    "environments": [
+                        {"environment_id": str(c.id), "native_id": c.native_id,
+                         "environment_type": getattr(c, "environment_type", None)}
+                        for c in candidates
+                    ],
+                }
+            env = candidates[0]
+        env_id = env.id
 
         user_id = uuid.UUID(str(raw_user)) if raw_user else None
         if user_id is None and mission_id is not None:
