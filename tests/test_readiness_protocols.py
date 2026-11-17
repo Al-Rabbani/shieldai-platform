@@ -45,12 +45,28 @@ class ProtocolHealthTests(unittest.IsolatedAsyncioTestCase):
         client.get_temporal_client.assert_awaited_once()
 
     async def test_temporal_requires_successful_protocol_handshake(self):
+        # The probe is not satisfied by a client object existing: it must obtain a positive
+        # answer from Temporal's WorkflowService health RPC. A bare object() used to be faked
+        # here, which is exactly the "port is listening, therefore healthy" bug this probe
+        # was rewritten to catch.
+        service = types.SimpleNamespace(check_health=AsyncMock(return_value=True))
         client = types.ModuleType("gds_api.temporal_client")
-        client.get_temporal_client = AsyncMock(return_value=object())
+        client.get_temporal_client = AsyncMock(return_value=types.SimpleNamespace(service_client=service))
         with patch.dict(sys.modules, {"gds_api.temporal_client": client}):
             result = await self.ns["_timed"]("temporal", self.ns["_check_temporal"])
         self.assertEqual(result.status, "healthy")
         self.assertIn("gRPC", result.detail)
+        service.check_health.assert_awaited_once()
+
+    async def test_temporal_reporting_not_serving_is_unhealthy(self):
+        service = types.SimpleNamespace(check_health=AsyncMock(return_value=False))
+        client = types.ModuleType("gds_api.temporal_client")
+        client.get_temporal_client = AsyncMock(return_value=types.SimpleNamespace(service_client=service))
+        with patch.dict(sys.modules, {"gds_api.temporal_client": client}):
+            result = await self.ns["_timed"]("temporal", self.ns["_check_temporal"])
+        self.assertEqual(result.status, "unhealthy")
+        # The detail is sanitised: a failing handshake never echoes broker internals.
+        self.assertIn("service check failed", result.detail)
 
     async def nats_probe(self, lines):
         reader = types.SimpleNamespace(readline=AsyncMock(side_effect=lines))
@@ -100,15 +116,74 @@ class ReadinessTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.status_code, 503)
 
 class LegacyRouteBoundaryTests(unittest.IsolatedAsyncioTestCase):
-    def test_every_legacy_router_has_the_fail_closed_dependency(self):
+    """The gap_routes raw-SQL routers must be either gated or explicitly tenant-scoped.
+
+    History: all six were gated behind require_verified_legacy_route. Five were then released
+    after being rewritten with explicit tenant predicates, so asserting "all six are gated"
+    is no longer true. The invariant that still holds, and is what this test enforces, is that
+    no router in this module exposes data without one of those two protections.
+    """
+
+    def routers_and_handlers(self):
         tree = ast.parse((ROOT / "apps/api/gds_api/gap_routes.py").read_text())
-        routers = [node for node in ast.walk(tree) if isinstance(node, ast.Call)
-                   and isinstance(node.func, ast.Name) and node.func.id == "APIRouter"]
-        self.assertEqual(len(routers), 6)
-        for router in routers:
-            dependencies = next((keyword.value for keyword in router.keywords if keyword.arg == "dependencies"), None)
-            self.assertIsNotNone(dependencies)
-            self.assertIn("require_verified_legacy_route", ast.unparse(dependencies))
+        routers = {}
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Assign) and isinstance(node.value, ast.Call):
+                call = node.value
+                if isinstance(call.func, ast.Name) and call.func.id == "APIRouter":
+                    name = node.targets[0].id
+                    deps = next((kw.value for kw in call.keywords if kw.arg == "dependencies"), None)
+                    routers[name] = deps
+
+        def decorator_router(node):
+            for dec in node.decorator_list:
+                target = dec.func if isinstance(dec, ast.Call) else dec
+                if isinstance(target, ast.Attribute) and isinstance(target.value, ast.Name):
+                    if target.value.id in routers:
+                        return target.value.id
+            return None
+
+        handlers = {name: [] for name in routers}
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                owner = decorator_router(node)
+                if owner:
+                    handlers[owner].append(node)
+        return routers, handlers
+
+    def test_every_legacy_router_is_gated_or_tenant_scoped(self):
+        routers, handlers = self.routers_and_handlers()
+        self.assertGreaterEqual(len(routers), 1)
+        for name, deps in routers.items():
+            gated = deps is not None and "require_verified_legacy_route" in ast.unparse(deps)
+            if gated:
+                continue
+            self.assertTrue(handlers[name], f"{name} is neither gated nor has visible handlers")
+            for handler in handlers[name]:
+                body = ast.unparse(handler)
+                self.assertIn(
+                    "_tenant_id(", body,
+                    f"{name}.{handler.name} is un-gated and never resolves a tenant",
+                )
+
+    def test_tenant_less_token_is_refused_not_widened(self):
+        # _tenant_id must raise 403 rather than falling back to an unscoped read.
+        class HTTPError(Exception):
+            def __init__(self, status_code, detail):
+                self.status_code = status_code
+                self.detail = detail
+
+        class Bare:
+            tenant_id = None
+
+        tree = ast.parse((ROOT / "apps/api/gds_api/gap_routes.py").read_text())
+        node = next(n for n in ast.walk(tree)
+                    if isinstance(n, ast.FunctionDef) and n.name == "_tenant_id")
+        ns = {"CurrentUser": object, "HTTPException": HTTPError}
+        exec(compile(ast.Module(body=[node], type_ignores=[]), "gap_routes", "exec"), ns)
+        with self.assertRaises(HTTPError) as caught:
+            ns["_tenant_id"](Bare())
+        self.assertEqual(caught.exception.status_code, 403)
 
     async def test_authenticated_legacy_request_is_blocked_before_query_execution(self):
         class HTTPError(Exception):
@@ -121,6 +196,49 @@ class LegacyRouteBoundaryTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(HTTPError) as caught:
             await ns["require_verified_legacy_route"](object())
         self.assertEqual(caught.exception.status_code, 503)
+
+
+class RetiredModuleAbsenceTests(unittest.TestCase):
+    """Retired scaffold modules are deleted, not merely commented out.
+
+    Each was retired because the tables it queried were never created, so its handlers could
+    only 500. Keeping the source invited exactly the confusion this test now prevents: a fix
+    applied to code that no process can reach.
+    """
+
+    RETIRED_PATHS = (
+        "apps/api/gds_api/marketplace",
+        "apps/api/gds_api/attack_graph",
+        "apps/api/gds_api/digital_twin",
+        "apps/api/gds_api/redteam_sim",
+        "apps/api/gds_api/ai_security",
+        "apps/api/gds_api/autofix",
+        "apps/api/gds_api/sso",
+        "apps/api/gds_api/compliance/autofix_routes.py",
+        "apps/api/gds_api/compliance/evidence_routes.py",
+        "apps/api/gds_api/integrations/routes.py",
+        "apps/api/gds_api/webhooks/routes.py",
+        "apps/api/gds_api/data_residency/routes.py",
+    )
+
+    def test_retired_modules_have_no_source_tree(self):
+        for rel in self.RETIRED_PATHS:
+            self.assertFalse((ROOT / rel).exists(), f"retired module still present: {rel}")
+
+    def test_main_py_no_longer_mentions_retired_routers(self):
+        source = (ROOT / "apps/api/gds_api/main.py").read_text()
+        for token in ("marketplace_routes", "attack_graph_routes", "digital_twin_routes",
+                      "redteam_sim_routes", "ai_security_routes", "autofix_routes",
+                      "sso_routes", "ci_cd_routes", "webhook_routes", "residency_routes",
+                      "compliance_autofix_routes", "compliance_evidence_routes"):
+            self.assertNotIn(token, source, f"main.py still references {token}")
+
+    def test_retirement_is_documented(self):
+        doc = (ROOT / "docs/RETIRED_MODULES.md").read_text()
+        for module in ("marketplace", "attack_graph", "digital_twin", "redteam_sim",
+                       "ai_security", "autofix", "sso"):
+            self.assertIn(module, doc, f"{module} missing from docs/RETIRED_MODULES.md")
+
 
 class WorkflowIdentifierTests(unittest.TestCase):
     def parser(self):
@@ -149,25 +267,3 @@ class WorkflowIdentifierTests(unittest.TestCase):
         value = uuid.uuid4()
         self.assertEqual(parser(str(value)), value)
 
-class LegacyFeatureMountTests(unittest.TestCase):
-    def test_unverified_feature_mounts_require_the_quarantine_guard(self):
-        expected = {
-            "compliance_autofix_routes.router", "autofix_routes.router",
-            "compliance_evidence_routes.router", "ci_cd_routes.router", "webhook_routes.router",
-            "sso_routes.router", "residency_routes.router", "ai_security_routes.router",
-            "attack_graph_routes.router", "redteam_sim_routes.router",
-            "digital_twin_routes.router", "marketplace_routes.router", "reasoning_router",
-        }
-        tree = ast.parse((ROOT / "apps/api/gds_api/main.py").read_text())
-        found = set()
-        for node in ast.walk(tree):
-            if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute) or node.func.attr != "include_router" or not node.args:
-                continue
-            name = ast.unparse(node.args[0])
-            if name not in expected:
-                continue
-            dependency = next((keyword.value for keyword in node.keywords if keyword.arg == "dependencies"), None)
-            self.assertIsNotNone(dependency, name)
-            self.assertIn("require_verified_legacy_route", ast.unparse(dependency), name)
-            found.add(name)
-        self.assertEqual(found, expected)
