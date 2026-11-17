@@ -29,6 +29,7 @@ import hashlib
 import json
 import math
 import os
+import sys
 import subprocess
 import tempfile
 import uuid
@@ -59,86 +60,21 @@ async def run_semgrep_scan(
     tenant_id: str,
     db: AsyncSession,
 ) -> dict[str, Any]:
-    """Run Semgrep static analysis on a code path.
+    """Semgrep static analysis, persisted to security_findings.
 
-    Semgrep must be installed on the system: `pip install semgrep`
-    or `npm install -g @semgrep/semgrep`.
-
-    Args:
-        target_path: Path to the code to scan (directory or file)
-        config: Semgrep rule config (default "auto" = all rules)
+    Previously this built ORM `Finding` rows (the legacy, empty `findings` table) and never
+    committed, so it could report findings that no endpoint could ever read. It now runs the real
+    engine in gds_api/scanner_engines.py and reports what actually persisted.
     """
+    from gds_api.scanner_engines import semgrep_findings, store_findings
+
     try:
-        proc = await asyncio.create_subprocess_exec(
-            "semgrep", "--json", "--config", config, target_path,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=300)
-
-        if proc.returncode not in (0, 1):  # 1 = findings found, 0 = clean
-            return {
-                "success": False,
-                "error": f"Semgrep failed: {stderr.decode()}",
-                "findings": [],
-            }
-
-        result = json.loads(stdout.decode())
-        findings_data = result.get("results", [])
-
-        findings_created = 0
-        critical_count = 0
-
-        for f in findings_data:
-            severity_map = {"ERROR": "critical", "WARNING": "high", "INFO": "low"}
-            severity = severity_map.get(f.get("extra", {}).get("severity", "INFO"), "low")
-
-            finding = Finding(
-                tenant_id=uuid.UUID(tenant_id),
-                source="semgrep_sast",
-                external_id=f"{f.get('check_id', 'unknown')}:{f.get('path', '')}",
-                title=f"SAST: {f.get('check_id', 'Unknown rule')}",
-                description=f"{f.get('extra', {}).get('message', 'Security issue detected')} in {f.get('path')}:{f.get('start', {}).get('line', '?')}",
-                severity=severity,
-                status=FindingStatus.OBSERVED.value,
-                raw_data={
-                    "check_id": f.get("check_id"),
-                    "path": f.get("path"),
-                    "line": f.get("start", {}).get("line"),
-                    "rule": f.get("extra", {}).get("metadata", {}),
-                    "fix": f.get("extra", {}).get("fix", ""),
-                    "cwe": f.get("extra", {}).get("metadata", {}).get("cwe", []),
-                    "owasp": f.get("extra", {}).get("metadata", {}).get("owasp", []),
-                },
-            )
-            db.add(finding)
-            findings_created += 1
-            if severity == "critical":
-                critical_count += 1
-
-        await db.commit()
-
-        return {
-            "success": True,
-            "findings_total": len(findings_data),
-            "findings_created": findings_created,
-            "critical_count": critical_count,
-            "scanner": "semgrep",
-            "config_used": config,
-            "scan_duration_ms": result.get("scan_time", 0),
-        }
-
-    except FileNotFoundError:
-        return {"success": False, "error": "Semgrep not installed. Install: pip install semgrep", "findings": []}
-    except asyncio.TimeoutError:
-        return {"success": False, "error": "Semgrep scan timed out (300s limit)", "findings": []}
+        found = await semgrep_findings(target_path, config)
     except Exception as exc:
-        return {"success": False, "error": str(exc), "findings": []}
+        return {"success": False, "scanner": "semgrep", "error": f"{type(exc).__name__}: {exc}"[:500], "findings": []}
+    stored = await store_findings(db, tenant_id, "semgrep", target_path, found)
+    return {"success": True, "scanner": "semgrep", **stored, "findings": found[:5]}
 
-
-# ---------------------------------------------------------------------------
-# 2. DAST — Dynamic Application Security Testing via Nuclei
-# ---------------------------------------------------------------------------
 
 
 async def run_nuclei_scan(
@@ -149,97 +85,16 @@ async def run_nuclei_scan(
     tenant_id: str,
     db: AsyncSession,
 ) -> dict[str, Any]:
-    """Run Nuclei dynamic scanning against a URL.
+    """Nuclei dynamic scan, persisted to security_findings (see scanner_engines)."""
+    from gds_api.scanner_engines import nuclei_findings, store_findings
 
-    Nuclei must be installed: `go install github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest`
-    or via the project's Docker image.
-
-    Args:
-        target_url: The URL to scan (must be authorized)
-        templates: Nuclei template tags to use
-        severity: Severity levels to report
-    """
     try:
-        proc = await asyncio.create_subprocess_exec(
-            "nuclei",
-            "-u", target_url,
-            "-j",  # JSON output
-            "-severity", severity,
-            "-tags", templates,
-            "-silent",  # Only results in stdout
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=600)
-
-        findings_created = 0
-        critical_count = 0
-
-        # Nuclei outputs one JSON object per line
-        for line in stdout.decode().strip().split("\n"):
-            if not line.strip():
-                continue
-            try:
-                result = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-
-            sev = result.get("info", {}).get("severity", "info").lower()
-            severity_map = {"critical": "critical", "high": "high", "medium": "medium", "low": "low", "info": "low"}
-            mapped_severity = severity_map.get(sev, "low")
-
-            finding = Finding(
-                tenant_id=uuid.UUID(tenant_id),
-                source="nuclei_dast",
-                external_id=f"nuclei:{result.get('template-id', 'unknown')}",
-                title=f"DAST: {result.get('info', {}).get('name', result.get('template-id', 'Unknown'))}",
-                description=(
-                    f"{result.get('info', {}).get('description', 'Vulnerability detected')}\n"
-                    f"Matched at: {result.get('matched-at', result.get('host', 'unknown'))}\n"
-                    f"Type: {result.get('type', 'unknown')}"
-                ),
-                severity=mapped_severity,
-                status=FindingStatus.OBSERVED.value,
-                raw_data={
-                    "template_id": result.get("template-id"),
-                    "template_path": result.get("template-path"),
-                    "matched_at": result.get("matched-at"),
-                    "extracted_results": result.get("extracted-results", []),
-                    "curl_command": result.get("curl-command"),
-                    "type": result.get("type"),
-                    "tags": result.get("info", {}).get("tags", []),
-                    "reference": result.get("info", {}).get("reference", []),
-                    "cvss": result.get("info", {}).get("classification", {}).get("cvss-score"),
-                    "cve": result.get("info", {}).get("classification", {}).get("cve-id", []),
-                },
-            )
-            db.add(finding)
-            findings_created += 1
-            if mapped_severity == "critical":
-                critical_count += 1
-
-        await db.commit()
-
-        return {
-            "success": True,
-            "target": target_url,
-            "findings_created": findings_created,
-            "critical_count": critical_count,
-            "scanner": "nuclei",
-            "templates_used": templates,
-        }
-
-    except FileNotFoundError:
-        return {"success": False, "error": "Nuclei not installed. See: https://github.com/projectdiscovery/nuclei", "findings": []}
-    except asyncio.TimeoutError:
-        return {"success": False, "error": "Nuclei scan timed out (600s limit)", "findings": []}
+        found = await nuclei_findings(target_url, templates, severity)
     except Exception as exc:
-        return {"success": False, "error": str(exc), "findings": []}
+        return {"success": False, "scanner": "nuclei", "error": f"{type(exc).__name__}: {exc}"[:500], "findings": []}
+    stored = await store_findings(db, tenant_id, "nuclei", target_url, found)
+    return {"success": True, "scanner": "nuclei", **stored, "findings": found[:5]}
 
-
-# ---------------------------------------------------------------------------
-# 3. Container Scanning via Trivy
-# ---------------------------------------------------------------------------
 
 
 async def run_trivy_scan(
@@ -250,120 +105,21 @@ async def run_trivy_scan(
     tenant_id: str,
     db: AsyncSession,
 ) -> dict[str, Any]:
-    """Run Trivy container image scanning.
+    """Trivy image scan, persisted to security_findings (see scanner_engines).
 
-    Trivy must be installed: https://aquasecurity.github.io/trivy/latest/getting-started/installation/
-
-    Args:
-        image: Docker image to scan (e.g., "nginx:latest")
-        scan_type: vuln (vulnerabilities), secret (secrets), misconfig (misconfigurations)
-        severity: Severity levels to report
+    The previous implementation handed ORM `Finding` rows to the session without committing and
+    without touching security_findings, so a scan of minio/minio:latest reported
+    `findings_created: 314` while the register gained zero rows.
     """
+    from gds_api.scanner_engines import store_findings, trivy_findings
+
     try:
-        cmd = ["trivy", "image", "--format", "json", "--severity", severity]
-
-        if scan_type == "secret":
-            cmd.extend(["--scanners", "secret"])
-        elif scan_type == "misconfig":
-            cmd.extend(["--scanners", "misconfig"])
-
-        cmd.append(image)
-
-        proc = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=300)
-
-        if proc.returncode not in (0, 1):
-            return {"success": False, "error": f"Trivy failed: {stderr.decode()[:500]}", "findings": []}
-
-        result = json.loads(stdout.decode())
-        findings_created = 0
-        critical_count = 0
-
-        for target in result.get("Results", []):
-            for vuln in target.get("Vulnerabilities", []) or []:
-                sev = vuln.get("Severity", "UNKNOWN").lower()
-                severity_map = {"critical": "critical", "high": "high", "medium": "medium", "low": "low"}
-                mapped_sev = severity_map.get(sev, "low")
-
-                finding = Finding(
-                    tenant_id=uuid.UUID(tenant_id),
-                    source="trivy_container",
-                    external_id=f"trivy:{vuln.get('VulnerabilityID', 'unknown')}:{vuln.get('PkgName', '')}",
-                    title=f"Container: {vuln.get('VulnerabilityID', 'Unknown')} in {vuln.get('PkgName', 'unknown')}",
-                    description=(
-                        f"{vuln.get('Title', vuln.get('Description', 'Vulnerability found'))}\n"
-                        f"Package: {vuln.get('PkgName')} {vuln.get('InstalledVersion')} → "
-                        f"Fixed: {vuln.get('FixedVersion', 'N/A')}\n"
-                        f"Image: {image}\n"
-                        f"Target: {target.get('Target', 'unknown')}"
-                    ),
-                    severity=mapped_sev,
-                    status=FindingStatus.OBSERVED.value,
-                    raw_data={
-                        "vulnerability_id": vuln.get("VulnerabilityID"),
-                        "package": vuln.get("PkgName"),
-                        "installed_version": vuln.get("InstalledVersion"),
-                        "fixed_version": vuln.get("FixedVersion"),
-                        "cvss": vuln.get("CVSS", {}),
-                        "cwe_id": vuln.get("CweIDs", []),
-                        "image": image,
-                        "target": target.get("Target"),
-                        "layer": vuln.get("Layer", {}),
-                    },
-                    cve=vuln.get("VulnerabilityID") if vuln.get("VulnerabilityID", "").startswith("CVE") else None,
-                )
-                db.add(finding)
-                findings_created += 1
-                if mapped_sev == "critical":
-                    critical_count += 1
-
-            # Also capture secrets
-            for secret in target.get("Secrets", []) or []:
-                finding = Finding(
-                    tenant_id=uuid.UUID(tenant_id),
-                    source="trivy_secret",
-                    external_id=f"trivy-secret:{secret.get('RuleID', 'unknown')}",
-                    title=f"Container Secret: {secret.get('Title', secret.get('RuleID', 'Unknown'))}",
-                    description=f"Secret detected in {image}: {secret.get('Match', 'hidden')}",
-                    severity="critical",
-                    status=FindingStatus.OBSERVED.value,
-                    raw_data={
-                        "rule_id": secret.get("RuleID"),
-                        "category": secret.get("Category"),
-                        "file": secret.get("Target"),
-                        "image": image,
-                    },
-                )
-                db.add(finding)
-                findings_created += 1
-                critical_count += 1
-
-        await db.commit()
-
-        return {
-            "success": True,
-            "image": image,
-            "scan_type": scan_type,
-            "findings_created": findings_created,
-            "critical_count": critical_count,
-            "scanner": "trivy",
-        }
-
-    except FileNotFoundError:
-        return {"success": False, "error": "Trivy not installed. See: https://aquasecurity.github.io/trivy/", "findings": []}
-    except asyncio.TimeoutError:
-        return {"success": False, "error": "Trivy scan timed out (300s limit)", "findings": []}
+        found = await trivy_findings(image, scan_type=scan_type, severity=severity)
     except Exception as exc:
-        return {"success": False, "error": str(exc), "findings": []}
+        return {"success": False, "scanner": "trivy", "error": f"{type(exc).__name__}: {exc}"[:500], "findings": []}
+    stored = await store_findings(db, tenant_id, "trivy", image, found)
+    return {"success": True, "scanner": "trivy", **stored, "findings": found[:5]}
 
-
-# ---------------------------------------------------------------------------
-# 4. SBOM Generation (CycloneDX format)
-# ---------------------------------------------------------------------------
 
 
 async def generate_sbom(
