@@ -27,5 +27,7 @@ _MAX_ITERATIONS = 3
 @workflow.defn
 class ConversationTurnWorkflow:
     @workflow.run
-    async def run(self, mission_id: str) -> None:
-        await reasoning_loop.run_reasoning_loop(mission_id, max_iterations=_MAX_ITERATIONS)
+    async def run(self, mission_id: str, tenant_id: str | None = None) -> None:
+        await reasoning_loop.run_reasoning_loop(
+            mission_id, max_iterations=_MAX_ITERATIONS, tenant_id=tenant_id
+        )

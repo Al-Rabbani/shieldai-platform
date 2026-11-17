@@ -323,9 +323,24 @@ _CHAT_REPORT_SYSTEM_PROMPT = (
 )
 
 
+
+async def _bind_if_given(db: AsyncSession, tenant_id: str | None) -> None:
+    """Bind the tenant BEFORE any read on a FORCE-RLS table.
+
+    The Mission row is the tenant anchor, but it lives in `missions`, which is itself
+    enforced. Reading it first to discover the tenant is circular once forcing is on: the
+    read returns nothing because no tenant is bound yet. The workflow therefore passes
+    tenant_id in its input, and this binds it up front so the row becomes visible.
+    """
+    if tenant_id:
+        await bind_tenant(db, tenant_id)
+
 @activity.defn
-async def assess_mission(mission_id: str) -> dict[str, str]:
+async def assess_mission(
+    mission_id: str, tenant_id: str | None = None
+) -> dict[str, str]:
     async with async_session_factory() as db:
+        await _bind_if_given(db, tenant_id)
         mission = await db.get(Mission, _activity_record_uuid(mission_id, "mission"))
         if mission is not None:
             await bind_tenant(db, mission.tenant_id)
@@ -364,8 +379,10 @@ async def decide_next_step(payload: dict[str, Any]) -> dict[str, Any]:
     reasoning_loop.py just calls this repeatedly and reacts to what it returns, same
     durable-workflow discipline as before)."""
     mission_id = payload.get("mission_id")
+    tenant_id = payload.get("tenant_id")
 
     async with async_session_factory() as db:
+        await _bind_if_given(db, tenant_id)
         mission = await db.get(Mission, _activity_record_uuid(mission_id, "mission"))
         if mission is not None:
             await bind_tenant(db, mission.tenant_id)
@@ -451,8 +468,9 @@ async def decide_next_step(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 @activity.defn
-async def evaluate_task(task_id: str) -> dict[str, Any]:
+async def evaluate_task(task_id: str, tenant_id: str | None = None) -> dict[str, Any]:
     async with async_session_factory() as db:
+        await _bind_if_given(db, tenant_id)
         task = await db.get(MissionTask, _activity_record_uuid(task_id, "task"))
         if task is None:
             raise ValueError(f"Task {task_id} not found")
@@ -544,8 +562,9 @@ async def evaluate_task(task_id: str) -> dict[str, Any]:
 
 
 @activity.defn
-async def check_approval(approval_id: str) -> str:
+async def check_approval(approval_id: str, tenant_id: str | None = None) -> str:
     async with async_session_factory() as db:
+        await _bind_if_given(db, tenant_id)
         approval = await db.get(Approval, _activity_record_uuid(approval_id, "approval"))
         if approval is None:
             raise ValueError(f"Approval {approval_id} not found")
@@ -553,8 +572,9 @@ async def check_approval(approval_id: str) -> str:
 
 
 @activity.defn
-async def execute_task(task_id: str) -> dict[str, Any]:
+async def execute_task(task_id: str, tenant_id: str | None = None) -> dict[str, Any]:
     async with async_session_factory() as db:
+        await _bind_if_given(db, tenant_id)
         task = await db.get(MissionTask, _activity_record_uuid(task_id, "task"))
         if task is None:
             raise ValueError(f"Task {task_id} not found")
@@ -563,6 +583,14 @@ async def execute_task(task_id: str) -> dict[str, Any]:
             await bind_tenant(db, mission.tenant_id)
         if mission is None:
             raise ValueError(f"Mission {task.mission_id} not found")
+
+        # Snapshot every scalar this activity needs AFTER the gateway is called.
+        # execute_capability_request() -> _claim_execution() may call db.rollback()
+        # on this same session, which expires all ORM instances; touching an expired
+        # attribute then does a synchronous PK reload and raises MissingGreenlet.
+        mission_id_str = str(mission.id)
+        _snapshot_mission_tenant = str(mission.tenant_id)
+        _snapshot_user_id = mission.requested_by_user_id
 
         task.status = "running"
         # Phase 15: the real first moment a mission's work actually begins - previously
@@ -707,22 +735,26 @@ async def execute_task(task_id: str) -> dict[str, Any]:
             "output": result,
             **({"agent_report": agent_report} if agent_report else {}),
         }
+        # Read status BEFORE commit: task may have been expired by a gateway rollback.
+        _final_status = task.status
         await db.commit()
         await publish_mission_event(
-            str(mission.id), "task_completed", task_id=task_id, status=task.status
+            mission_id_str, "task_completed", task_id=task_id, status=_final_status
         )
         return result
 
 
 @activity.defn
-async def deny_task(task_id: str) -> None:
+async def deny_task(task_id: str, tenant_id: str | None = None) -> None:
     async with async_session_factory() as db:
+        await _bind_if_given(db, tenant_id)
         task = await db.get(MissionTask, _activity_record_uuid(task_id, "task"))
         if task is None:
             raise ValueError(f"Task {task_id} not found")
         task.status = "denied"
+        _denied_mission_id = str(task.mission_id)
         await db.commit()
-        await publish_mission_event(str(task.mission_id), "task_denied", task_id=task_id)
+        await publish_mission_event(_denied_mission_id, "task_denied", task_id=task_id)
 
 
 @activity.defn
@@ -736,9 +768,11 @@ async def mark_mission_failed(payload: dict[str, Any]) -> None:
     after, so Temporal's own execution history still shows the real failure too; this
     activity's only job is making sure Postgres agrees before that happens."""
     mission_id = payload.get("mission_id")
+    tenant_id = payload.get("tenant_id")
     error_message_safe = str(payload.get("error_message_safe", ""))[:500]
 
     async with async_session_factory() as db:
+        await _bind_if_given(db, tenant_id)
         mission = await db.get(Mission, _activity_record_uuid(mission_id, "mission"))
         if mission is not None:
             await bind_tenant(db, mission.tenant_id)
@@ -822,9 +856,11 @@ def _build_report_user_message(
 @activity.defn
 async def synthesize_report(payload: dict[str, Any]) -> None:
     mission_id = payload.get("mission_id")
+    tenant_id = payload.get("tenant_id")
     hit_iteration_limit = bool(payload.get("hit_iteration_limit", False))
 
     async with async_session_factory() as db:
+        await _bind_if_given(db, tenant_id)
         mission = await db.get(Mission, _activity_record_uuid(mission_id, "mission"))
         if mission is not None:
             await bind_tenant(db, mission.tenant_id)

@@ -24,10 +24,12 @@ _MAX_ITERATIONS = 5
 @workflow.defn
 class MissionWorkflow:
     @workflow.run
-    async def run(self, mission_id: str) -> None:
+    async def run(self, mission_id: str, tenant_id: str | None = None) -> None:
         await workflow.execute_activity(
             activities.assess_mission,
-            mission_id,
+            args=[mission_id, tenant_id],
             start_to_close_timeout=_ASSESS_TIMEOUT,
         )
-        await reasoning_loop.run_reasoning_loop(mission_id, max_iterations=_MAX_ITERATIONS)
+        await reasoning_loop.run_reasoning_loop(
+            mission_id, max_iterations=_MAX_ITERATIONS, tenant_id=tenant_id
+        )

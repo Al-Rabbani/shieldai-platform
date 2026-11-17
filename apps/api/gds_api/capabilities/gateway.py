@@ -24,6 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from gds_api import tool_gateway
 from gds_api.capabilities.broker import mark_capability_execution, reevaluate_capability_request
+from gds_api.tenant_binding import bind_tenant
 from gds_api.models import CapabilityRequestRecord, CapabilityDecisionRecord
 
 
@@ -35,11 +36,30 @@ class CapabilityExecutionDenied(Exception):
         super().__init__(safe_message)
 
 
+def _parameters_match(stored, actual) -> bool:
+    """Stored parameters are redacted, so compare keys and non-redacted values.
+
+    A redacted value ("[REDACTED]") authorises any value for that key: the point of the
+    check is that the caller cannot substitute a different tool, actor, mission or an
+    added/removed argument, and that any parameter recorded in the clear still matches.
+    """
+    if not isinstance(stored, dict) or not isinstance(actual, dict):
+        return False
+    if set(stored.keys()) != set(actual.keys()):
+        return False
+    for key, value in stored.items():
+        if value == "[REDACTED]":
+            continue
+        if actual[key] != value:
+            return False
+    return True
+
+
 def _validate_execution_binding(request, *, tenant_id, user_id, mission_id, tool_name, input_data):
     """Execution cannot substitute a new tool, actor, mission or argument set."""
     if (request is None or request.tenant_id != tenant_id or request.user_id != user_id
             or request.mission_id != mission_id or request.requested_tool_id != tool_name
-            or not isinstance(input_data, dict) or request.requested_parameters_safe != input_data):
+            or not _parameters_match(request.requested_parameters_safe, input_data)):
         # Raw secrets are not valid tool arguments: use brokered credential references.
         # Redacted stored parameters can never authorize a substituted raw secret.
         raise CapabilityExecutionDenied("DENY", "execution_binding_mismatch", "Execution does not match its approved request.")
@@ -52,6 +72,10 @@ async def _claim_execution(db, *, tenant_id, request_id, decision_id):
     for this request. A crashed claim requires operator reconciliation, never replay.
     Requires PostgreSQL acceptance tests before production deployment.
     """
+    # R2: bind immediately before the locking read. A commit inside reevaluation can
+    # hand this session a fresh, unbound connection under NullPool, which would make
+    # the request row invisible to FORCE-RLS and look like a missing request.
+    await bind_tenant(db, tenant_id)
     request = (await db.execute(select(CapabilityRequestRecord).where(
         CapabilityRequestRecord.id == request_id,
         CapabilityRequestRecord.tenant_id == tenant_id,
@@ -88,6 +112,9 @@ async def execute_capability_request(
     runs the real tool and records the real outcome (executed|failed) on the decision
     that authorized it - a given decision can only ever be marked executed once
     (gds_api.capabilities.broker.CapabilityExecutionConflict guards real reuse)."""
+    # R2: capability tables are FORCE-RLS, so the tenant context must be live on the
+    # connection this session is currently using - it can be lost across a commit.
+    await bind_tenant(db, tenant_id)
     request_record = await db.get(CapabilityRequestRecord, request_id)
     _validate_execution_binding(request_record, tenant_id=tenant_id, user_id=user_id,
         mission_id=mission_id, tool_name=tool_name, input_data=input_data)

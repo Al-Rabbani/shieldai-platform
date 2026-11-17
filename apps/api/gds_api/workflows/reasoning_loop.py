@@ -29,7 +29,9 @@ _APPROVAL_POLL_INTERVAL = timedelta(seconds=5)
 _APPROVAL_TIMEOUT = timedelta(minutes=10)
 
 
-async def run_reasoning_loop(mission_id: str, *, max_iterations: int) -> None:
+async def run_reasoning_loop(
+    mission_id: str, *, max_iterations: int, tenant_id: str | None = None
+) -> None:
     """Phase 15: now wrapped in a try/except so a real activity failure (exhausted
     Temporal retries, a timeout) actually marks the Mission/WorkflowRun failed - see
     docs/reviews/phase-15-workflow-lifecycle-audit.md finding 2. CancelledError is caught
@@ -40,7 +42,9 @@ async def run_reasoning_loop(mission_id: str, *, max_iterations: int) -> None:
     with an incorrect "failed" one. Both branches re-raise afterward so Temporal's own
     execution history still shows the real outcome too - nothing is hidden from it."""
     try:
-        await _run_reasoning_loop_inner(mission_id, max_iterations=max_iterations)
+        await _run_reasoning_loop_inner(
+            mission_id, max_iterations=max_iterations, tenant_id=tenant_id
+        )
     except CancelledError:
         raise
     except Exception as exc:
@@ -54,13 +58,15 @@ async def run_reasoning_loop(mission_id: str, *, max_iterations: int) -> None:
         detail = str(cause) if cause is not None else str(exc)
         await workflow.execute_activity(
             activities.mark_mission_failed,
-            {"mission_id": mission_id, "error_message_safe": detail},
+            {"mission_id": mission_id, "error_message_safe": detail, "tenant_id": tenant_id},
             start_to_close_timeout=_SHORT_TIMEOUT,
         )
         raise
 
 
-async def _run_reasoning_loop_inner(mission_id: str, *, max_iterations: int) -> None:
+async def _run_reasoning_loop_inner(
+    mission_id: str, *, max_iterations: int, tenant_id: str | None = None
+) -> None:
     step_count = 0
     hit_iteration_limit = False
 
@@ -71,7 +77,7 @@ async def _run_reasoning_loop_inner(mission_id: str, *, max_iterations: int) -> 
 
         decision = await workflow.execute_activity(
             activities.decide_next_step,
-            {"mission_id": mission_id},
+            {"mission_id": mission_id, "tenant_id": tenant_id},
             start_to_close_timeout=_DEFAULT_TIMEOUT,
         )
         if decision["action"] == "finish":
@@ -80,13 +86,15 @@ async def _run_reasoning_loop_inner(mission_id: str, *, max_iterations: int) -> 
         task_id = decision["task_id"]
         evaluation = await workflow.execute_activity(
             activities.evaluate_task,
-            task_id,
+            args=[task_id, tenant_id],
             start_to_close_timeout=_SHORT_TIMEOUT,
         )
 
         if evaluation["decision"] == "deny":
             await workflow.execute_activity(
-                activities.deny_task, task_id, start_to_close_timeout=_SHORT_TIMEOUT
+                activities.deny_task,
+                    args=[task_id, tenant_id],
+                    start_to_close_timeout=_SHORT_TIMEOUT,
             )
             step_count += 1
             continue
@@ -99,19 +107,21 @@ async def _run_reasoning_loop_inner(mission_id: str, *, max_iterations: int) -> 
                 await workflow.sleep(_APPROVAL_POLL_INTERVAL)
                 status = await workflow.execute_activity(
                     activities.check_approval,
-                    args=[approval_id],
+                    args=[approval_id, tenant_id],
                     start_to_close_timeout=_SHORT_TIMEOUT,
                 )
             if status != "approved":
                 await workflow.execute_activity(
-                    activities.deny_task, task_id, start_to_close_timeout=_SHORT_TIMEOUT
+                    activities.deny_task,
+                args=[task_id, tenant_id],
+                start_to_close_timeout=_SHORT_TIMEOUT,
                 )
                 step_count += 1
                 continue
 
         await workflow.execute_activity(
             activities.execute_task,
-            task_id,
+            args=[task_id, tenant_id],
             start_to_close_timeout=_DEFAULT_TIMEOUT,
         )
         step_count += 1

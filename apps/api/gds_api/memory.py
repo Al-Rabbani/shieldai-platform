@@ -41,6 +41,7 @@ from gds_api.schemas import (
     WorkingMemoryEntryOut,
 )
 from gds_api.security import CurrentUser, require_permission
+from gds_api.tenant_binding import bind_tenant
 
 KNOWLEDGE_COLLECTION = "gds_knowledge"
 EMBEDDING_DIM = 384  # all-MiniLM-L6-v2's output size
@@ -129,6 +130,7 @@ async def add_knowledge_document(
     document_type: str = "manual",
     source_mission_id: uuid.UUID | None = None,
 ) -> KnowledgeDocument:
+    await bind_tenant(db, tenant_id)
     await _ensure_knowledge_collection()
     vector = await _embed(content)
     point_id = uuid.uuid4()
@@ -161,6 +163,7 @@ async def add_knowledge_document(
 async def search_knowledge(
     db: AsyncSession, *, tenant_id: uuid.UUID, query: str, limit: int = 3
 ) -> list[dict[str, object]]:
+    await bind_tenant(db, tenant_id)
     await _ensure_knowledge_collection()
     vector = await _embed(query)
 

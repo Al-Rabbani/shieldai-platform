@@ -52,14 +52,14 @@ async def start_mission_workflow(
     if kind == "direct":
         handle = await client.start_workflow(
             MissionWorkflow.run,
-            str(record_id),
+            args=[str(record_id), str(mission.tenant_id)],
             id=f"mission-{record_id}",
             task_queue=TASK_QUEUE,
         )
     else:
         handle = await client.start_workflow(
             ConversationTurnWorkflow.run,
-            str(record_id),
+            args=[str(record_id), str(mission.tenant_id)],
             id=f"conversation-turn-{record_id}",
             task_queue=TASK_QUEUE,
         )

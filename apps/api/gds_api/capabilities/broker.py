@@ -36,6 +36,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from gds_api import redteam_safety
 from gds_api.agents.manifest import AgentStatus
+from gds_api.tenant_binding import bind_tenant
 from gds_api.agents.registry import AGENT_REGISTRY
 from gds_api.audit import record_audit_event
 from gds_api.capabilities.catalog import CAPABILITY_REGISTRY
@@ -773,6 +774,9 @@ async def mark_capability_execution(
     authorized it. Called by gds_api.capabilities.gateway immediately after a real
     tool_gateway.execute_tool call returns (success or exception) - never before, and
     never for a decision that isn't ALLOW (the gateway itself enforces that)."""
+    # R2: capability_decisions is FORCE-RLS; bind the tenant before the PK read or the
+    # row is invisible and this wrongly reports a missing decision.
+    await bind_tenant(db, tenant_id)
     decision = await db.get(CapabilityDecisionRecord, decision_id)
     if decision is None or decision.tenant_id != tenant_id:
         raise CapabilityDenied(
