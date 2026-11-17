@@ -42,6 +42,7 @@ from gds_api.cloud.posture.registry import (
 from gds_api.cloud.posture.taxonomy import ApplicabilityState, EvaluationResult, EvaluationType
 from gds_api.cloud.posture.types import ApplicabilityResult, EvaluationContext, EvaluationOutcome
 from gds_api.events import publish_mission_event
+from gds_api.mission_reaper import fail_mission_durably
 from gds_api.logging_config import get_logger
 from gds_api.metrics import cloud_posture_evaluation_runs_total
 from gds_api.mission_taxonomy import (
@@ -473,15 +474,16 @@ async def start_evaluation(
             user_id=user_id,
             mission_id=mission.id,
         )
-    except CapabilityExecutionDenied as exc:
-        mission.status = "failed"
-        await db.flush()
+    except Exception as exc:
+        # Same defect as cloud discovery: the failure status was flushed and then destroyed by the
+        # rollback that follows this raise, leaving the mission running forever.
+        await fail_mission_durably(mission.id, tenant_id, f"{type(exc).__name__}: {exc}")
+        if isinstance(exc, CloudPostureEvaluationStartError):
+            raise
         raise CloudPostureEvaluationStartError(str(exc)) from exc
 
-    mission.status = "completed"
-    mission.completed_at = datetime.now(UTC)
-    await db.flush()
-
+    # The run is looked up BEFORE the mission is closed: a read that follows a commit needs the
+    # tenant re-bound on this NullPool session, and this keeps the read before any commit.
     run = (
         (
             await db.execute(
@@ -494,11 +496,21 @@ async def start_evaluation(
         .first()
     )
     if run is None:
+        await fail_mission_durably(
+            mission.id,
+            tenant_id,
+            "Capability executed but no CloudPostureEvaluationRun record was created",
+        )
         raise CloudPostureEvaluationStartError(
             "Capability executed but no CloudPostureEvaluationRun record was created - "
             "this is a real, unexpected internal inconsistency, not a normal "
             "evaluation failure."
         )
+
+    mission.status = "completed"
+    mission.completed_at = datetime.now(UTC)
+    await db.flush()
+    await db.commit()
     return run
 
 

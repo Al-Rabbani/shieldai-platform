@@ -28,6 +28,7 @@ from gds_api.capabilities.gateway import CapabilityExecutionDenied, execute_capa
 from gds_api.cloud.environments import CloudEnvironmentNotFound
 from gds_api.cloud.environments import get_environment as get_environment_service
 from gds_api.events import publish_mission_event
+from gds_api.mission_reaper import fail_mission_durably
 from gds_api.logging_config import get_logger
 from gds_api.metrics import cloud_discovery_jobs_total
 from gds_api.mission_taxonomy import (
@@ -139,9 +140,13 @@ async def start_discovery(
             user_id=user_id,
             mission_id=mission.id,
         )
-    except CapabilityExecutionDenied as exc:
-        mission.status = "failed"
-        await db.flush()
+    except Exception as exc:
+        # A failed start must not leave a running mission behind. The route commits only after this
+        # returns and get_db never commits, so raising here rolls this session back - the durable
+        # write below is the only record of the failure that survives.
+        await fail_mission_durably(mission.id, tenant_id, f"{type(exc).__name__}: {exc}")
+        if isinstance(exc, CloudDiscoveryStartError):
+            raise
         raise CloudDiscoveryStartError(str(exc)) from exc
 
     mission.status = "completed"
@@ -160,10 +165,16 @@ async def start_discovery(
         .first()
     )
     if job is None:
+        # The capability ran but left no job behind: close the mission honestly rather than reporting
+        # a start that produced nothing.
+        await fail_mission_durably(mission.id, tenant_id, "discovery produced no job record")
         raise CloudDiscoveryStartError(
             "Capability executed but no CloudDiscoveryJob record was created - this is a "
             "real, unexpected internal inconsistency, not a normal discovery failure."
         )
+    # Committed after the read, never before: a commit here would leave the job lookup above running
+    # on an unbound connection, where a forced table silently returns nothing.
+    await db.commit()
 
     await record_audit_event(
         db,
