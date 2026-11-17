@@ -60,3 +60,17 @@ converts a 503 into a 500.
 reappears, if `main.py` mentions a retired router again, or if this document loses a module.
 `tests/test_repo_hygiene.py` fails on tracked `.bak`, `.pyc`, `patches/`, or new one-off
 `fix_*` / `phase5_*` scripts.
+
+## Duplicate implementations removed (17 Nov 2026)
+
+Removed because a second copy of a working feature is a place for fixes to disappear:
+
+| Removed | Lines | Live replacement |
+| --- | --- | --- |
+| `billing/models.py`, `billing/service.py` | 412 | `billing/router.py` (only module `main.py` imports) |
+| `compliance/evidence.py` (+ package) | 429 | `gds_api/evidence.py`, registered in `main.py` |
+| `workflows/identifiers.py` | 14 | `gds_api/identifiers.py` (`parse_database_uuid`) |
+
+Kept and to be wired rather than deleted: `repository/diff_engine.py`, `repository/path_policy.py`,
+`repository/policy_enforcement.py` (201 lines). The repository gate is declared capability
+(`ci_gate_enabled`), so it gets an execution path instead of a deletion.
