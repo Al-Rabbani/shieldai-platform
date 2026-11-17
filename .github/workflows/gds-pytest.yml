@@ -1,0 +1,42 @@
+name: gds-offline-suite
+
+# The offline suite is the only mechanical proof that this platform still imports, still
+# exposes the routes it claims, and has not re-grown dead or fabricated modules. It ran
+# locally for weeks while six other workflows existed and none of them ran it, so a green
+# branch badge proved nothing. This job makes the suite gate merges.
+
+on:
+  push:
+    branches: [main, "fix/**", "codex/**"]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: gds-pytest-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  suite:
+    name: pytest (offline, no DB)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: apps/api/requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r apps/api/requirements.txt
+
+      - name: Run offline suite
+        env:
+          PYTHONPATH: apps/api:tests
+        run: |
+          python -m pytest tests -q --maxfail=1 -p no:cacheprovider
