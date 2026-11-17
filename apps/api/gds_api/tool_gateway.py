@@ -603,6 +603,7 @@ async def _execute_registered_tool(
     actor_type: str = "agent",
     actor_role: str = "",
     tenant_id: str = "",
+    mission_id: str = "",
 ) -> dict[str, Any]:
     """Execute a tool by name. This is the main entry point for the AgentExecutionLoop."""
     payload = payload or {}
@@ -620,10 +621,18 @@ async def _execute_registered_tool(
     # bind_tenant never sets ambient state, and this scope resets on exit.
     scope = use_tenant(tenant_id) if tenant_id else nullcontext()
     try:
-        if actor_id and isinstance(payload, dict):
-            # Handlers that record provenance (approvals, engagement authorisation) need the
-            # acting principal; it used to be dropped between the governance layer and the handler.
-            payload.setdefault("_actor_id", actor_id)
+        if isinstance(payload, dict):
+            # Handlers that record provenance (approvals, engagement authorisation, cloud
+            # discovery) need the acting principal and the execution context. It used to be
+            # dropped between the governance layer and the handler, which left any handler that
+            # must write a row it owns (cloud_discovery_jobs.initiated_by_user_id) with no way to
+            # know who asked - so that tool could not create its own record at all.
+            if actor_id:
+                payload.setdefault("_actor_id", actor_id)
+            if tenant_id:
+                payload.setdefault("_tenant_id", tenant_id)
+            if mission_id:
+                payload.setdefault("_mission_id", mission_id)
         with scope:
             result = await handler(payload) if asyncio.iscoroutinefunction(handler) else handler(payload)
         logger.info(f"tool_completed: tool={tool_name} success={result.get('success', True)}")
@@ -720,6 +729,27 @@ def _attach_tool_specs() -> None:
 _attach_tool_specs()
 
 
+def _parameters_match_redacted(stored: Any, actual: Any) -> bool:
+    """Compare a redacted stored parameter set with the real input it authorised.
+
+    The broker persists `requested_parameters_safe`, in which sensitive values are replaced
+    with "[REDACTED]". Comparing that to the real input with plain equality therefore denies
+    EVERY governed execution whose parameters were redacted - and it denies silently, because
+    the caller only sees EXECUTION_BINDING_MISMATCH. A redacted value is a wildcard: the key
+    must still be present, and every unredacted value must match exactly.
+    """
+    if not isinstance(stored, dict) or not isinstance(actual, dict):
+        return stored == actual
+    if set(stored) != set(actual):
+        return False
+    for key, expected in stored.items():
+        if expected == "[REDACTED]":
+            continue
+        if actual[key] != expected:
+            return False
+    return True
+
+
 async def execute_tool_governed(
     db: Any,
     *,
@@ -787,7 +817,7 @@ async def execute_tool_governed(
     request = await db.get(CapabilityRequestRecord, decision.request_id)
     if (request is None or request.tenant_id != tenant_id or request.user_id != user_id
             or request.mission_id != mission_id or request.requested_tool_id != tool_name
-            or request.requested_parameters_safe != input_data):
+            or not _parameters_match_redacted(request.requested_parameters_safe, input_data)):
         return {"success": False, "code": "EXECUTION_BINDING_MISMATCH", "error": "Execution request mismatch"}
     return await _execute_registered_tool(
         tool_name=tool_name,
@@ -796,4 +826,5 @@ async def execute_tool_governed(
         actor_type=actor_type,
         actor_role=f"mission:{mission_id}",
         tenant_id=str(tenant_id),
+        mission_id=str(mission_id) if mission_id else "",
     )
