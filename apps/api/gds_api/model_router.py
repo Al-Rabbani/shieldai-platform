@@ -27,6 +27,7 @@ from anthropic.types import MessageParam
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from gds_api.config import settings
+from gds_api.tenant_binding import bind_tenant
 from gds_api.metrics import llm_call_duration_seconds, llm_calls_total
 from gds_api.models import CostRecord
 
@@ -182,6 +183,9 @@ async def _complete(
     llm_call_duration_seconds.labels(model=model).observe(duration_seconds)
     llm_calls_total.labels(model=model, outcome="success").inc()
 
+    # R2: cost_records is FORCE-RLS; bind before this write or the insert is
+    # rejected and the whole agent turn fails after doing real work.
+    await bind_tenant(db, tenant_id)
     db.add(
         CostRecord(
             tenant_id=tenant_id,
@@ -334,6 +338,9 @@ async def complete_streaming(
     llm_call_duration_seconds.labels(model=model).observe(duration_seconds)
     llm_calls_total.labels(model=model, outcome="success").inc()
 
+    # R2: cost_records is FORCE-RLS; bind before this write or the insert is
+    # rejected and the whole agent turn fails after doing real work.
+    await bind_tenant(db, tenant_id)
     db.add(
         CostRecord(
             tenant_id=tenant_id,

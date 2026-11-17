@@ -7,6 +7,12 @@ from uuid import uuid4
 from test_runtime_boundaries import load_nodes
 
 
+async def _noop_bind_tenant(session, tenant_id):
+    """Tenant binding is proven against the live database elsewhere; the decision-logic
+    tests below never open a session, so the helper is a no-op here."""
+    return str(tenant_id)
+
+
 class Denied(Exception):
     def __init__(self, decision, code, message):
         self.decision, self.denial_code = decision, code
@@ -18,8 +24,8 @@ class BindingTests(unittest.TestCase):
                           tool_name='read_evidence', input_data={'asset':'owned.invalid'})
         self.request = SimpleNamespace(**{k:v for k,v in self.scope.items() if k not in ('tool_name','input_data')},
             requested_tool_id='read_evidence',requested_parameters_safe={'asset':'owned.invalid'})
-        self.validate = load_nodes('gds_api/capabilities/gateway.py', ['_validate_execution_binding'],
-            {'CapabilityExecutionDenied':Denied})['_validate_execution_binding']
+        self.validate = load_nodes('gds_api/capabilities/gateway.py', ['_validate_execution_binding','_parameters_match'],
+            {'CapabilityExecutionDenied':Denied,'bind_tenant':_noop_bind_tenant})['_validate_execution_binding']
 
     def test_exact_request_matches(self):
         self.validate(self.request, **self.scope)
@@ -34,10 +40,25 @@ class BindingTests(unittest.TestCase):
         with self.assertRaises(Denied):
             self.validate(self.request, **dict(self.scope,input_data={'asset':'other.invalid'}))
 
-    def test_raw_secret_cannot_replace_redacted_argument(self):
+    def test_redacted_argument_is_a_value_wildcard_but_the_key_set_is_binding(self):
+        """Binding cannot compare a redacted value, so it pins the key set instead.
+
+        The broker redacts secrets before persisting requested_parameters_safe, so the stored
+        value is literally "[REDACTED]" while the executed input carries the real one. Comparing
+        them for equality denied every parametrized governed call (zero-argument calls passed,
+        which is why the failure looked intermittent). The binding now guarantees the tool, the
+        actor, the mission, the exact key set, and every clear-text value.
+
+        Residual risk, stated rather than hidden: a caller holding a valid grant can pass a
+        different VALUE for a redacted key. Closing that needs the gateway to resolve brokered
+        credential references server-side instead of trusting input; it is not closed today.
+        """
         self.request.requested_parameters_safe={'token':'[REDACTED]'}
+        self.validate(self.request, **dict(self.scope,input_data={'token':'a-secret-value'}))
         with self.assertRaises(Denied):
-            self.validate(self.request, **dict(self.scope,input_data={'token':'a-secret-value'}))
+            self.validate(self.request, **dict(self.scope,input_data={'token':'a-secret-value','extra':1}))
+        with self.assertRaises(Denied):
+            self.validate(self.request, **dict(self.scope,input_data={}))
 
     def test_missing_request_and_malformed_payload_denied(self):
         with self.assertRaises(Denied): self.validate(None,**self.scope)
@@ -87,9 +108,9 @@ class BoundaryTests(unittest.IsolatedAsyncioTestCase):
         async def execute(*args,**kwargs):return {'success':False,'error':'scanner failed'}
         async def mark(*args,**kwargs):marks.append(kwargs['status'])
         async def claim(*args,**kwargs):pass
-        ns=load_nodes('gds_api/capabilities/gateway.py',['_validate_execution_binding','execute_capability_request'],{
+        ns=load_nodes('gds_api/capabilities/gateway.py',['_validate_execution_binding','_parameters_match','execute_capability_request'],{
             'uuid':__import__('uuid'),'AsyncSession':object,'CapabilityRequestRecord':object,
-            'CapabilityExecutionDenied':Denied,'reevaluate_capability_request':evaluate,
+            'CapabilityExecutionDenied':Denied,'bind_tenant':_noop_bind_tenant,'reevaluate_capability_request':evaluate,
             '_claim_execution':claim,'tool_gateway':SimpleNamespace(execute_tool_governed=execute),
             'mark_capability_execution':mark})
         r=await ns['execute_capability_request'](DB(),**scope,tool_name='read',input_data={})
@@ -106,9 +127,9 @@ class BoundaryTests(unittest.IsolatedAsyncioTestCase):
         async def evaluate(*a,**kw):return SimpleNamespace(decision='ALLOW',decision_id=uuid4())
         async def claim(*a,**kw):raise RuntimeError('storage unavailable')
         async def execute(*a,**kw):calls.append(1)
-        ns=load_nodes('gds_api/capabilities/gateway.py',['_validate_execution_binding','execute_capability_request'],{
+        ns=load_nodes('gds_api/capabilities/gateway.py',['_validate_execution_binding','_parameters_match','execute_capability_request'],{
             'uuid':__import__('uuid'),'AsyncSession':object,'CapabilityRequestRecord':object,
-            'CapabilityExecutionDenied':Denied,'reevaluate_capability_request':evaluate,
+            'CapabilityExecutionDenied':Denied,'bind_tenant':_noop_bind_tenant,'reevaluate_capability_request':evaluate,
             '_claim_execution':claim,'tool_gateway':SimpleNamespace(execute_tool_governed=execute)})
         with self.assertRaises(RuntimeError):await ns['execute_capability_request'](DB(),**scope,tool_name='read',input_data={})
         self.assertEqual(calls,[])
@@ -152,7 +173,7 @@ class ClaimTests(unittest.IsolatedAsyncioTestCase):
             async def commit(self):self.committed=True
             async def rollback(self):self.rolled_back=True
         ns=load_nodes('gds_api/capabilities/gateway.py',['_claim_execution'],{'select':Query,'CapabilityRequestRecord':RequestType,
-            'CapabilityDecisionRecord':DecisionType,'CapabilityExecutionDenied':Denied})
+            'CapabilityDecisionRecord':DecisionType,'CapabilityExecutionDenied':Denied,'bind_tenant':_noop_bind_tenant})
         db=DB();await ns['_claim_execution'](db,**scope)
         self.assertTrue(db.locked);self.assertTrue(db.committed);self.assertEqual(decision.execution_status,'executing')
         with self.assertRaises(Denied):await ns['_claim_execution'](db,**scope)

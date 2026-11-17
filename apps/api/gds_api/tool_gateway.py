@@ -5,6 +5,7 @@ When an agent executes a step with tool_name="tool_gateway.execute_tool",
 this module routes it to the actual security tool implementation.
 """
 import asyncio
+from contextlib import nullcontext
 import json
 import os
 import subprocess
@@ -313,29 +314,23 @@ async def _check_url_headers(params: dict) -> dict:
 # === Agent-Internal Tools (platform operations) ===
 
 async def _search_knowledge(params: dict) -> dict:
-    """Search knowledge base. params: query, limit."""
-    query = params.get("query", "")
-    limit = params.get("limit", 10)
-    # Query Qdrant semantic search
-    try:
-        from qdrant_client import QdrantClient
-        from qdrant_client.models import SearchRequest
-        client = QdrantClient(host="localhost", port=6333)
-        # Try searching the knowledge collection
-        results = client.scroll(collection_name="knowledge_base", limit=limit)
-        return {"success": True, "tool": "search_knowledge", "query": query, "results": str(results)}
-    except Exception:
-        return {"success": True, "tool": "search_knowledge", "query": query, "results": [], "note": "Qdrant collection not initialized"}
-
+    """Real semantic search over knowledge_documents. Used the wrong qdrant collection."""
+    return await platform_data.knowledge_search(
+        query=params.get("query", ""), limit=platform_data.bounded_limit(params.get("limit"), 5, 20)
+    )
 async def _add_knowledge(params: dict) -> dict:
-    """Add to knowledge base. params: content, metadata."""
-    content = params.get("content", "")
-    return {"success": True, "tool": "add_knowledge", "content_preview": content[:100], "stored": True}
-
+    """Store a real knowledge document (postgres + qdrant). Was a no-op claiming stored."""
+    return await platform_data.knowledge_add(
+        title=params.get("title", ""),
+        content=params.get("content", ""),
+        document_type=params.get("document_type", "manual"),
+        mission_id=params.get("mission_id"),
+    )
 async def _record_mission_lesson(params: dict) -> dict:
-    """Record lessons from a mission. params: mission_id, lesson."""
-    return {"success": True, "tool": "record_mission_lesson", "recorded": True, "lesson": params.get("lesson", "")[:100]}
-
+    """Persist a lesson as a mission_lesson document. Was a no-op claiming recorded."""
+    return await platform_data.record_mission_lesson(
+        mission_id=params.get("mission_id"), lesson=params.get("lesson", "")
+    )
 async def _query_platform_metrics(params: dict) -> dict:
     """Query platform metrics. params: metric, period."""
     import httpx
@@ -347,9 +342,8 @@ async def _query_platform_metrics(params: dict) -> dict:
         return {"success": False, "tool": "query_platform_metrics", "error": str(e)}
 
 async def _list_pending_approvals(params: dict) -> dict:
-    """List pending approvals."""
-    return {"success": True, "tool": "list_pending_approvals", "approvals": [], "note": "No pending approvals"}
-
+    """Pending approvals from the live approvals table. Was a hardcoded empty list."""
+    return await platform_data.pending_approvals(limit=platform_data.bounded_limit(params.get("limit"), 50))
 async def _check_platform_health(params: dict) -> dict:
     """Check platform health."""
     import httpx
@@ -360,9 +354,8 @@ async def _check_platform_health(params: dict) -> dict:
         return {"success": True, "tool": "check_platform_health", "status": "error", "error": str(e)}
 
 async def _list_recent_missions(params: dict) -> dict:
-    """List recent missions."""
-    return {"success": True, "tool": "list_recent_missions", "missions": [], "note": "No recent missions"}
-
+    """Recent missions with task tallies. Was a hardcoded empty list."""
+    return await platform_data.recent_missions(limit=platform_data.bounded_limit(params.get("limit"), 10))
 async def _search_osv_vulnerabilities(params: dict) -> dict:
     """Search OSV for vulnerabilities. params: package, ecosystem, version."""
     import httpx
@@ -387,47 +380,65 @@ async def _search_osv_vulnerabilities(params: dict) -> dict:
         return {"success": False, "tool": "search_osv_vulnerabilities", "error": str(e)}
 
 async def _enrich_finding(params: dict) -> dict:
-    """Enrich a finding with additional context."""
-    return {"success": True, "tool": "enrich_finding", "finding_id": params.get("finding_id", ""), "enriched": True}
-
+    """Real finding detail from security_findings. Previously returned {"enriched": True}."""
+    return await platform_data.finding_detail(params.get("finding_id", ""))
 async def _prioritise_finding(params: dict) -> dict:
-    """Prioritise a finding based on risk."""
-    severity = params.get("severity", "medium")
-    return {"success": True, "tool": "prioritise_finding", "priority": severity, "reason": "Risk-based prioritisation"}
-
+    """Priority derived from the stored finding. Previously echoed severity back."""
+    detail = await platform_data.finding_detail(params.get("finding_id", ""))
+    if not detail.get("success"):
+        return detail
+    priority = platform_data.derive_priority(detail["finding"])
+    return {"success": True, "tool": "prioritise_finding", "finding_id": params.get("finding_id", ""), **priority}
 async def _check_threat_indicator(params: dict) -> dict:
-    """Check a threat indicator against threat intel feeds."""
-    indicator = params.get("indicator", "")
-    indicator_type = params.get("type", "domain")
-    return {"success": True, "tool": "check_threat_indicator", "indicator": indicator, "type": indicator_type, "match": False, "note": "No matches in threat feeds"}
-
+    """No local indicator feed exists; refuse instead of a fabricated 'no match'."""
+    return await platform_data.threat_indicator(
+        indicator=params.get("indicator", ""), indicator_type=params.get("type", "unknown")
+    )
 async def _triage_finding(params: dict) -> dict:
-    """Triage a security finding."""
-    finding_id = params.get("finding_id", "")
-    severity = params.get("severity", "medium")
-    return {"success": True, "tool": "triage_finding", "finding_id": finding_id, "triage": {"severity": severity, "action": "investigate", "confidence": "high"}}
-
+    """Triage a real finding. Returns stored fields plus a documented priority rule."""
+    detail = await platform_data.finding_detail(params.get("finding_id", ""))
+    if not detail.get("success"):
+        return detail
+    finding = detail["finding"]
+    return {
+        "success": True,
+        "tool": "triage_finding",
+        "source": "security_findings (live, tenant-scoped)",
+        "finding_id": finding["id"],
+        "title": finding.get("title"),
+        "severity": finding.get("severity"),
+        "status": finding.get("status"),
+        "kev_listed": finding.get("kev_listed"),
+        "cvss": finding.get("cvss"),
+        "epss": finding.get("epss"),
+        **platform_data.derive_priority(finding),
+    }
 async def _list_open_findings(params: dict) -> dict:
-    """List open security findings."""
-    return {"success": True, "tool": "list_open_findings", "findings": [], "note": "No open findings in current scope"}
-
+    """Open findings from the live security_findings table. Was a hardcoded empty list."""
+    return await platform_data.open_findings(
+        severity=params.get("severity"),
+        limit=platform_data.bounded_limit(params.get("limit"), 50),
+        target=params.get("target"),
+    )
 async def _create_incident_from_findings(params: dict) -> dict:
-    """Create an incident from findings."""
-    finding_ids = params.get("finding_ids", [])
-    return {"success": True, "tool": "create_incident_from_findings", "incident_id": "INC-AUTO-001", "source_findings": finding_ids}
-
+    """Not wired: creating an incident is a governed write that needs an approval."""
+    return {
+        "success": False,
+        "tool": "create_incident_from_findings",
+        "code": "NOT_IMPLEMENTED",
+        "error": "incident creation from findings is not wired to a governed write path; "
+        "it previously returned a fabricated incident id INC-AUTO-001",
+        "requested_finding_ids": params.get("finding_ids", []),
+    }
 async def _list_open_incidents(params: dict) -> dict:
-    """List open incidents."""
-    return {"success": True, "tool": "list_open_incidents", "incidents": [], "note": "No open incidents"}
-
+    """Open incidents from the live incidents table. Was a hardcoded empty list."""
+    return await platform_data.open_incidents(limit=platform_data.bounded_limit(params.get("limit"), 50))
 async def _review_platform_architecture(params: dict) -> dict:
-    """Review platform architecture for security issues."""
-    return {"success": True, "tool": "review_platform_architecture", "issues": [], "score": "B", "note": "Architecture review complete"}
-
+    """Real RLS/tenancy posture of the schema. Was a hardcoded grade B."""
+    return await platform_data.architecture_review()
 async def _review_identity_posture(params: dict) -> dict:
-    """Review identity and access management posture."""
-    return {"success": True, "tool": "review_identity_posture", "issues": [], "score": "B", "note": "Identity posture review complete"}
-
+    """Real identity data or an explicit refusal. Was a hardcoded grade B."""
+    return await platform_data.identity_posture()
 async def _check_domain_security(params: dict) -> dict:
     """Check domain security (DNS, SSL, headers)."""
     domain = params.get("domain", "globaldigitalsecurity.io")
@@ -450,22 +461,19 @@ async def _check_url_security_headers(params: dict) -> dict:
     return await _check_url_headers(params)
 
 async def _review_compliance_posture(params: dict) -> dict:
-    """Review compliance posture against frameworks."""
-    return {"success": True, "tool": "review_compliance_posture", "frameworks": ["PCI-DSS", "SOC2", "ISO27001", "NIST"], "avg_score": "28%", "note": "Compliance review complete"}
-
+    """Per-framework pass/fail from compliance_assessments. Was a hardcoded 28 percent."""
+    return await platform_data.compliance_posture()
 async def _calculate_risk_exposure(params: dict) -> dict:
-    """Calculate risk exposure."""
-    return {"success": True, "tool": "calculate_risk_exposure", "risk_score": 88, "grade": "A", "trend": "improving", "financial_exposure": "$0"}
-
+    """Exposure score computed from open findings. Was a hardcoded 88/grade A."""
+    return await platform_data.risk_exposure()
 async def _verify_evidence_integrity(params: dict) -> dict:
-    """Verify evidence integrity for chain of custody."""
-    evidence_id = params.get("evidence_id", "")
-    return {"success": True, "tool": "verify_evidence_integrity", "evidence_id": evidence_id, "intact": True, "hash_verified": True}
-
+    """Real evidence lookup. Was a hardcoded intact: True."""
+    return await platform_data.evidence_integrity(params.get("evidence_id", ""))
 async def _scan_own_dependencies(params: dict) -> dict:
-    """Scan own dependencies for vulnerabilities."""
-    return {"success": True, "tool": "scan_own_dependencies", "dependencies_scanned": 0, "vulnerabilities": [], "note": "No vulnerable dependencies found"}
-
+    """Real OSV batch scan of the API's pinned requirements. Was a hardcoded zero."""
+    return await platform_data.scan_dependencies(
+        requirements_path=params.get("requirements_path", "/opt/gds-os/apps/api/requirements.txt")
+    )
 async def _check_malware_hash(params: dict) -> dict:
     """Check a file hash against malware databases."""
     file_hash = params.get("hash", "")
@@ -504,19 +512,35 @@ async def _assess_attack_surface(params: dict) -> dict:
     }
 
 async def _validate_finding(params: dict) -> dict:
-    """Validate a finding (re-test)."""
-    finding_id = params.get("finding_id", "")
-    return {"success": True, "tool": "validate_finding", "finding_id": finding_id, "validated": True, "still_present": False}
-
+    """Not wired: a real re-test needs a scanner run. Was a hardcoded still_present: False."""
+    detail = await platform_data.finding_detail(params.get("finding_id", ""))
+    return {
+        "success": False,
+        "tool": "validate_finding",
+        "code": "NOT_IMPLEMENTED",
+        "error": "no re-test path is wired to this tool, so no validated/still_present verdict is "
+        "issued; it previously returned a fabricated clean result",
+        "finding_lookup": detail,
+    }
 async def _auto_fix_finding(params: dict) -> dict:
-    """Auto-fix a finding."""
-    finding_id = params.get("finding_id", "")
-    return {"success": True, "tool": "auto_fix_finding", "finding_id": finding_id, "fixed": True, "method": "automated_remediation"}
-
+    """Not wired: remediation runs through MissionPlan. Was a hardcoded fixed: True."""
+    return {
+        "success": False,
+        "tool": "auto_fix_finding",
+        "code": "NOT_IMPLEMENTED",
+        "error": "automated remediation is not wired to this tool; it previously returned "
+        "fixed: True without touching anything",
+        "finding_id": params.get("finding_id", ""),
+    }
 async def _coordinate_pentest_engagement(params: dict) -> dict:
-    """Coordinate a pentest engagement."""
-    return {"success": True, "tool": "coordinate_pentest_engagement", "engagement_id": "PENTEST-001", "status": "coordinated", "note": "Pentest engagement created"}
-
+    """Not wired: engagements are created by the authorised-target flow, not here."""
+    return {
+        "success": False,
+        "tool": "coordinate_pentest_engagement",
+        "code": "NOT_IMPLEMENTED",
+        "error": "engagement creation is not wired to this tool; it previously returned a "
+        "fabricated engagement id PENTEST-001",
+    }
 async def _get_current_time(params: dict) -> dict:
     """Get current time."""
     from datetime import datetime, timezone
@@ -525,11 +549,15 @@ async def _get_current_time(params: dict) -> dict:
 
 
 async def _purge_mission_memory(params: dict) -> dict:
-    """Purge mission memory. params: mission_id, retention_days."""
-    mission_id = params.get("mission_id", "")
-    return {"success": True, "tool": "purge_mission_memory", "mission_id": mission_id, "purged": True}
-
-
+    """Not wired: destructive purge is not available to the reasoning loop."""
+    return {
+        "success": False,
+        "tool": "purge_mission_memory",
+        "code": "NOT_IMPLEMENTED",
+        "error": "destructive memory purge is not exposed as a tool; it previously reported "
+        "purged: True without deleting anything",
+        "mission_id": params.get("mission_id", ""),
+    }
 # === Tool registry ===
 TOOL_REGISTRY = {
     "nmap_scan": _nmap_scan,
@@ -603,8 +631,14 @@ async def _execute_registered_tool(
         return {"success": False, "error": f"Unknown tool: {tool_name}", "available": list(TOOL_REGISTRY.keys())}
     
     handler = TOOL_REGISTRY[tool_name]
+    # Tenant scope for the handler. Platform-state tools open their own sessions, and
+    # use_tenant makes the engine bind gds.tenant_id on every transaction they start, so a
+    # FORCE-RLS read cannot silently return zero rows and masquerade as "none found".
+    # bind_tenant never sets ambient state, and this scope resets on exit.
+    scope = use_tenant(tenant_id) if tenant_id else nullcontext()
     try:
-        result = await handler(payload) if asyncio.iscoroutinefunction(handler) else handler(payload)
+        with scope:
+            result = await handler(payload) if asyncio.iscoroutinefunction(handler) else handler(payload)
         logger.info(f"tool_completed: tool={tool_name} success={result.get('success', True)}")
         return result
     except Exception as e:
@@ -638,6 +672,8 @@ def list_tools() -> list[str]:
 # evaluate_task already fail-closes them at the broker until they are - so their specs
 # are hand-written here from their real behaviour, at the same scale.
 from gds_api.capabilities.definitions import RiskClass  # noqa: E402
+from gds_api import platform_data
+from gds_api.tenant_binding import bind_tenant, use_tenant
 
 _RISK_CLASS_LABEL: dict[str, str] = {
     RiskClass.R0: "low",
@@ -731,7 +767,29 @@ async def execute_tool_governed(
     )
     from datetime import datetime, UTC
     from gds_api.models import CapabilityDecisionRecord, CapabilityRequestRecord
+    # R2: capability_decisions is FORCE-RLS and db.py uses NullPool, so the claim's
+    # commit can leave this session on a fresh unbound connection. Without a bind
+    # here the decision row is invisible and the grant is wrongly rejected.
+    await bind_tenant(db, tenant_id)
     decision = await db.get(CapabilityDecisionRecord, capability_decision_id)
+    if decision is None:
+        logger.warning(
+            "grant_check: decision=%s NOT_FOUND (missing row or RLS hid it)", capability_decision_id
+        )
+    else:
+        _now = datetime.now(UTC)
+        logger.debug(
+            "grant_check: decision=%s tenant_ok=%s user_ok=%s mission_ok=%s verdict=%s "
+            "exec_status=%r expires_at=%s expired=%s",
+            capability_decision_id,
+            decision.tenant_id == tenant_id,
+            decision.evaluated_user_id == user_id,
+            decision.evaluated_mission_id == mission_id,
+            decision.decision,
+            decision.execution_status,
+            decision.expires_at,
+            (decision.expires_at is None or decision.expires_at <= _now),
+        )
     if (decision is None or decision.tenant_id != tenant_id
             or decision.evaluated_user_id != user_id
             or decision.evaluated_mission_id != mission_id
