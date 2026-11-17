@@ -680,6 +680,14 @@ from gds_api.repository.tools import REPOSITORY_TOOL_HANDLERS  # noqa: E402
 
 TOOL_REGISTRY.update(REPOSITORY_TOOL_HANDLERS)
 
+# ---- Declared scanner capabilities ----------------------------------------------
+# capabilities/catalog.py declares sast_scan, dast_scan, container_scan, iac_scan and
+# generate_sbom. The engines were installed but these names were never registered, so the
+# broker raised KeyError and all five returned 500.
+from gds_api.scanner_actions import SCANNER_TOOL_HANDLERS  # noqa: E402
+
+TOOL_REGISTRY.update(SCANNER_TOOL_HANDLERS)
+
 # ---- Real tool specs (risk_class + description) ---------------------------------
 # gds_api.workflows' decide prompt and _resolve_task_risk_class() read
 # spec.risk_class / spec.description off every TOOL_REGISTRY function. Those fields
