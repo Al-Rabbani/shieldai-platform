@@ -307,6 +307,16 @@ async def validate_cloud_connection(
     )
 
 
+def _as_list(value: object) -> list:
+    """A NULL list column means nothing was recorded, which is [], not None.
+
+    Measured: a job whose list columns were NULL failed response validation after a discovery that
+    had actually succeeded - the work completed and the client got a 500 ("Input should be a valid
+    list, input_value=None").
+    """
+    return value if isinstance(value, list) else []
+
+
 def _discovery_job_to_out(job: CloudDiscoveryJob) -> CloudDiscoveryJobOut:
     return CloudDiscoveryJobOut(
         id=job.id,
@@ -315,8 +325,8 @@ def _discovery_job_to_out(job: CloudDiscoveryJob) -> CloudDiscoveryJobOut:
         provider=job.provider,
         connection_profile_id=job.connection_profile_id,
         requested_scope=job.requested_scope,
-        discovery_categories=job.discovery_categories,
-        regions=job.regions,
+        discovery_categories=_as_list(job.discovery_categories),
+        regions=_as_list(job.regions),
         initiated_by_user_id=job.initiated_by_user_id,
         mission_id=job.mission_id,
         workflow_run_id=job.workflow_run_id,
@@ -328,8 +338,8 @@ def _discovery_job_to_out(job: CloudDiscoveryJob) -> CloudDiscoveryJobOut:
         assets_unchanged=job.assets_unchanged,
         assets_marked_absent=job.assets_marked_absent,
         relationships_discovered=job.relationships_discovered,
-        errors=job.errors,
-        warnings=job.warnings,
+        errors=_as_list(job.errors),
+        warnings=_as_list(job.warnings),
         rate_limit_state=job.rate_limit_state,
         evidence_id=job.evidence_id,
         correlation_id=job.correlation_id,
