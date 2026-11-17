@@ -65,7 +65,7 @@ from gds_api.agentic.threat_stream import ThreatStreamHub
 from gds_api.config import settings
 from gds_api.health import check_all_services
 from gds_api.logging_config import configure_logging, get_logger
-from gds_api.middleware import RequestLoggingMiddleware
+from gds_api.middleware import RequestLoggingMiddleware, TenantContextMiddleware
 from gds_api.security import CurrentUser, require_permission
 
 configure_logging()
@@ -163,6 +163,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.add_middleware(RequestLoggingMiddleware)
+app.add_middleware(TenantContextMiddleware)
 
 from gds_api.reasoning.routes import router as reasoning_router
 from gds_kernel.kernel_router import router as kernel_router

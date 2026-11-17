@@ -14,6 +14,8 @@ from starlette.requests import Request
 from starlette.responses import Response
 
 from gds_api.logging_config import bind_request_context, clear_request_context, get_logger
+from gds_api.security import ACCESS_COOKIE_NAME, decode_access_token
+from gds_api.tenant_binding import use_tenant
 from gds_api.metrics import http_request_duration_seconds, http_requests_total
 
 _log = get_logger("gds_api.request")
@@ -60,3 +62,34 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         response.headers["X-Request-ID"] = request_id
         clear_request_context()
         return response
+
+
+class TenantContextMiddleware(BaseHTTPMiddleware):
+    """Scope each authenticated request to its tenant.
+
+    Every FORCE-RLS table returns ZERO rows on a connection with no tenant bound, and db.py
+    uses NullPool, so a route that commits and then reads (db.refresh after commit is the
+    common case) resumes on a fresh, unbound connection and cannot see the row it just
+    wrote. Measured live: deciding an approval returned HTTP 500 from db.refresh even though
+    the decision had committed.
+
+    Binding per request removes that whole class of bug instead of patching 61 call sites.
+    The tenant comes from the same signed cookie the auth dependency verifies; an
+    unauthenticated or invalid token simply leaves the request unscoped and the route's own
+    auth denies it, so this can never widen access.
+    """
+
+    async def dispatch(
+        self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
+        token = request.cookies.get(ACCESS_COOKIE_NAME)
+        if not token:
+            return await call_next(request)
+        try:
+            tenant_id = decode_access_token(token).get("tenant_id")
+        except Exception:  # noqa: BLE001 - an invalid token is the auth layer's problem, not ours
+            return await call_next(request)
+        if not tenant_id:
+            return await call_next(request)
+        with use_tenant(tenant_id):
+            return await call_next(request)
