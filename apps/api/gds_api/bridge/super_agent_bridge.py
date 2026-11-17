@@ -294,8 +294,12 @@ async def _run_mission(mission_id: str, goal: str, agent_id: Optional[str], cont
 
 
 @router.post("/mission")
-async def bridge_mission(request: Request):
+async def bridge_mission(request: Request, authorization: str = Header(None)):
     """Phase 6 v2: Multi-agent mission orchestration with async support."""
+    # Found unguarded on 17 Nov 2026: every other bridge handler called _verify_auth and this one did
+    # not, so an anonymous POST with a goal returned 200 and started a real multi-agent mission
+    # (mission-d40432e49588). Guarded like its siblings rather than with a new mechanism.
+    _verify_auth(authorization)
     try:
         body = await request.json()
         goal = body.get("goal", "")
