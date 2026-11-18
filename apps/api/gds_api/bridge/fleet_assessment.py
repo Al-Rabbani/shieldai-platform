@@ -36,16 +36,16 @@ READ_ONLY_CASES: dict[str, ReadOnlyCase] = {
 # Assessment contracts are plans, not receipts. A role moves to verified only
 # after the broker executes the tool and the stated outcome is independently checked.
 MISSION_CONTRACTS: dict[str, tuple[str, str, str]] = {
-    "knowledge_memory": ("Search sandbox knowledge", "Search result and source IDs returned", "sandbox knowledge record"),
+    "knowledge_memory": ("Search sandbox knowledge", "Tenant search result count and results returned", "sandbox knowledge index"),
     "data_intelligence": ("Read sandbox metrics", "Tenant metric values and source returned", "sandbox tenant"),
     "automation_workflow": ("Read approval queue", "Tenant queue count returned", "sandbox tenant"),
-    "platform_operations": ("Check platform health", "Live health result and release SHA returned", "running services"),
+    "platform_operations": ("Check platform health", "Live readiness status returned", "running services"),
     "executive_advisor": ("Read recent missions", "Tenant mission list returned", "sandbox tenant"),
     "blue_team": ("Read open findings", "Tenant findings list returned", "sandbox tenant"),
     "incident_response": ("Read open incidents", "Tenant incident list returned", "sandbox tenant"),
     "security_architecture": ("Inspect tenant isolation", "RLS inventory and missing policies returned", "live schema"),
     "identity_access_management": ("Inventory identity evidence", "Tenant user, role, session counts returned with unmeasured controls explicit", "live identity tables"),
-    "compliance_grc": ("Review compliance posture", "Tenant evidence and control state returned", "sandbox tenant"),
+    "compliance_grc": ("Review platform compliance records", "Platform-wide control counts and scope warning returned", "live compliance assessment table"),
     "risk_business_intelligence": ("Calculate risk exposure", "Tenant exposure calculation and input counts returned", "sandbox tenant"),
     "threat_intelligence": ("Cross-check one sandbox CVE against CISA KEV", "Feed response, match and raw source evidence recorded", "sandbox CVE watchlist and reachable CISA feed"),
     "vulnerability_management": ("Assess one pinned sandbox package", "OSV match, dedup finding, enrichment and priority checked", "pinned test package and reachable OSV/EPSS feeds"),
@@ -79,7 +79,9 @@ def verified_case(agent_id: str) -> ReadOnlyCase | None:
 
 def outcome_verified(agent_id: str, result: Any) -> bool:
     """A successful dispatch is insufficient when the result lacks the evidence contract."""
-    if not isinstance(result, dict) or result.get("success") is not True:
+    case = verified_case(agent_id)
+    if (case is None or not isinstance(result, dict)
+            or result.get("success") is not True or result.get("tool") != case.tool):
         return False
     if agent_id == "identity_access_management":
         observed = result.get("observed")
@@ -91,7 +93,35 @@ def outcome_verified(agent_id: str, result: Any) -> bool:
                 and all(isinstance(observed.get(key), int) and observed[key] >= 0
                         for key in ("users", "active_users", "roles", "sessions",
                                     "current_sessions", "users_without_tenant_role")))
-    return True
+    if agent_id == "knowledge_memory":
+        return isinstance(result.get("results"), list) and result.get("count") == len(result["results"])
+    if agent_id == "data_intelligence":
+        return (result.get("tenant_scoped") is True and isinstance(result.get("missions"), dict)
+                and isinstance(result.get("model_usage"), dict))
+    if agent_id in ("automation_workflow", "executive_advisor", "incident_response"):
+        field = {"automation_workflow": "approvals", "executive_advisor": "missions",
+                 "incident_response": "incidents"}[agent_id]
+        return isinstance(result.get(field), list) and result.get("count") == len(result[field])
+    if agent_id == "platform_operations":
+        return isinstance(result.get("status"), dict)
+    if agent_id == "blue_team":
+        return (result.get("tenant_scoped") is True and isinstance(result.get("findings"), list)
+                and result.get("returned") == len(result["findings"])
+                and isinstance(result.get("total_open"), int))
+    if agent_id == "security_architecture":
+        return (isinstance(result.get("tables_total"), int)
+                and isinstance(result.get("tenant_tables_without_rls_list"), list))
+    if agent_id == "compliance_grc":
+        return (result.get("tenant_scoped") is False
+                and isinstance(result.get("frameworks"), list)
+                and isinstance(result.get("total_controls"), int)
+                and isinstance(result.get("tenant_scoped_note"), str))
+    if agent_id == "risk_business_intelligence":
+        return (result.get("tenant_scoped") is True
+                and isinstance(result.get("inputs"), dict)
+                and isinstance(result.get("exposure_score"), (int, float))
+                and 0 <= result["exposure_score"] <= 100)
+    return False
 
 
 def assessment_plan() -> list[dict[str, Any]]:
