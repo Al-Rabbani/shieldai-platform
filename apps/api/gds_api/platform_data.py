@@ -44,6 +44,25 @@ _GRADE_BANDS = ((90, "A"), (80, "B"), (70, "C"), (60, "D"))
 _OPEN_INCIDENT_STATUSES = ("open", "investigating", "contained", "monitoring", "new")
 
 
+async def platform_metrics() -> dict[str, Any]:
+    """Measured mission and model-cost totals inside the caller's tenant only."""
+    tid = _tenant_or_raise()
+    missions = await _fetch(
+        "SELECT count(*) AS total, count(*) FILTER (WHERE status = 'completed') AS completed, "
+        "count(*) FILTER (WHERE status = 'failed') AS failed "
+        "FROM missions WHERE tenant_id = :tid", {"tid": tid}, tid,
+    )
+    costs = await _fetch(
+        "SELECT count(*) AS calls, coalesce(sum(input_tokens), 0) AS input_tokens, "
+        "coalesce(sum(output_tokens), 0) AS output_tokens, "
+        "coalesce(sum(cost_usd), 0) AS cost_usd "
+        "FROM cost_records WHERE tenant_id = :tid", {"tid": tid}, tid,
+    )
+    return {"success": True, "tool": "query_platform_metrics", "tenant_scoped": True,
+            "missions": missions[0],
+            "model_usage": {**costs[0], "cost_usd": str(costs[0]["cost_usd"])} }
+
+
 def _tenant_or_raise() -> str:
     tenant = current_context_tenant()
     if not tenant:
