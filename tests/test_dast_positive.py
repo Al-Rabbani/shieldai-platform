@@ -21,6 +21,13 @@ from gds_api.scanner_engines import engine_path
 NUCLEI = engine_path("nuclei")
 TEMPLATES = Path("/root/nuclei-templates/http/exposures/configs/git-config.yaml")
 
+
+def _templates_available():
+    try:
+        return TEMPLATES.is_file()
+    except OSError:
+        return False
+
 # A real record produced by nuclei against the fixture below, used to pin the parsing layer.
 RECORDED = {
     "template-id": "git-config",
@@ -77,7 +84,7 @@ def test_recorded_nuclei_output_maps_to_a_real_finding(monkeypatch):
 
 
 @pytest.mark.skipif(NUCLEI is None, reason="nuclei is not installed on this host")
-@pytest.mark.skipif(not TEMPLATES.exists(), reason="nuclei community templates are not installed")
+@pytest.mark.skipif(not _templates_available(), reason="nuclei community templates are not installed")
 def test_dast_detects_a_known_exposure(tmp_path):
     """The positive control: a real template against a real exposure must produce a finding."""
     import asyncio

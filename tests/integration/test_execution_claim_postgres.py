@@ -46,7 +46,9 @@ class ExecutionClaimPostgresTests(unittest.IsolatedAsyncioTestCase):
         path=Path(__file__).resolve().parents[2]/'apps/api/gds_api/capabilities/gateway.py'
         tree=ast.parse(path.read_text())
         node=next(n for n in tree.body if getattr(n,'name',None)=='_claim_execution')
-        ns={'select':select,'CapabilityRequestRecord':RequestRow,'CapabilityDecisionRecord':DecisionRow,'CapabilityExecutionDenied':ClaimDenied}
+        async def bind_tenant(db, tenant_id):
+            await db.execute(text("SELECT set_config('gds.tenant_id', :tid, false)"), {'tid':str(tenant_id)})
+        ns={'select':select,'bind_tenant':bind_tenant,'CapabilityRequestRecord':RequestRow,'CapabilityDecisionRecord':DecisionRow,'CapabilityExecutionDenied':ClaimDenied}
         exec(compile(ast.Module(body=[node],type_ignores=[]),str(path),'exec'),ns)
         self.claim=ns['_claim_execution']
 

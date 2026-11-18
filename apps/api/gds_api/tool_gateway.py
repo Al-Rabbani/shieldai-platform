@@ -348,10 +348,12 @@ async def _check_platform_health(params: dict) -> dict:
     """Check platform health."""
     import httpx
     try:
-        resp = await httpx.AsyncClient().get("http://localhost:8000/health", timeout=5)
+        async with httpx.AsyncClient() as client:
+            resp = await client.get("http://localhost:8000/health/ready", timeout=5)
+        resp.raise_for_status()
         return {"success": True, "tool": "check_platform_health", "status": resp.json()}
     except Exception as e:
-        return {"success": True, "tool": "check_platform_health", "status": "error", "error": str(e)}
+        return {"success": False, "tool": "check_platform_health", "status": "error", "error": str(e)}
 
 async def _list_recent_missions(params: dict) -> dict:
     """Recent missions with task tallies. Was a hardcoded empty list."""

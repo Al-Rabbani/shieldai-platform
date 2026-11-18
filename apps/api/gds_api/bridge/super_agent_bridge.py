@@ -13,7 +13,7 @@ The Super Agent calls these endpoints to:
 Authentication: Bearer token (BRIDGE_API_KEY from /opt/.env)
 """
 from fastapi import Request
-import os, sys, json, asyncio, uuid, logging
+import os, json, asyncio, uuid, logging
 import secrets
 from datetime import datetime
 from fastapi import APIRouter, Header, HTTPException, BackgroundTasks
@@ -42,8 +42,6 @@ class DictWrapper:
 
 
 logger = logging.getLogger("gds.bridge")
-
-sys.path.insert(0, "/opt/gds-os/apps/api")
 
 router = APIRouter(prefix="/bridge", tags=["bridge"])
 
@@ -354,3 +352,77 @@ async def bridge_diagnostics(authorization: Optional[str] = Header(None)):
         "service_scope_configured": bool(os.environ.get("SECURITY_SERVICE_PRINCIPAL_ID") and os.environ.get("SECURITY_SERVICE_TENANT_ID")),
         "timestamp": datetime.utcnow().isoformat(),
     }
+
+
+def _sandbox_assessment_identity() -> tuple[str, str]:
+    """Use a dedicated tenant and principal, never the platform service's ambient scope."""
+    tenant = os.environ.get("GDS_ASSESSMENT_TENANT_ID", "")
+    principal = os.environ.get("GDS_ASSESSMENT_PRINCIPAL_ID", "")
+    try:
+        tenant_id = str(uuid.UUID(tenant))
+        principal_id = str(uuid.UUID(principal))
+    except (ValueError, TypeError):
+        raise HTTPException(503, "Scoped assessment identity is not configured") from None
+    if tenant_id == os.environ.get("SECURITY_SERVICE_TENANT_ID"):
+        raise HTTPException(503, "Assessment tenant must be isolated from the platform service")
+    return tenant_id, principal_id
+
+
+async def _assert_sandbox_principal(tenant_id: str, user_id: str) -> None:
+    """Reject a configuration accidentally aimed at a real customer tenant."""
+    from gds_api.db import async_session_factory
+    from gds_api.models import Tenant, User
+    from gds_api.tenant_binding import bind_tenant
+
+    async with async_session_factory() as db:
+        await bind_tenant(db, tenant_id)
+        tenant = await db.get(Tenant, uuid.UUID(tenant_id))
+        principal = await db.get(User, uuid.UUID(user_id))
+        if (tenant is None or tenant.slug != "gds-assessment-sandbox"
+                or principal is None or principal.tenant_id != tenant.id
+                or not principal.is_active):
+            raise HTTPException(503, "Scoped assessment identity is not provisioned")
+
+
+@router.post("/sandbox/assess/platform-health")
+async def assess_platform_health(authorization: Optional[str] = Header(None)):
+    """Run one R0 read-only tool through a tenant-bound capability grant.
+
+    The shared bridge key authenticates the caller, while the separate server-owned
+    sandbox identity confines the mission. No caller-supplied target, tenant, agent,
+    tool or arguments are accepted. The broker must still authorize the principal,
+    mission, registered agent and capability before dispatch.
+    """
+    _verify_auth(authorization)
+    tenant_id, user_id = _sandbox_assessment_identity()
+    await _assert_sandbox_principal(tenant_id, user_id)
+    from gds_api.reasoning.governed_tools import (
+        execute_governed_tool, open_reasoning_mission, set_mission_outcome,
+    )
+
+    mission_id = await open_reasoning_mission(
+        tenant_id=tenant_id, user_id=user_id,
+        goal="Read-only platform health assessment", agent_id="platform_operations",
+    )
+    result = None
+    try:
+        result = await execute_governed_tool(
+            tenant_id=tenant_id, user_id=user_id, mission_id=mission_id,
+            agent_id="platform_operations", tool_name="check_platform_health", args={},
+            purpose="Scoped GDS sandbox platform health assessment",
+        )
+        succeeded = isinstance(result, dict) and result.get("success") is True
+        return {
+            "mission_id": str(mission_id),
+            "agent_id": "platform_operations",
+            "tool": "check_platform_health",
+            "verification_status": "tool_executed" if succeeded else "not_verified",
+            "tool_result": result,
+        }
+    finally:
+        await set_mission_outcome(
+            mission_id=mission_id, tenant_id=tenant_id,
+            success=isinstance(result, dict) and result.get("success") is True,
+            summary="Platform health tool executed" if isinstance(result, dict) and result.get("success") is True
+            else "Platform health assessment did not verify execution",
+        )

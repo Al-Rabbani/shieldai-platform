@@ -56,6 +56,7 @@ MACHINE_AUTH = {
     "POST /bridge/agent/{agent_id}/invoke": "BRIDGE_API_KEY bearer",
     "POST /bridge/auto": "BRIDGE_API_KEY bearer",
     "POST /bridge/mission": "BRIDGE_API_KEY bearer",
+    "POST /bridge/sandbox/assess/platform-health": "BRIDGE_API_KEY bearer; tenant and principal are server-owned",
     "GET /kernel/audit": "BRIDGE_API_KEY bearer",
     "GET /kernel/ipc/recv/{pid}": "BRIDGE_API_KEY bearer",
     "GET /kernel/memory/global-stats": "BRIDGE_API_KEY bearer",
