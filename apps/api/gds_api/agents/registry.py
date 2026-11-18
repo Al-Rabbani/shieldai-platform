@@ -886,27 +886,20 @@ AGENT_REGISTRY: dict[str, AgentManifest] = {
         owner="Purple Security Command / Rabbani AI Core",
         documentation_reference="docs/architecture/unified-purple-workforce.md#purple-18",
     ),
-    # Phase 20, Part 10: promoted from PLANNED_AGENTS to a real AgentManifest -
-    # auto_fix_finding is its first real capability. Status is DEGRADED, not
-    # OPERATIONAL: it can trigger a real, governed remediation mission for a
-    # validated finding, but the underlying Phase 18/19 write path's own real
-    # commit is a background, asynchronous process this agent doesn't itself
-    # wait on or guarantee completes - degraded_reason discloses this honestly.
+    # The earlier direct-repository commit path is disabled. Keep this role
+    # degraded until it can use the isolated Workspace Manager, approval and retest.
     "defensive_remediation_autofix": AgentManifest(
         name="defensive_remediation_autofix",
         display_name="Defensive Remediation and Auto-Fix Agent",
         description=(
-            "Routes a real, validated Finding into the existing, real, operational "
-            "governed engineering write path (Repository Registry -> Workspace "
-            "Manager -> Secure Capability Broker -> AIProvider -> Review Engine -> "
-            "Human Approval -> Local Commit) to produce an approval-gated fix."
+            "Auto-fix is disabled pending a governed isolated-workspace implementation; "
+            "the former direct repository commit path has been closed."
         ),
         system_prompt=(
             "You are the Defensive Remediation and Auto-Fix Agent for GDS Security "
-            "OS. You route a real, validated finding into the existing governed "
-            "engineering write path to produce a real, approval-gated fix - you "
-            "never bypass human approval, and you never claim a fix is complete "
-            "until its real commit actually lands."
+            "OS. Auto-fix is currently blocked. Report the governed engineering "
+            "workflow required for a validated finding; never claim that a fix "
+            "was applied or that a commit landed."
         ),
         tool_names=("auto_fix_finding",),
         team=Team.BLUE,
@@ -919,38 +912,33 @@ AGENT_REGISTRY: dict[str, AgentManifest] = {
         purple_role_name="Defensive Remediation and Auto-Fix Agent",
         operational_domain="Remediation Engineering",
         mission_role=(
-            "Real, operational trigger (Phase 20, Part 10) into the existing Phase "
-            "18/19 governed engineering write path for a validated finding. Does "
-            "not itself wait for or guarantee the resulting mission's real commit -"
-            " that remains a real, separately-approved, asynchronous process."
+            "Blocked until a validated finding can start an isolated engineering mission "
+            "and a separately approved commit with independent retest."
         ),
-        objectives=("Route a validated finding into a real, governed remediation mission",),
+        objectives=("Safely refuse direct repository writes until governed remediation exists",),
         knowledge_domains=("secure remediation", "governed code change management"),
-        skills=("finding-to-remediation-mission routing",),
+        skills=("remediation safety boundary",),
         approval_requirements=(
             "the resulting mission's eventual commit requires human approval "
             "(engineering.commit_mission, unchanged from Phase 18/19)",
         ),
         evidence_requirements=(
-            "MissionPlan.finding_id links the remediation mission to its finding",
+            "A future mission must link its finding, approval, commit and retest evidence",
         ),
         input_contracts=("Finding rows with status='validated'",),
         output_contracts=(
-            "Finding.status set to remediation_planned, a real MissionPlan created "
-            "and linked via finding_id",
+            "GOVERNED_ENGINEERING_REQUIRED; no repository write or finding status change",
         ),
         collaboration_contracts=("vulnerability_management", "validation_retest", "devsecops"),
         repository_permissions=(
-            "write: only inside an isolated Workspace, never the primary repo",
+            "none until an isolated Workspace and human approval are enforced",
         ),
-        workspace_permissions=("creates one via the existing Workspace Manager",),
-        health_checks=("auto_fix_finding call succeeds against a real validated Finding",),
+        workspace_permissions=("none from this tool in its current state",),
+        health_checks=("auto_fix_finding refuses direct repository writes",),
         degraded_reason=(
-            "Real trigger into the governed engineering write path is operational "
-            "(Phase 20, Part 10). The eventual mission's own execution/commit is a "
-            "real, separate, asynchronous, human-approved process this agent does "
-            "not itself await or guarantee - disclosed here rather than claiming "
-            "end-to-end completion this agent alone doesn't control."
+            "Direct checkout and commit in the registered repository violated the "
+            "Workspace Manager and approval boundary. The path now refuses "
+            "execution until the full governed mission, approval and retest exist."
         ),
         owner="Purple Security Command / Rabbani AI Core",
         documentation_reference="docs/architecture/unified-purple-workforce.md#purple-17",
