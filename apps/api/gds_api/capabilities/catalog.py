@@ -731,21 +731,16 @@ CAPABILITY_REGISTRY: dict[str, CapabilityDefinition] = {
         requires_human_approval=True,
     ),
     # ---- Phase 20 (Continuation Prompt 7), Part 10: Vulnerability-to-Auto-Fix ------
-    # A real, distinct capability from engineering.plan_mission - a Finding-triggered
-    # remediation, not a caller-supplied objective - but reuses the exact same
-    # create_mission_plan/execute_mission_plan machinery underneath, so this
-    # capability itself is deliberately low-risk (creates a plan + starts execution,
-    # every write still confined to isolated Workspaces). The one real
-    # repository-affecting action - the eventual mission commit - stays gated by the
-    # existing engineering.commit_mission capability's own always-required approval;
-    # this capability is not a second commit path.
+    # Fail-closed placeholder until a finding-triggered remediation is implemented
+    # through the isolated Workspace Manager and approved engineering commit path.
+    # The old tool directly committed in the registered repository and was disabled.
     "remediation.auto_fix_finding": CapabilityDefinition(
         stable_key="remediation.auto_fix_finding",
         display_name="Auto-Fix a Validated Finding",
         description=(
-            "Routes a real, validated Finding into the governed multi-agent "
-            "engineering write path to produce an approval-gated fix - no second "
-            "write path."
+            "Currently refuses direct repository writes with "
+            "GOVERNED_ENGINEERING_REQUIRED. A future finding-triggered fix must use "
+            "the isolated Workspace Manager and approved engineering commit path."
         ),
         category="remediation",
         risk_class=RiskClass.R2,
