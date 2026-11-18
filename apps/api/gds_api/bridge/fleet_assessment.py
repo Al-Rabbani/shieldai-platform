@@ -56,7 +56,7 @@ MISSION_CONTRACTS: dict[str, tuple[str, str, str]] = {
     "api_application_security": ("Assess an authorized sandbox API", "Scoped API observations and issue evidence checked", "owned local API and written scope"),
     "digital_forensics": ("Verify a sandbox evidence object", "Stored digest matches independent content digest", "tenant evidence object and content"),
     "devsecops": ("Inspect a sandbox dependency manifest", "Dependency finding and repository provenance checked", "isolated repository fixture"),
-    "malware_analysis": ("Analyze an inert known sample", "Sample hash, classification and source evidence checked", "safe sample and isolated analyzer"),
+    "malware_analysis": ("Look up a known SHA-256", "Authenticated provider status and matching hash checked", "sandbox hash, MalwareBazaar Auth-Key and R3 approval"),
     "red_team": ("Run approved recon on local target", "Technique scope and observed DNS/port/TLS receipts checked", "owned local target and human authorization"),
     "validation_retest": ("Independently retest a remediated finding", "Fresh source evidence and verdict checked; closure remains separate", "sandbox finding with reproducible source"),
     "defensive_remediation_autofix": ("Remediate in isolated workspace", "Finding, worktree, approval, commit and independent retest linked", "validated sandbox finding and governed engineering workspace"),
