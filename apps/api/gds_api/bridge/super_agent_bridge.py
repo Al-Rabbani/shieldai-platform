@@ -13,7 +13,7 @@ The Super Agent calls these endpoints to:
 Authentication: Bearer token (BRIDGE_API_KEY from /opt/.env)
 """
 from fastapi import Request
-import os, sys, json, asyncio, uuid, logging
+import os, json, asyncio, uuid, logging
 import secrets
 from datetime import datetime
 from fastapi import APIRouter, Header, HTTPException, BackgroundTasks
@@ -42,8 +42,6 @@ class DictWrapper:
 
 
 logger = logging.getLogger("gds.bridge")
-
-sys.path.insert(0, "/opt/gds-os/apps/api")
 
 router = APIRouter(prefix="/bridge", tags=["bridge"])
 
