@@ -49,6 +49,29 @@ class FleetAssessmentTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("roles WHERE tenant_id = :tid", fetch.call_args_list[0].args[0])
         self.assertFalse(outcome_verified("identity_access_management", {"success": True}))
 
+    def test_all_read_only_results_require_structural_outcome_evidence(self):
+        valid = {
+            "knowledge_memory": {"results": [], "count": 0},
+            "data_intelligence": {"tenant_scoped": True, "missions": {}, "model_usage": {}},
+            "automation_workflow": {"approvals": [], "count": 0},
+            "platform_operations": {"status": {"status": "ready"}},
+            "executive_advisor": {"missions": [], "count": 0},
+            "blue_team": {"tenant_scoped": True, "findings": [], "returned": 0, "total_open": 0},
+            "incident_response": {"incidents": [], "count": 0},
+            "security_architecture": {"tables_total": 1, "tenant_tables_without_rls_list": []},
+            "compliance_grc": {"tenant_scoped": False, "frameworks": [], "total_controls": 0,
+                               "tenant_scoped_note": "platform-wide"},
+            "risk_business_intelligence": {"tenant_scoped": True, "inputs": {},
+                                           "exposure_score": 100},
+        }
+        for agent_id, fields in valid.items():
+            with self.subTest(agent_id=agent_id):
+                result = {"success": True, "tool": READ_ONLY_CASES[agent_id].tool, **fields}
+                self.assertTrue(outcome_verified(agent_id, result))
+                self.assertFalse(outcome_verified(agent_id, {"success": True, "tool": result["tool"]}))
+                self.assertFalse(outcome_verified(agent_id, {**result, "tool": "wrong_tool"}))
+                self.assertFalse(outcome_verified(agent_id, {**result, "success": False}))
+
     async def test_auth_precedes_case_lookup_and_no_case_dispatches(self):
         with patch.object(bridge, "BRIDGE_API_KEY", "secret"):
             with self.assertRaises(HTTPException) as e:
