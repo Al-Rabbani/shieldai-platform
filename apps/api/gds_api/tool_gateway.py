@@ -468,21 +468,41 @@ async def _scan_own_dependencies(params: dict) -> dict:
         requirements_path=params.get("requirements_path", "/opt/gds-os/apps/api/requirements.txt")
     )
 async def _check_malware_hash(params: dict) -> dict:
-    """Check a file hash against malware databases."""
-    file_hash = params.get("hash", "")
-    # Check against URLhaus
+    """Look up one SHA-256 in MalwareBazaar; unknown responses are not clean."""
     import httpx
+    import re
+    file_hash = str(params.get("hash") or "").lower()
+    if not re.fullmatch(r"[0-9a-f]{64}", file_hash):
+        return {"success": False, "tool": "check_malware_hash", "code": "INVALID_HASH",
+                "error": "a SHA-256 hex digest is required"}
+    key = os.environ.get("MALWAREBAZAAR_AUTH_KEY", "").strip()
+    if not key:
+        return {"success": False, "tool": "check_malware_hash", "code": "CONNECTOR_NOT_CONFIGURED",
+                "error": "MalwareBazaar Auth-Key is not configured"}
     try:
-        resp = await httpx.AsyncClient().get(
-            f"https://urlhaus-api.abuse.ch/v1/payload/?sha256_hash={file_hash}",
-            timeout=10
-        )
-        if resp.status_code == 200:
-            data = resp.json()
-            return {"success": True, "tool": "check_malware_hash", "hash": file_hash, "malicious": data.get("query_status") == "OK", "details": data}
-        return {"success": True, "tool": "check_malware_hash", "hash": file_hash, "malicious": False, "note": "No match"}
-    except Exception as e:
-        return {"success": False, "tool": "check_malware_hash", "error": str(e)}
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.post("https://mb-api.abuse.ch/api/v1/",
+                                     data={"query": "get_info", "hash": file_hash},
+                                     headers={"Auth-Key": key})
+        resp.raise_for_status()
+        data = resp.json()
+    except (httpx.HTTPError, ValueError) as exc:
+        return {"success": False, "tool": "check_malware_hash", "code": "SOURCE_UNAVAILABLE",
+                "error": f"MalwareBazaar lookup failed: {type(exc).__name__}"}
+    status = data.get("query_status") if isinstance(data, dict) else None
+    if status == "hash_not_found":
+        return {"success": True, "tool": "check_malware_hash", "hash": file_hash,
+                "malicious": False, "source": "MalwareBazaar get_info", "verdict": "not_listed"}
+    if status == "ok" and isinstance(data.get("data"), list):
+        matches = [item for item in data["data"] if isinstance(item, dict)
+                   and str(item.get("sha256_hash") or "").lower() == file_hash]
+        if matches:
+            return {"success": True, "tool": "check_malware_hash", "hash": file_hash,
+                    "malicious": True, "source": "MalwareBazaar get_info", "verdict": "listed",
+                    "matched_record": matches[0]}
+    return {"success": False, "tool": "check_malware_hash", "code": "UNVERIFIED_SOURCE_RESPONSE",
+            "error": "MalwareBazaar did not return a verified hash match or explicit not-found status",
+            "source_status": status}
 
 async def _recon_dns_enumeration(params: dict) -> dict:
     """DNS enumeration using subfinder."""
