@@ -507,3 +507,28 @@ async def assess_registered_agent(agent_id: str, authorization: Optional[str] = 
                     + ("governed execution verified" if receipt and receipt["execution_status"] == "executed"
                     and outcome_verified(agent_id, result) else "not verified"),
         )
+
+
+@router.get("/fleet-status")
+async def fleet_status(authorization: Optional[str] = Header(None)):
+    """Derived fleet state for a console: registered role, verified heartbeat freshness, and whether an
+    executed governed receipt exists. The tenant is server-owned; a machine surface that let the caller
+    pick the tenant would be a cross-tenant read. A role with no verified heartbeat is unknown, never
+    assumed online."""
+    _verify_auth(authorization)
+    from gds_api.agent_heartbeats import fleet_status as derive_fleet
+    from gds_api.db import async_session_factory
+    from gds_api.tenant_binding import bind_tenant
+
+    tenant = os.environ.get("SECURITY_ALERT_TENANT_ID")
+    if not tenant:
+        raise HTTPException(status_code=503, detail="fleet status requires a configured tenant")
+    async with async_session_factory() as db:
+        await bind_tenant(db, tenant)
+        data = await derive_fleet(db, tenant_id=str(tenant))
+    return {
+        "tenant_id": str(tenant),
+        "source": "agent_heartbeats + capability_decisions",
+        "freshness": {"fresh_seconds": 180, "stale_seconds": 900, "capable_window_hours": 24},
+        "fleet": data,
+    }

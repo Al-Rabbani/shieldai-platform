@@ -46,6 +46,7 @@ PUBLIC_BY_DESIGN = {
 }
 
 MACHINE_AUTH = {
+    "GET /bridge/fleet-status": "BRIDGE_API_KEY bearer; tenant is server-owned",
     "POST /agents/heartbeat": "HMAC-signed with the per-tenant key derived from HEARTBEAT_SIGNING_KEY; a worker has no user session",
     "POST /billing/webhook": "Stripe signature verified with STRIPE_WEBHOOK_SECRET",
     "POST /ci/gate": "repository token verified by _verify_gate_auth",
