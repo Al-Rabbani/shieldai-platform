@@ -832,8 +832,8 @@ AGENT_REGISTRY: dict[str, AgentManifest] = {
         name="validation_retest",
         display_name="Validation and Retest Agent",
         description=(
-            "Independently validates or rejects findings awaiting validation - never "
-            "trusting a patch's existence alone. Real retest execution is not yet built."
+            "Retests pinned PyPI advisory or named HTTP header findings against the live "
+            "source and records the verdict. Other finding types remain unsupported."
         ),
         system_prompt=(
             "You are the Validation and Retest Agent for GDS Security OS. You "
@@ -853,20 +853,18 @@ AGENT_REGISTRY: dict[str, AgentManifest] = {
         purple_role_name="Validation and Retest Agent",
         operational_domain="Validation and Assurance",
         mission_role=(
-            "Independently validates findings and rejects weak/unsupported ones (real, "
-            "Phase 20 Part 9). Retesting remediation and confirming attack-path closure "
-            "is Part 10 work, not yet built."
+            "Limited source retest records a fresh verdict without changing finding status. "
+            "Independent closure and general attack-path retest are still outstanding."
         ),
         objectives=(
-            "Independently validate or reject a finding awaiting validation, with a "
-            "real, documented reason",
+            "Recheck a supported finding source and record a fresh, documented verdict",
         ),
         knowledge_domains=("independent validation", "retest methodology"),
-        skills=("finding validation/rejection",),
+        skills=("limited source retest",),
         approval_requirements=(),
         evidence_requirements=("Finding.raw_data and enrichment fields reviewed before deciding",),
-        input_contracts=("Finding rows with status='awaiting_validation'",),
-        output_contracts=("Finding.status set to validated|rejected with a real reason recorded",),
+        input_contracts=("Tenant security_findings row with pinned PyPI target or named HTTP header",),
+        output_contracts=("details.reverification contains source verdict and evidence; status unchanged",),
         collaboration_contracts=(
             "vulnerability_management",
             "defensive_remediation_autofix",
@@ -875,13 +873,12 @@ AGENT_REGISTRY: dict[str, AgentManifest] = {
         repository_permissions=("none",),
         workspace_permissions=("none",),
         health_checks=(
-            "validate_finding call succeeds against a real awaiting_validation Finding",
+            "validate_finding records source evidence for a supported sandbox finding",
         ),
         degraded_reason=(
-            "Independent finding validation/rejection is real and operational (Phase 20, "
-            "Part 9). Real retest execution (confirming a remediation actually closed the "
-            "underlying issue) is Part 10 work, not yet built - this agent's own name is "
-            "only half-real today, disclosed here rather than claimed as complete."
+            "Only pinned PyPI advisory and named HTTP header source checks are implemented. "
+            "A source verdict is recorded, but finding status stays unchanged and no "
+            "general remediation closure or independent attack-path check exists."
         ),
         owner="Purple Security Command / Rabbani AI Core",
         documentation_reference="docs/architecture/unified-purple-workforce.md#purple-18",
@@ -943,22 +940,13 @@ AGENT_REGISTRY: dict[str, AgentManifest] = {
         owner="Purple Security Command / Rabbani AI Core",
         documentation_reference="docs/architecture/unified-purple-workforce.md#purple-17",
     ),
-    # Phase 20, Part 11: promoted from PLANNED_AGENTS to a real AgentManifest -
-    # coordinate_pentest_engagement is its first real capability. Status is
-    # DEGRADED, not OPERATIONAL: it coordinates real DNS/port/TLS reconnaissance
-    # (the same 3 primitives the Red Team Agent's own tools use) across a real,
-    # human-authorized Engagement, but performs no exploitation, no attack-path
-    # validation, and creates no Finding rows yet - degraded_reason discloses this
-    # honestly rather than claiming the full "Penetration Testing Coordinator" name.
+    # The current tool creates a scoped draft only; execution is a separate step.
     "penetration_testing_coordinator": AgentManifest(
         name="penetration_testing_coordinator",
         display_name="Penetration Testing Coordinator Agent",
         description=(
-            "Coordinates real DNS/port/TLS reconnaissance across every authorized "
-            "target in scope for a real, written, human-authorized Engagement "
-            "(gds_api.models.Engagement) - rules of engagement, an allowed/"
-            "prohibited technique list, and an exclusion list, layered on top of "
-            "the existing AuthorizedTarget/redteam_safety boundary."
+            "Creates a draft engagement for targets with live authorization records, "
+            "with rules of engagement and technique lists. Recon execution remains separate."
         ),
         system_prompt=(
             "You are the Penetration Testing Coordinator Agent for GDS Security "
@@ -980,43 +968,34 @@ AGENT_REGISTRY: dict[str, AgentManifest] = {
         purple_role_name="Penetration Testing Coordinator Agent",
         operational_domain="Penetration Testing",
         mission_role=(
-            "Real, operational coordinator (Phase 20, Part 11) of the existing 3 "
-            "Red Team recon primitives across a real Engagement's in-scope "
-            "targets. Does not itself generate Findings, assess exploitability, "
-            "or perform any technique beyond real DNS/port/TLS reconnaissance."
+            "Drafts a mission-scoped engagement for authorized targets. Recon, evidence "
+            "collection, report summary, and completion are not implemented by this tool."
         ),
         objectives=(
-            "Run a real, human-authorized Engagement's in-scope reconnaissance, "
-            "honoring its rules of engagement",
+            "Create a scoped draft from active authorizations; keep execution separate",
         ),
         knowledge_domains=("penetration test coordination", "rules of engagement"),
-        skills=("multi-target recon coordination", "engagement lifecycle management"),
+        skills=("draft engagement scoping", "authorization check"),
         approval_requirements=(
             "coordinate_pentest_engagement always requires human approval (R4), "
             "same as the 3 underlying red_team.* recon capabilities",
         ),
         evidence_requirements=(
-            "Engagement.report_summary and the real per-target recon results "
-            "recorded as PurpleMissionMessage rows",
+            "Draft engagement ID and linked AuthorizedTarget records; no recon receipt yet",
         ),
-        input_contracts=("Engagement rows with status='authorized'",),
+        input_contracts=("Mission ID and active AuthorizedTarget rows",),
         output_contracts=(
-            "Engagement.status set to in_progress then completed, with a real, "
-            "computed report_summary",
+            "Engagement.status='draft' and linked engagement_targets; no execution",
         ),
         collaboration_contracts=("red_team", "network_security", "api_application_security"),
         repository_permissions=("none",),
         workspace_permissions=("none",),
         health_checks=(
-            "coordinate_pentest_engagement call succeeds against a real authorized Engagement",
+            "coordinate_pentest_engagement creates a scoped draft after authorization checks",
         ),
         degraded_reason=(
-            "Real, coordinated multi-target DNS/port/TLS reconnaissance under a real "
-            "Engagement's rules of engagement is operational (Phase 20, Part 11). "
-            "Test-plan generation, specialist assignment beyond this one agent, "
-            "attack-path validation, and automated Finding creation from recon "
-            "results are honestly not yet built - disclosed here rather than "
-            "claiming the full 'coordinator' scope this agent's name implies."
+            "The tool only opens a draft; it does not authorize, execute recon, collect "
+            "per-target receipts, compute a report, or complete the engagement."
         ),
         owner="Purple Security Command / Rabbani AI Core",
         documentation_reference="docs/architecture/unified-purple-workforce.md#purple-07",
