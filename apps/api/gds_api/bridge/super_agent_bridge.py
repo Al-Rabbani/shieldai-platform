@@ -454,7 +454,7 @@ async def get_sandbox_assessment_plan(authorization: Optional[str] = Header(None
 async def assess_registered_agent(agent_id: str, authorization: Optional[str] = Header(None)):
     """Run a single fixed R0 case with a persisted mission and broker receipt."""
     _verify_auth(authorization)
-    from gds_api.bridge.fleet_assessment import verified_case
+    from gds_api.bridge.fleet_assessment import outcome_verified, verified_case
     from gds_api.reasoning.governed_tools import (
         execute_governed_tool, open_reasoning_mission, set_mission_outcome,
     )
@@ -491,7 +491,7 @@ async def assess_registered_agent(agent_id: str, authorization: Optional[str] = 
                 receipt = {"request_id": str(request_record.id), "decision_id": str(decision.id),
                            "capability_key": request_record.capability_key,
                            "decision": decision.decision, "execution_status": decision.execution_status}
-        verified = (isinstance(result, dict) and result.get("success") is True
+        verified = (outcome_verified(agent_id, result)
                     and receipt is not None and receipt["decision"] == "ALLOW"
                     and receipt["execution_status"] == "executed")
         return {"agent_id": agent_id, "tool": case.tool, "mission_id": str(mission_id),
@@ -500,10 +500,10 @@ async def assess_registered_agent(agent_id: str, authorization: Optional[str] = 
     finally:
         await set_mission_outcome(
             mission_id=mission_id, tenant_id=tenant_id,
-            success=(isinstance(result, dict) and result.get("success") is True
+            success=(outcome_verified(agent_id, result)
                      and receipt is not None and receipt["decision"] == "ALLOW"
                      and receipt["execution_status"] == "executed"),
             summary=f"Read-only {agent_id} assessment: {case.tool}; "
                     + ("governed execution verified" if receipt and receipt["execution_status"] == "executed"
-                       and isinstance(result, dict) and result.get("success") is True else "not verified"),
+                    and outcome_verified(agent_id, result) else "not verified"),
         )
