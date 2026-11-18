@@ -1,11 +1,13 @@
 """The assessment allowlist cannot drift into writes, scans or false receipts."""
 import unittest
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 from fastapi import HTTPException
 
 from gds_api.bridge import super_agent_bridge as bridge
-from gds_api.bridge.fleet_assessment import READ_ONLY_CASES, assessment_plan, verified_case
+from gds_api.bridge.fleet_assessment import (MISSION_CONTRACTS, READ_ONLY_CASES,
+                                             assessment_plan, outcome_verified, verified_case)
+from gds_api import platform_data
 from gds_api.capabilities.definitions import RiskClass, SideEffectType
 from gds_api.capabilities.catalog import CAPABILITY_REGISTRY
 from gds_api.agents.registry import AGENT_REGISTRY
@@ -29,6 +31,23 @@ class FleetAssessmentTests(unittest.IsolatedAsyncioTestCase):
             row = next(r for r in assessment_plan() if r["agent_id"] == agent_id)
             self.assertEqual(row["assessment_status"], "not_executed")
         self.assertEqual(len(assessment_plan()), 23)
+        self.assertEqual(set(MISSION_CONTRACTS), set(AGENT_REGISTRY))
+        for row in assessment_plan():
+            self.assertTrue(row["mission"] and row["outcome_check"] and row["required_fixture"])
+
+    async def test_identity_inventory_is_observed_but_not_graded(self):
+        values = {"users": 2, "active_users": 1, "roles": 2, "ciem_findings": 0,
+                  "sessions": 3, "current_sessions": 1, "users_without_tenant_role": 0}
+        fetch = AsyncMock(side_effect=[[values], [{"column_name": "id"}]])
+        with patch.object(platform_data, "_tenant_or_raise", return_value="sandbox"), \
+                patch.object(platform_data, "_fetch", fetch):
+            result = await platform_data.identity_posture()
+        self.assertTrue(outcome_verified("identity_access_management", result))
+        self.assertEqual(result["grade"], None)
+        self.assertIn("user MFA enrollment", result["unmeasured_controls"])
+        self.assertEqual(result["checks"]["current_sessions"], 1)
+        self.assertIn("roles WHERE tenant_id = :tid", fetch.call_args_list[0].args[0])
+        self.assertFalse(outcome_verified("identity_access_management", {"success": True}))
 
     async def test_auth_precedes_case_lookup_and_no_case_dispatches(self):
         with patch.object(bridge, "BRIDGE_API_KEY", "secret"):
