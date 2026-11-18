@@ -42,6 +42,7 @@ class DictWrapper:
 
 
 logger = logging.getLogger("gds.bridge")
+RELEASE_PATH = "/opt/gds-os/RELEASE"
 
 router = APIRouter(prefix="/bridge", tags=["bridge"])
 
@@ -331,17 +332,30 @@ async def bridge_mission(request: Request, authorization: str = Header(None)):
     except Exception as e:
         logger.error("Mission failed: %s" % str(e))
         raise HTTPException(status_code=500, detail=str(e))
+def _release_sha() -> str | None:
+    """Report the same deployed release stamp as /health/version."""
+    candidate = os.environ.get("GDS_RELEASE_SHA", "")
+    if len(candidate) == 40 and all(c in "0123456789abcdef" for c in candidate):
+        return candidate
+    try:
+        with open(RELEASE_PATH, encoding="utf-8") as release_file:
+            candidate = json.load(release_file).get("sha", "")
+    except (OSError, ValueError, AttributeError, TypeError):
+        return None
+    return candidate if isinstance(candidate, str) and len(candidate) == 40 and all(
+        c in "0123456789abcdef" for c in candidate
+    ) else None
+
+
 @router.get("/diagnostics")
 async def bridge_diagnostics(authorization: Optional[str] = Header(None)):
     """Bounded metadata for deployment verification; never secrets or customer data."""
     _verify_auth(authorization)
     from gds_api.reasoning.prompts import AGENT_REGISTRY
     from gds_api.tool_gateway import TOOL_REGISTRY
-    release = os.environ.get("GDS_RELEASE_SHA", "")
-    release_valid = len(release) == 40 and all(c in "0123456789abcdef" for c in release)
     return {
         "schema_version": 1,
-        "release_sha": release if release_valid else None,
+        "release_sha": _release_sha(),
         "registry_counts": {"agents": len(AGENT_REGISTRY), "tools": len(TOOL_REGISTRY)},
         "workers_verified": False,
         "tool_canary_verified": False,
