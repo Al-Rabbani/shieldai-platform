@@ -26,6 +26,7 @@ reported with tenant_scoped=False rather than being silently mixed into tenant-s
 from __future__ import annotations
 
 import hashlib
+import hmac
 import math
 import re
 import uuid
@@ -491,6 +492,29 @@ async def evidence_integrity(evidence_id: Any) -> dict[str, Any]:
             "error": f"no evidence record {eid} for this tenant",
         }
     row = rows[0]
+    tenant = _tenant_or_raise()
+    if not str(row["storage_key"]).startswith(f"{tenant}/"):
+        return _not_implemented(
+            "verify_evidence_integrity", "STORAGE_SCOPE_MISMATCH",
+            "evidence object key is outside this tenant's storage prefix", evidence_id=str(eid),
+        )
+    if not isinstance(row.get("size_bytes"), int) or not 0 <= row["size_bytes"] <= 100 * 1024 * 1024:
+        return _not_implemented(
+            "verify_evidence_integrity", "EVIDENCE_SIZE_UNSUPPORTED",
+            "evidence size is missing or exceeds the bounded verification limit", evidence_id=str(eid),
+        )
+    from gds_api.evidence import download_evidence_content
+    try:
+        content = await download_evidence_content(row["storage_key"])
+    except Exception as exc:  # no object read is never proof of integrity
+        return _not_implemented(
+            "verify_evidence_integrity", "EVIDENCE_SOURCE_UNAVAILABLE",
+            f"evidence object could not be read: {type(exc).__name__}", evidence_id=str(eid),
+        )
+    measured_hash = hashlib.sha256(content).hexdigest()
+    measured_size = len(content)
+    intact = (hmac.compare_digest(str(row.get("sha256") or ""), measured_hash)
+              and measured_size == row["size_bytes"])
     row["id"] = str(row["id"])
     if row.get("created_at") is not None:
         row["created_at"] = row["created_at"].isoformat()
@@ -498,12 +522,12 @@ async def evidence_integrity(evidence_id: Any) -> dict[str, Any]:
         "success": True,
         "tool": "verify_evidence_integrity",
         "source": "evidence (live, tenant-scoped)",
-        "verdict": "stored_hash_only",
+        "verdict": "intact" if intact else "tampered",
+        "intact": intact,
         "stored_sha256": row.get("sha256"),
-        "note": (
-            "the recorded hash is returned; re-hashing the object requires a storage read "
-            "that is not wired into this tool, so no intact/tampered verdict is claimed"
-        ),
+        "measured_sha256": measured_hash,
+        "measured_size_bytes": measured_size,
+        "checked_content": "MinIO object bytes, freshly downloaded",
         "evidence": row,
     }
 

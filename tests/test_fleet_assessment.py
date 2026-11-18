@@ -1,5 +1,7 @@
 """The assessment allowlist cannot drift into writes, scans or false receipts."""
 import unittest
+import hashlib
+import uuid
 from unittest.mock import AsyncMock, patch
 
 from fastapi import HTTPException
@@ -71,6 +73,30 @@ class FleetAssessmentTests(unittest.IsolatedAsyncioTestCase):
                 self.assertFalse(outcome_verified(agent_id, {"success": True, "tool": result["tool"]}))
                 self.assertFalse(outcome_verified(agent_id, {**result, "tool": "wrong_tool"}))
                 self.assertFalse(outcome_verified(agent_id, {**result, "success": False}))
+
+    async def test_forensic_case_rehashes_object_and_rejects_tampering(self):
+        evidence_id = str(uuid.uuid4())
+        tenant_id = str(uuid.uuid4())
+        raw = b"controlled GDS sandbox evidence\n"
+        digest = hashlib.sha256(raw).hexdigest()
+        row = {"id": uuid.UUID(evidence_id), "storage_key": f"{tenant_id}/fixture",
+               "sha256": digest, "size_bytes": len(raw), "created_at": None}
+        with patch.dict("os.environ", {"GDS_ASSESSMENT_EVIDENCE_ID": evidence_id}), \
+                patch.object(platform_data, "_tenant_or_raise", return_value=tenant_id), \
+                patch.object(platform_data, "_fetch", AsyncMock(return_value=[row.copy()])), \
+                patch("gds_api.evidence.download_evidence_content", AsyncMock(return_value=raw)):
+            case = verified_case("digital_forensics")
+            self.assertEqual(case.args, {"evidence_id": evidence_id})
+            intact = await platform_data.evidence_integrity(evidence_id)
+            self.assertTrue(outcome_verified("digital_forensics", intact))
+        with patch.object(platform_data, "_tenant_or_raise", return_value=tenant_id), \
+                patch.object(platform_data, "_fetch", AsyncMock(return_value=[row.copy()])), \
+                patch("gds_api.evidence.download_evidence_content", AsyncMock(return_value=raw + b"changed")):
+            tampered = await platform_data.evidence_integrity(evidence_id)
+        self.assertFalse(tampered["intact"])
+        self.assertEqual(tampered["verdict"], "tampered")
+        with patch.dict("os.environ", {"GDS_ASSESSMENT_EVIDENCE_ID": evidence_id}):
+            self.assertFalse(outcome_verified("digital_forensics", tampered))
 
     async def test_auth_precedes_case_lookup_and_no_case_dispatches(self):
         with patch.object(bridge, "BRIDGE_API_KEY", "secret"):
