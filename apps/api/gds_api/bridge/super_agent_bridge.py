@@ -426,3 +426,70 @@ async def assess_platform_health(authorization: Optional[str] = Header(None)):
             summary="Platform health tool executed" if isinstance(result, dict) and result.get("success") is True
             else "Platform health assessment did not verify execution",
         )
+
+
+@router.get("/sandbox/assessment-plan")
+async def get_sandbox_assessment_plan(authorization: Optional[str] = Header(None)):
+    """Disclose exactly which registered roles have a safe assessment case."""
+    _verify_auth(authorization)
+    from gds_api.bridge.fleet_assessment import assessment_plan
+    return {"agents": assessment_plan(), "scope": "gds-assessment-sandbox"}
+
+
+@router.post("/sandbox/assess/agent/{agent_id}")
+async def assess_registered_agent(agent_id: str, authorization: Optional[str] = Header(None)):
+    """Run a single fixed R0 case with a persisted mission and broker receipt."""
+    _verify_auth(authorization)
+    from gds_api.bridge.fleet_assessment import verified_case
+    from gds_api.reasoning.governed_tools import (
+        execute_governed_tool, open_reasoning_mission, set_mission_outcome,
+    )
+    from gds_api.db import async_session_factory
+    from gds_api.models import CapabilityDecisionRecord, CapabilityRequestRecord
+    from gds_api.tenant_binding import bind_tenant
+    from sqlalchemy import select
+
+    case = verified_case(agent_id)
+    if case is None:
+        raise HTTPException(409, "No fixed read-only case for this registered agent")
+    tenant_id, user_id = _sandbox_assessment_identity()
+    await _assert_sandbox_principal(tenant_id, user_id)
+    mission_id = await open_reasoning_mission(
+        tenant_id=tenant_id, user_id=user_id,
+        goal="Read-only fleet assessment", agent_id=agent_id,
+    )
+    result = None
+    receipt = None
+    try:
+        result = await execute_governed_tool(
+            tenant_id=tenant_id, user_id=user_id, mission_id=mission_id,
+            agent_id=agent_id, tool_name=case.tool, args=case.args,
+            purpose="Scoped GDS sandbox fleet assessment",
+        )
+        async with async_session_factory() as db:
+            await bind_tenant(db, tenant_id)
+            row = (await db.execute(select(CapabilityRequestRecord, CapabilityDecisionRecord)
+                .join(CapabilityDecisionRecord, CapabilityDecisionRecord.request_id == CapabilityRequestRecord.id)
+                .where(CapabilityRequestRecord.mission_id == mission_id)
+                .order_by(CapabilityDecisionRecord.decided_at.desc()))).first()
+            if row:
+                request_record, decision = row
+                receipt = {"request_id": str(request_record.id), "decision_id": str(decision.id),
+                           "capability_key": request_record.capability_key,
+                           "decision": decision.decision, "execution_status": decision.execution_status}
+        verified = (isinstance(result, dict) and result.get("success") is True
+                    and receipt is not None and receipt["decision"] == "ALLOW"
+                    and receipt["execution_status"] == "executed")
+        return {"agent_id": agent_id, "tool": case.tool, "mission_id": str(mission_id),
+                "verification_status": "tool_executed" if verified else "not_verified",
+                "receipt": receipt, "tool_result": result}
+    finally:
+        await set_mission_outcome(
+            mission_id=mission_id, tenant_id=tenant_id,
+            success=(isinstance(result, dict) and result.get("success") is True
+                     and receipt is not None and receipt["decision"] == "ALLOW"
+                     and receipt["execution_status"] == "executed"),
+            summary=f"Read-only {agent_id} assessment: {case.tool}; "
+                    + ("governed execution verified" if receipt and receipt["execution_status"] == "executed"
+                       and isinstance(result, dict) and result.get("success") is True else "not verified"),
+        )
