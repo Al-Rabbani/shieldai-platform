@@ -111,7 +111,10 @@ async def download_evidence_content(storage_key: str) -> bytes:
         _ensure_bucket()
         response = _client.get_object(settings.minio_evidence_bucket, storage_key)
         try:
-            return response.read()
+            content = response.read(_MAX_EVIDENCE_UPLOAD_BYTES + 1)
+            if len(content) > _MAX_EVIDENCE_UPLOAD_BYTES:
+                raise ValueError("Evidence object exceeds the bounded verification limit")
+            return content
         finally:
             response.close()
             response.release_conn()
