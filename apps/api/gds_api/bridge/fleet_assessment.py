@@ -6,7 +6,9 @@ documented assessment gap, never an invitation to execute a write or scan.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import os
 from typing import Any
+import uuid
 
 from gds_api.agents.registry import AGENT_REGISTRY
 from gds_api.capabilities.catalog import CAPABILITY_REGISTRY
@@ -66,6 +68,12 @@ def verified_case(agent_id: str) -> ReadOnlyCase | None:
     """Fail closed if a catalogue or manifest edit changes the case's safety."""
     agent = AGENT_REGISTRY.get(agent_id)
     case = READ_ONLY_CASES.get(agent_id)
+    if agent_id == "digital_forensics":
+        try:
+            evidence_id = str(uuid.UUID(os.environ["GDS_ASSESSMENT_EVIDENCE_ID"]))
+            case = ReadOnlyCase("verify_evidence_integrity", {"evidence_id": evidence_id})
+        except (KeyError, ValueError):
+            return None
     if agent is None or case is None or case.tool not in agent.tool_names:
         return None
     matches = [cap for cap in CAPABILITY_REGISTRY.values()
@@ -93,6 +101,12 @@ def outcome_verified(agent_id: str, result: Any) -> bool:
                 and all(isinstance(observed.get(key), int) and observed[key] >= 0
                         for key in ("users", "active_users", "roles", "sessions",
                                     "current_sessions", "users_without_tenant_role")))
+    if agent_id == "digital_forensics":
+        evidence = result.get("evidence") or {}
+        return (result.get("intact") is True and result.get("verdict") == "intact"
+                and result.get("measured_sha256") == result.get("stored_sha256")
+                and result.get("measured_size_bytes") == evidence.get("size_bytes")
+                and evidence.get("id") == case.args["evidence_id"])
     if agent_id == "knowledge_memory":
         return isinstance(result.get("results"), list) and result.get("count") == len(result["results"])
     if agent_id == "data_intelligence":
