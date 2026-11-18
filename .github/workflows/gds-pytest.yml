@@ -38,5 +38,6 @@ jobs:
       - name: Run offline suite
         env:
           PYTHONPATH: apps/api:tests
+          JWT_SECRET_KEY: isolated-ci-contract-test-only
         run: |
           python -m pytest tests -q --maxfail=1 -p no:cacheprovider
