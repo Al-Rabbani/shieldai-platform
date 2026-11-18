@@ -190,169 +190,21 @@ async def retest_finding(finding_id: Any) -> dict[str, Any]:
 # --------------------------------------------------------------------------------------
 
 
-def _git(cwd: str, *args: str) -> subprocess.CompletedProcess:
-    return subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True, timeout=120)
-
-
 async def autofix_finding(finding_id: Any) -> dict[str, Any]:
-    """Raise the pinned version of a vulnerable dependency on a throwaway branch.
+    """Fail closed until auto-fix uses an isolated governed engineering workspace.
 
-    Deliberately does NOT push or merge: it produces a real, reviewable commit and reports the
-    branch. A dependency fix that lands itself is an outage waiting for a reviewer to blink.
+    The former implementation checked out and committed a branch in a registered
+    repository's primary working directory. That bypassed the Workspace Manager
+    and the human-approved engineering commit boundary promised by the manifest.
+    A successful broker decision for this R2 tool cannot authorize that write.
     """
-    tool = "auto_fix_finding"
-    try:
-        fid = int(str(finding_id))
-    except (ValueError, TypeError):
-        return _refuse(tool, "MISSING_ARGUMENT", "finding_id must be an integer security_findings id")
-    tenant = _tenant()
-    async with async_session_factory() as session:
-        await bind_tenant(session, tenant)
-        finding = (
-            await session.execute(
-                text(
-                    "SELECT id, title, target, status, external_id, raw_data, remediation "
-                    "FROM security_findings WHERE id = :id AND tenant_id = :t"
-                ),
-                {"id": fid, "t": tenant},
-            )
-        ).mappings().first()
-        if not finding:
-            return _refuse(tool, "FINDING_NOT_FOUND", f"no finding {fid} in this tenant")
-        repo = (
-            await session.execute(
-                text(
-                    "SELECT id, display_name, working_directory, default_branch FROM repositories "
-                    "WHERE tenant_id = :t AND status = 'active' ORDER BY created_at LIMIT 1"
-                ),
-                {"t": tenant},
-            )
-        ).mappings().first()
-
-    pinned = _PINNED.match((finding["target"] or "").strip())
-    if finding["status"] in ("resolved", "false_positive"):
-        return _refuse(tool, "FINDING_CLOSED", f"finding {fid} is already {finding['status']}")
-    if not pinned:
-        return _refuse(
-            tool, "AUTOFIX_UNSUPPORTED",
-            "only pinned dependency findings can be fixed automatically; this finding's target is not "
-            "a package==version pin",
-            finding_id=fid, target=finding["target"],
-        )
-    raw = finding["raw_data"] or {}
-    if isinstance(raw, str):
-        try:
-            raw = json.loads(raw)
-        except json.JSONDecodeError:
-            raw = {}
-    fixed_version = raw.get("fixed_version")
-    if not fixed_version:
-        return _refuse(
-            tool, "NO_FIXED_VERSION",
-            "the advisory records no fixed version, so there is nothing deterministic to upgrade to",
-            finding_id=fid,
-        )
-    if not repo:
-        return _refuse(
-            tool, "REPOSITORY_NOT_REGISTERED",
-            "no repository is registered for this tenant, so there is no codebase to patch",
-            finding_id=fid,
-        )
-    workdir = repo["working_directory"]
-    if not workdir or not os.path.isdir(workdir):
-        return _refuse(
-            tool, "REPOSITORY_WORKDIR_MISSING",
-            f"registered working_directory {workdir!r} is not present on this host",
-            repository=repo["display_name"],
-        )
-
-    dirty = _git(workdir, "status", "--porcelain").stdout.strip()
-    if dirty:
-        return _refuse(
-            tool, "WORKTREE_DIRTY",
-            "the autofix workspace has uncommitted changes; refusing to build a branch on top of them",
-            repository=repo["display_name"], changed_files=len(dirty.splitlines()),
-        )
-
-    package, installed = pinned.group("name"), pinned.group("version")
-    base = repo["default_branch"] or "main"
-    branch = f"gds/autofix/{fid}-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}"
-    co = _git(workdir, "checkout", "-q", base)
-    if co.returncode != 0:
-        return _refuse(tool, "GIT_CHECKOUT_FAILED", co.stderr.strip()[:400], repository=repo["display_name"])
-    br = _git(workdir, "checkout", "-q", "-b", branch)
-    if br.returncode != 0:
-        return _refuse(tool, "GIT_BRANCH_FAILED", br.stderr.strip()[:400], repository=repo["display_name"])
-
-    requirements = os.path.join(workdir, "apps", "api", "requirements.txt")
-    if not os.path.isfile(requirements):
-        _git(workdir, "checkout", "-q", base)
-        _git(workdir, "branch", "-D", branch)
-        return _refuse(tool, "REQUIREMENTS_NOT_FOUND", f"{requirements} does not exist", repository=repo["display_name"])
-
-    lines = open(requirements, encoding="utf-8").read().splitlines()
-    changed_line = None
-    for index, line in enumerate(lines):
-        stripped = line.split("#", 1)[0].strip()
-        match = _PINNED.match(stripped)
-        if match and match.group("name").lower() == package.lower():
-            changed_line = f"{package}=={fixed_version}"
-            lines[index] = changed_line
-            break
-    if changed_line is None:
-        _git(workdir, "checkout", "-q", base)
-        _git(workdir, "branch", "-D", branch)
-        return _refuse(
-            tool, "PACKAGE_NOT_PINNED",
-            f"{package} is not pinned in apps/api/requirements.txt, so the fix needs a human decision",
-            repository=repo["display_name"],
-        )
-
-    open(requirements, "w", encoding="utf-8").write("\n".join(lines) + "\n")
-    _git(workdir, "add", "apps/api/requirements.txt")
-    commit = _git(
-        workdir, "commit", "-q", "-m",
-        f"security: raise {package} {installed} -> {fixed_version} for finding {fid}",
+    return _refuse(
+        "auto_fix_finding", "GOVERNED_ENGINEERING_REQUIRED",
+        "Auto-fix requires an isolated Workspace, a reviewed mission and a separate "
+        "human-approved commit. Direct checkout and commit in a registered repository "
+        "are disabled; no fix was applied.",
+        finding_id=str(finding_id) if finding_id is not None else None,
     )
-    if commit.returncode != 0:
-        _git(workdir, "checkout", "-q", base)
-        _git(workdir, "branch", "-D", branch)
-        return _refuse(tool, "GIT_COMMIT_FAILED", commit.stderr.strip()[:400], repository=repo["display_name"])
-    sha = _git(workdir, "rev-parse", "HEAD").stdout.strip()
-    diff = _git(workdir, "show", "--stat", "--format=", "HEAD").stdout.strip()
-    _git(workdir, "checkout", "-q", base)
-
-    async with async_session_factory() as session:
-        await bind_tenant(session, tenant)
-        await session.execute(
-            text(
-                "UPDATE security_findings SET details = jsonb_set(coalesce(details, '{}'::jsonb), "
-                "'{autofix}', CAST(:v AS jsonb), true) WHERE id = :id AND tenant_id = :t"
-            ),
-            {
-                "v": json.dumps({"branch": branch, "commit": sha, "to_version": fixed_version,
-                                 "at": datetime.now(UTC).isoformat(), "pushed": False}),
-                "id": fid,
-                "t": tenant,
-            },
-        )
-        await session.commit()
-
-    return {
-        "success": True,
-        "tool": tool,
-        "finding_id": fid,
-        "source": "real git commit in the registered repository",
-        "repository": repo["display_name"],
-        "branch": branch,
-        "commit": sha,
-        "package": package,
-        "from_version": installed,
-        "to_version": fixed_version,
-        "diff": diff,
-        "pushed": False,
-        "note": "branch is local and unpushed; open a PR when the change is reviewed",
-    }
 
 
 # --------------------------------------------------------------------------------------
