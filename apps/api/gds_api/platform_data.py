@@ -393,40 +393,44 @@ async def compliance_posture() -> dict[str, Any]:
 
 
 async def identity_posture() -> dict[str, Any]:
-    """Identity posture from real tables, or an explicit statement of what is missing."""
+    """Tenant-scoped identity evidence; unknown controls never become a grade."""
     tid = _tenant_or_raise()
-    counts = (
-        await _fetch(
-            "SELECT (SELECT COUNT(*) FROM users WHERE tenant_id = :tid) AS users, "
-            "(SELECT COUNT(*) FROM roles) AS roles, "
-            "(SELECT COUNT(*) FROM ciem_findings WHERE tenant_id = :tid) AS ciem_findings, "
-            "(SELECT COUNT(*) FROM user_sessions WHERE tenant_id = :tid) AS sessions",
-            {"tid": tid},
-        )
-    )[0]
-    counts = {k: int(v or 0) for k, v in counts.items()}
+    counts = (await _fetch(
+        "SELECT (SELECT COUNT(*) FROM users WHERE tenant_id = :tid) AS users, "
+        "(SELECT COUNT(*) FROM users WHERE tenant_id = :tid AND is_active) AS active_users, "
+        "(SELECT COUNT(*) FROM roles WHERE tenant_id = :tid) AS roles, "
+        "(SELECT COUNT(*) FROM ciem_findings WHERE tenant_id = :tid) AS ciem_findings, "
+        "(SELECT COUNT(*) FROM user_sessions WHERE tenant_id = :tid) AS sessions, "
+        "(SELECT COUNT(*) FROM user_sessions WHERE tenant_id = :tid AND revoked_at IS NULL "
+        "AND expires_at > now()) AS current_sessions, "
+        "(SELECT COUNT(*) FROM users u LEFT JOIN roles r ON r.id = u.role_id "
+        "AND r.tenant_id = u.tenant_id WHERE u.tenant_id = :tid AND r.id IS NULL) "
+        "AS users_without_tenant_role",
+        {"tid": tid},
+    ))[0]
+    counts = {key: int(value or 0) for key, value in counts.items()}
     columns = await _fetch(
         "SELECT column_name FROM information_schema.columns "
         "WHERE table_schema = 'public' AND table_name = 'users'",
         {"tid": tid},
     )
     has_mfa_column = any(str(c["column_name"]).lower().startswith("mfa") for c in columns)
-    if not has_mfa_column and counts["ciem_findings"] == 0:
-        return _not_implemented(
-            "review_identity_posture",
-            "INSUFFICIENT_IDENTITY_DATA",
-            "identity posture cannot be graded: the users table has no MFA or privilege "
-            "column and ciem_findings is empty, so any grade would be invented",
-            observed=counts,
-            missing=["users.mfa_enabled", "ciem_findings rows"],
-        )
     return {
         "success": True,
         "tool": "review_identity_posture",
         "source": "users + roles + ciem_findings + user_sessions (live, tenant-scoped)",
         "tenant_scoped": True,
+        "evidence_status": "inventory_only",
         "observed": counts,
-        "has_mfa_column": has_mfa_column,
+        "checks": {
+            "users_without_tenant_role": counts["users_without_tenant_role"],
+            "current_sessions": counts["current_sessions"],
+        },
+        "unmeasured_controls": ([] if has_mfa_column else ["user MFA enrollment"])
+        + (["CIEM entitlement risk"] if counts["ciem_findings"] == 0 else []),
+        "grade": None,
+        "note": "Inventory and referential checks are observed; MFA and entitlement controls "
+                "need independent evidence before an identity grade or readiness claim.",
     }
 
 
