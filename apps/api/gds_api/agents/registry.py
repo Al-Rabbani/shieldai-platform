@@ -710,13 +710,13 @@ AGENT_REGISTRY: dict[str, AgentManifest] = {
         name="malware_analysis",
         display_name="Malware Analysis Agent",
         description=(
-            "Checks a file hash against abuse.ch MalwareBazaar's real recent-samples feed."
+            "Queries one SHA-256 in MalwareBazaar via an authenticated get_info request."
         ),
         system_prompt=(
             "You are the Malware Analysis Agent for GDS Security OS. You check a file "
-            "hash against abuse.ch MalwareBazaar's real recent-samples feed - a clean "
-            "result is a valid, honest outcome (it only covers recent samples, not the "
-            "full historical database), never claim a sandboxed detonation this project "
+            "hash against abuse.ch MalwareBazaar's authenticated get_info endpoint - a "
+            "not-listed result is limited to that provider, never proof a file is safe. "
+            "Never claim a sandboxed detonation this project "
             "doesn't have."
         ),
         tool_names=("check_malware_hash",),
@@ -729,16 +729,16 @@ AGENT_REGISTRY: dict[str, AgentManifest] = {
         purple_role_name="Threat Hunting Agent",
         operational_domain="Threat Hunting",
         mission_role=(
-            "Hash-based IOC hunting against a real abuse.ch MalwareBazaar recent-samples feed."
+            "Hash-based IOC lookup against MalwareBazaar with an explicit provider verdict."
         ),
         objectives=("Check a file hash against real recent known-malware samples",),
         knowledge_domains=("malware IOC hunting",),
         skills=("hash lookup", "hunt reporting"),
         approval_requirements=("threat_intel.lookup_malware_hash requires human approval (R3)",),
-        evidence_requirements=("Finding.raw_data retains the matched feed entry",),
-        input_contracts=("file hash supplied by the requesting mission",),
+        evidence_requirements=("Matched provider record retained in the tool receipt",),
+        input_contracts=("SHA-256 supplied by the mission and server-side MalwareBazaar Auth-Key",),
         output_contracts=(
-            "Finding(source='malwarebazaar') on match, honest clean result otherwise",
+            "listed or not_listed provider verdict; no Finding row is created",
         ),
         collaboration_contracts=("threat_hunting", "threat_intelligence"),
         repository_permissions=("none",),
