@@ -46,6 +46,7 @@ PUBLIC_BY_DESIGN = {
 }
 
 MACHINE_AUTH = {
+    "POST /agents/heartbeat": "HMAC-signed with the per-tenant key derived from HEARTBEAT_SIGNING_KEY; a worker has no user session",
     "POST /billing/webhook": "Stripe signature verified with STRIPE_WEBHOOK_SECRET",
     "POST /ci/gate": "repository token verified by _verify_gate_auth",
     "POST /auth/refresh": "authenticates with the refresh cookie, not the access session",
@@ -97,7 +98,7 @@ PROTECTED_SAMPLE = ("/findings/security", "/missions", "/approvals", "/monitorin
 # not 401 and that is correct: a Stripe webhook with no signature is rejected as a bad signature
 # (400), and FastAPI validates a request body before an in-handler guard runs, so a malformed body
 # can return 422 - which is why the probe below sends a valid-shaped body to reach the guard.
-EXPECTED_ANONYMOUS = {"POST /billing/webhook": {400}}
+EXPECTED_ANONYMOUS = {"POST /billing/webhook": {400}, "POST /agents/heartbeat": {400}}
 PROBE_BODY = {
     "POST /bridge/auto": {"goal": "auth probe, do not execute", "agent_id": "nonexistent-agent"},
     "POST /bridge/mission": {"goal": "auth probe, do not execute", "agent_id": "nonexistent-agent"},

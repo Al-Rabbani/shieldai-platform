@@ -388,3 +388,8 @@ async def health_version():
     except Exception:
         info["migrations_applied"] = None
     return info
+
+# Authenticated worker heartbeats: status is derived from stored, verified evidence, never assumed.
+from gds_api.heartbeat_api import router as heartbeat_router  # noqa: E402
+
+app.include_router(heartbeat_router)
