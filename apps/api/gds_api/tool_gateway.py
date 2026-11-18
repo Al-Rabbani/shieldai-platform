@@ -332,14 +332,8 @@ async def _record_mission_lesson(params: dict) -> dict:
         mission_id=params.get("mission_id"), lesson=params.get("lesson", "")
     )
 async def _query_platform_metrics(params: dict) -> dict:
-    """Query platform metrics. params: metric, period."""
-    import httpx
-    try:
-        resp = await httpx.AsyncClient().get("http://localhost:8000/health", timeout=5)
-        health = resp.json() if resp.status_code == 200 else {}
-        return {"success": True, "tool": "query_platform_metrics", "health": health}
-    except Exception as e:
-        return {"success": False, "tool": "query_platform_metrics", "error": str(e)}
+    """Return real tenant-scoped mission and model-cost totals."""
+    return await platform_data.platform_metrics()
 
 async def _list_pending_approvals(params: dict) -> dict:
     """Pending approvals from the live approvals table. Was a hardcoded empty list."""
