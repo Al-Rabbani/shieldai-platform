@@ -124,7 +124,6 @@ AGENT_REGISTRY: dict[str, AgentManifest] = {
             "mission.list_recent",
             "finding.list_open",
             "network.check_url_headers",
-            "risk.calculate_exposure",
         ),
     ),
     "threat_intelligence": AgentManifest(
