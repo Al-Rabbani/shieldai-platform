@@ -62,3 +62,12 @@ def test_session_expiry_returns_to_sign_in():
 def test_no_demo_or_hardcoded_figures_in_the_shell():
     for marker in ("lorem ipsum", "Math.random", "placeholder data", "dummy"):
         assert marker.lower() not in HTML.lower(), f"demo marker present: {marker}"
+
+
+def test_branding_name_is_not_overwritten_by_the_router():
+    # The router must own the route suffix and branding the customer name. An earlier edit wrapped the
+    # router line instead of the branding one, which would have set the "brand name" to "Overview".
+    assert "window.__gdsBrandName = brand.display_name;" in HTML
+    assert "window.__gdsBrandName = (ROUTES" not in HTML
+    router = HTML[HTML.index("function setActiveNav"):HTML.index("async function withBusy")]
+    assert "__gdsBrandName || 'GDS OS'" in router

@@ -323,7 +323,7 @@ function setActiveNav(page) {
     a.classList.toggle('active', on);
     if (on) { a.setAttribute('aria-current', 'page'); } else { a.removeAttribute('aria-current'); }
   });
-  window.__gdsBrandName = (ROUTES[page] + ' \u00b7 GDS OS'); document.title = window.__gdsBrandName;
+  document.title = ROUTES[page] + ' \u00b7 ' + (window.__gdsBrandName || 'GDS OS');
 }
 
 async function withBusy(page, loader) {
@@ -423,7 +423,10 @@ async function applyBranding() {
     document.documentElement.style.setProperty('--primary-glow', brand.secondary_color);
   }
   if (brand.display_name) {
-    document.title = brand.display_name + ' — Security OS';
+    // Branding owns the name; the router owns the suffix. Storing the name separately stops the
+    // two from overwriting each other on every route change.
+    window.__gdsBrandName = brand.display_name;
+    document.title = ROUTES[routeFromHash(location.hash)] + ' \u00b7 ' + brand.display_name;
   }
 }
 
