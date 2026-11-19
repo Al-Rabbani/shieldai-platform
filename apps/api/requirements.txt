@@ -186,3 +186,5 @@ websockets==17.0
 wrapt==1.17.3
 yarl==1.25.1
 zipp==4.1.0
+# test-only: embedded JS engine used by tests/test_client_logic.py
+dukpy==0.6.0

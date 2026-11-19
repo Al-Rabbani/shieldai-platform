@@ -1,0 +1,118 @@
+"""Behavioural tests for the pure client functions (gap register C9 and C13).
+
+These are not structural. The chart and router logic is pure, so it is extracted from the page and
+EXECUTED in an embedded JavaScript engine. That makes an assertion like "a null measurement renders as
+the words not assessed" a fact about the code rather than a grep for a string that happens to be present.
+
+If the engine is not installed the tests skip with that reason instead of passing quietly.
+"""
+import json
+import re
+from pathlib import Path
+
+import pytest
+
+dukpy = pytest.importorskip(
+    "dukpy", reason="embedded JS engine not installed; behavioural client tests cannot run"
+)
+
+SHELL = Path(__file__).resolve().parents[1] / "web" / "gds_app.html"
+JS = re.search(r"<script>(.*?)</script>", SHELL.read_text(encoding="utf-8"), re.S).group(1)
+
+
+def _block(start):
+    """Return the balanced {...} block that begins at or after `start`."""
+    depth = 0
+    for k in range(JS.index("{", start), len(JS)):
+        if JS[k] == "{":
+            depth += 1
+        elif JS[k] == "}":
+            depth -= 1
+            if depth == 0:
+                return JS[start:k + 1]
+    raise AssertionError("unbalanced block in the shell")
+
+
+def _fn(name):
+    return _block(JS.index("function " + name))
+
+
+def _const(name):
+    return _block(JS.index("const " + name + " ="))
+
+
+SOURCE = "\n".join([
+    _const("ROUTES"),
+    _fn("escapeHtml"),
+    _fn("formatValue"),
+    _fn("routeFromHash"),
+    _fn("svgGroupedBars"),
+])
+
+
+def run(expr):
+    return dukpy.evaljs(SOURCE + "\n" + expr)
+
+
+def test_route_from_hash_maps_addresses():
+    cases = {
+        "#/findings": "findings",
+        "#/mssp": "mssp",
+        "#/compliance": "compliance",
+        "#findings": "findings",
+        "#/cloud?tab=1": "cloud",
+        "": "overview",
+        "#/": "overview",
+        "#/does-not-exist": "overview",
+    }
+    for hash_value, expected in cases.items():
+        got = run("routeFromHash(%s);" % json.dumps(hash_value))
+        assert got == expected, f"{hash_value!r} routed to {got!r}, expected {expected!r}"
+
+
+def test_a_null_hash_lands_on_overview():
+    assert run("routeFromHash(null);") == "overview"
+
+
+def test_null_measurement_is_written_out_not_drawn_as_zero():
+    # A measurement nobody took and a measured zero are different facts. The chart must not merge them.
+    svg = run("svgGroupedBars([{label:'NIST AI RMF', a:null, b:null}], {aria:'x'});")
+    assert "not assessed" in svg
+
+
+def test_a_measured_zero_is_drawn_as_zero_not_as_missing():
+    svg = run("svgGroupedBars([{label:'NIST AI RMF', a:0, b:null}], {aria:'x'});")
+    assert "not assessed" not in svg
+    assert 'width="0.0"' in svg
+
+
+def test_labels_are_escaped_before_reaching_the_dom():
+    svg = run("svgGroupedBars([{label:'<script>alert(1)</script>', a:10, b:null}], {aria:'x'});")
+    assert "<script" not in svg
+    assert "&lt;script&gt;" in svg
+
+
+def test_a_chart_is_readable_without_vision():
+    svg = run("svgGroupedBars([{label:'A', a:10, b:null}], {aria:'Open findings per tenant'});")
+    assert 'role="img"' in svg
+    assert 'aria-label="Open findings per tenant"' in svg
+
+
+def test_values_scale_against_the_stated_maximum():
+    # 50 of 100 over a 380px bar is 190.0px; a chart that ignores its own scale misleads by geometry.
+    svg = run("svgGroupedBars([{label:'A', a:50, b:null}], {aria:'x', max:100});")
+    assert 'width="190.0"' in svg
+
+
+def test_the_second_legend_appears_only_when_a_second_series_exists():
+    one = run("svgGroupedBars([{label:'A', a:10, b:null}], {aria:'x', legend:{a:'One'}});")
+    two = run("svgGroupedBars([{label:'A', a:10, b:20}], {aria:'x', legend:{a:'One', b:'Two'}});")
+    assert "One" in one and "Two" not in one
+    assert "Two" in two
+
+
+def test_coverage_and_pass_rate_are_drawn_as_separate_series():
+    # The compliance view must never let 87% pass rate stand alone beside 15% coverage.
+    svg = run("svgGroupedBars([{label:'CIS', a:15.0, b:87.0}], {aria:'x', legend:{a:'Coverage', b:'Pass rate'}, suffix:'%'});")
+    assert "15.0%" in svg and "87.0%" in svg
+    assert svg.count("<rect") >= 3
