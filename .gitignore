@@ -12,3 +12,4 @@ mission_state.json
 *.bak.*
 patches/
 RELEASE
+web/dist/
