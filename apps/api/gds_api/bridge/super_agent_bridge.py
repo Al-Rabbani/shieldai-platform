@@ -49,6 +49,42 @@ router = APIRouter(prefix="/bridge", tags=["bridge"])
 # Bridge authentication key
 BRIDGE_API_KEY = os.environ.get("BRIDGE_API_KEY", "")
 
+
+async def _bridge_identity() -> tuple[str, str]:
+    """The tenant and user the bridge acts for.
+
+    The bridge authenticates with one platform-level key, so it has no tenant of its own.
+    Before 19 Nov 2026 it therefore called the reasoning loop with no identity at all, the
+    loop fell back to the legacy tool executor, and every tool returned
+    GOVERNED_CAPABILITY_REQUIRED - the Co-Pilot path could reason but never act.
+
+    The identity is explicit and never guessed: GDS_TENANT_ID from the environment and the
+    tenant's own admin user. A missing tenant fails loudly rather than borrowing another
+    tenant's data, and there is no fallback that widens scope.
+    """
+    from gds_api.db import async_session_factory
+    from gds_api.tenant_binding import bind_tenant
+    from sqlalchemy import text as _text
+
+    tenant_id = os.environ.get("GDS_TENANT_ID", "").strip()
+    if not tenant_id:
+        raise HTTPException(503, "GDS_TENANT_ID is not configured; the bridge cannot act for a tenant")
+
+    async with async_session_factory() as session:
+        await bind_tenant(session, tenant_id)
+        row = await session.execute(
+            _text(
+                "SELECT u.id FROM users u JOIN roles r ON r.id = u.role_id "
+                "WHERE u.tenant_id = :tid AND u.is_active "
+                "ORDER BY (r.name = 'admin') DESC, u.created_at LIMIT 1"
+            ),
+            {"tid": tenant_id},
+        )
+        user_id = row.scalar()
+    if not user_id:
+        raise HTTPException(503, "no active user exists for the bridge tenant")
+    return tenant_id, str(user_id)
+
 # In-memory mission store (missions are also stored in the reasoning bridge)
 _mission_store = {}
 
@@ -179,9 +215,16 @@ async def invoke_agent_directly(
         if agent_id not in AGENT_REGISTRY:
             raise HTTPException(404, f"Agent {agent_id} not found. Available: {list(AGENT_REGISTRY.keys())[:10]}")
         
-        # Phase 5: kernel-managed memory (no AgenticLoop)
-        result_dict = await run_kernel_agent_runner(agent_id=agent_id, goal=req.goal, context=req.context)
-        result = DictWrapper(result_dict)
+        # 19 Nov 2026: this endpoint used the kernel runner, whose tool executor has no tenant
+        # identity, so every governed tool answered GOVERNED_CAPABILITY_REQUIRED - the Co-Pilot
+        # could reason through this path and never act. It now uses the governed reasoning loop
+        # with an explicit tenant, which is the path that executes real tools under audit.
+        from gds_api.reasoning.bridge import reasoning_bridge
+
+        tenant_id, user_id = await _bridge_identity()
+        result = await reasoning_bridge.execute_task(
+            agent_id, req.goal, req.context, tenant_id=tenant_id, user_id=user_id
+        )
         
         return {
             "success": result.success,
@@ -224,7 +267,10 @@ async def auto_select_and_run(
     try:
         from gds_api.reasoning.bridge import reasoning_bridge
         
-        result = await reasoning_bridge.run_with_auto_select(req.goal, req.context)
+        tenant_id, user_id = await _bridge_identity()
+        result = await reasoning_bridge.run_with_auto_select(
+            req.goal, req.context, tenant_id=tenant_id, user_id=user_id
+        )
         
         return {
             "success": result.success,
@@ -255,10 +301,15 @@ async def _run_mission(mission_id: str, goal: str, agent_id: Optional[str], cont
         
         from gds_api.reasoning.bridge import reasoning_bridge
         
+        tenant_id, user_id = await _bridge_identity()
         if agent_id:
-            result = await reasoning_bridge.execute_task(agent_id, goal, context)
+            result = await reasoning_bridge.execute_task(
+                agent_id, goal, context, tenant_id=tenant_id, user_id=user_id
+            )
         else:
-            result = await reasoning_bridge.run_with_auto_select(goal, context)
+            result = await reasoning_bridge.run_with_auto_select(
+                goal, context, tenant_id=tenant_id, user_id=user_id
+            )
         
         _mission_store[mission_id]["status"] = "completed" if result.success else "failed"
         _mission_store[mission_id]["result"] = {
