@@ -62,9 +62,15 @@ class GroundTruth:
         if not self.ok:
             return (f"UNAVAILABLE ({self.error}). Do not state any finding count; "
                     "say the count could not be verified.")
+        # 19 Nov 2026: a completed mission reported "378 security controls were evaluated" when 378
+        # is the total findings in the register and 60 evaluations ran. The labels were right and
+        # the model relabelled them, so the rule now travels with the numbers.
         return (f"open findings = {self.open_findings}; total findings = {self.total_findings}; "
                 f"critical open = {self.critical_open}; KEV-listed = {self.kev_listed} "
-                f"[source: {self.source}, read at synthesis time]")
+                f"[source: {self.source}, read at synthesis time]. "
+                "These four figures are FINDINGS in the register. Never call them controls, assets, "
+                "checks or scans, and never substitute a tool's own counts for them. Quote each "
+                "label as written, and attribute any other number to the tool that reported it.")
 
 
 def ground_truth() -> GroundTruth:
