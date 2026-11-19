@@ -60,6 +60,9 @@ tr:hover{background:var(--surface2)}
 
 :focus-visible{outline:3px solid var(--focus);outline-offset:4px}
 .toggle-btn{font:inherit;color:inherit;background:transparent;border:0;cursor:pointer}
+.skip-link{position:absolute;left:-9999px;top:0;z-index:100;background:var(--primary);color:var(--on-accent);padding:10px 16px;border-radius:0 0 var(--radius-sm) 0;font-weight:600}
+.skip-link:focus{left:0}
+
 .assurance-panel{padding:clamp(16px,3vw,32px);border:1px solid var(--border-strong);border-radius:20px;background:radial-gradient(ellipse at top right,rgba(34,211,238,.12),transparent 60%),var(--surface-panel)}
 .assurance-heading{display:flex;justify-content:space-between;align-items:center;gap:20px;flex-wrap:wrap}
 .assurance-eyebrow{font-size:11px;letter-spacing:.18em;color:var(--accent-soft);margin-bottom:8px}
@@ -75,9 +78,27 @@ tr:hover{background:var(--surface2)}
 @media(max-width:768px){.nav-inner{align-items:flex-start;gap:16px;flex-wrap:wrap}.nav-links{gap:8px 16px;flex-wrap:wrap;padding-bottom:10px}.nav-links a:not(#nav-user){display:inline-block}.main{padding-left:16px;padding-right:16px}.assurance-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.auth-box{max-width:100%;box-sizing:border-box}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
 
+
+@media (max-width:900px){
+  .nav-inner{flex-wrap:wrap;gap:8px}
+  .nav-links{flex-wrap:wrap;gap:10px}
+  .grid-4{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .grid-2{grid-template-columns:1fr}
+  .main{padding:16px}
+}
+@media (max-width:560px){
+  .grid-4{grid-template-columns:1fr}
+  .stat-val{font-size:22px}
+  /* a wide findings table must scroll inside its own box rather than push the page sideways */
+  .main table{display:block;overflow-x:auto;white-space:nowrap}
+}
 </style>
 </head>
 <body>
+
+<!-- Skip link: the first focusable thing on the page, so a keyboard or screen-reader user can jump the
+     navigation instead of tabbing through it on every visit. -->
+<a class="skip-link" href="#main">Skip to content</a>
 
 <!-- LOGIN / REGISTER VIEW -->
 <div id="authView" class="auth-wrap">
@@ -111,7 +132,7 @@ tr:hover{background:var(--surface2)}
 
 <!-- DASHBOARD VIEW -->
 <div id="dashView" class="hidden">
-<nav>
+<nav aria-label="Primary">
 <div class="nav-inner">
 <a href="/" class="logo">GDS<span>OS</span></a>
 <div class="nav-links">
@@ -122,6 +143,7 @@ tr:hover{background:var(--surface2)}
 <a href="#/compliance" data-route="compliance" id="nav-compliance">Compliance</a>
 <a href="#/mssp" data-route="mssp" id="nav-mssp">MSSP</a>
 <a href="#/agents" data-route="agents" id="nav-agents">Agents</a>
+<a href="#/branding" data-route="branding" id="nav-branding">Branding</a>
 <a href="https://api.globaldigitalsecurity.io/docs" target="_blank">API Docs</a>
 <a href="#" onclick="logout();return false" id="nav-user" style="color:var(--primary);font-weight:600"></a>
 <span id="sessionNote" class="muted" style="font-size:11px"></span>
@@ -129,7 +151,7 @@ tr:hover{background:var(--surface2)}
 </div>
 </div>
 </nav>
-<div class="main">
+<div class="main" id="main" role="main">
 
 <!-- Overview Page -->
 <div id="page-overview">
@@ -189,6 +211,32 @@ tr:hover{background:var(--surface2)}
 <div id="ciemList"><div class="spinner"></div></div>
 </div>
 </div>
+</div>
+
+
+<!-- Branding Page -->
+<div id="page-branding" class="hidden">
+  <h2>Branding</h2>
+  <p class="muted">This sets how this tenant presents itself: the name in the header and the colours used
+  throughout. Values left empty keep their current setting.</p>
+  <div id="brandingNotice" role="status" class="muted"></div>
+  <form id="brandingForm" class="card" style="max-width:520px;display:grid;gap:12px">
+    <label for="brandDisplay">Display name</label>
+    <input id="brandDisplay" name="display_name" maxlength="120" placeholder="Leave empty to keep the tenant name">
+    <label for="brandPrimary">Primary colour</label>
+    <input id="brandPrimary" name="primary_color" pattern="^#[0-9a-fA-F]{6}$" aria-describedby="brandColourHint">
+    <label for="brandSecondary">Secondary colour</label>
+    <input id="brandSecondary" name="secondary_color" pattern="^#[0-9a-fA-F]{6}$" aria-describedby="brandColourHint">
+    <p id="brandColourHint" class="muted" style="font-size:12px">Six-digit hex, including the leading hash.</p>
+    <label for="brandSupport">Support email</label>
+    <input id="brandSupport" name="support_email" type="email" maxlength="320" placeholder="support@example.com">
+    <label for="brandLogo">Logo URL</label>
+    <input id="brandLogo" name="logo_url" maxlength="2048" placeholder="https://...">
+    <button type="submit" class="btn btn-primary" id="brandSave">Save branding</button>
+    <p class="muted" style="font-size:12px">A provider administrator changing another tenant's branding is
+    not offered here, because the API only accepts changes to the caller's own tenant. Showing a control
+    that the server would refuse would be a lie about what this page can do.</p>
+  </form>
 </div>
 
 <!-- Agents Page -->
@@ -715,7 +763,7 @@ async function loadMssp() {
    bookmarked or reached with the back button, and a refresh always dropped the reader on Overview.
    The route now lives in the hash, so #/findings is a real location that survives reload and
    history navigation. routeFromHash is deliberately pure so it can be tested outside a browser. */
-const ROUTES = { overview:'Overview', findings:'Findings', incidents:'Incidents', cloud:'Cloud', compliance:'Compliance', mssp:'MSSP', agents:'Agents' };
+const ROUTES = { overview:'Overview', findings:'Findings', incidents:'Incidents', cloud:'Cloud', compliance:'Compliance', mssp:'MSSP', agents:'Agents', branding:'Branding' };
 
 function routeFromHash(hash) {
   const raw = String(hash == null ? '' : hash).replace(/^#\/?/, '').split('?')[0];
@@ -768,11 +816,12 @@ function applyRoute() {
 window.addEventListener('hashchange', applyRoute);
 
 function showPage(page) {
-    ['overview','findings','incidents','cloud','compliance','mssp','agents'].forEach(p => {
+    ['overview','findings','incidents','cloud','compliance','mssp','agents','branding'].forEach(p => {
         document.getElementById('page-'+p).classList.toggle('hidden', p !== page);
         const nav = document.getElementById('nav-'+p);
         if (nav) nav.classList.toggle('active', p === page);
     });
+    if (page === 'branding') withBusy('branding', loadBranding);
     if (page === 'findings') withBusy('findings', loadFindings);
     if (page === 'incidents') withBusy('incidents', loadIncidents);
     if (page === 'cloud') withBusy('cloud', loadCloud);
@@ -891,6 +940,27 @@ async function apiResult(path, opts) {
 async function apiGet(path, opts) {
   const result = await apiResult(path, opts);
   return result.ok ? result.data : null;
+}
+
+
+async function apiSend(method, path, body) {
+  // Writes do not go through the read cache and are not retried: a retry on a non-idempotent write can
+  // duplicate it, and this helper exists mainly for PATCH, where the caller decides about retries.
+  try {
+    const res = await fetch(API + path, {
+      method: method,
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: body === undefined ? undefined : JSON.stringify(body)
+    });
+    if (res.status === 401) { handleUnauthorised(); }
+    let data = null;
+    try { data = await res.json(); } catch (_) { data = null; }
+    if (res.ok) { invalidate(path); return { ok: true, status: res.status, data: data }; }
+    return { ok: false, status: res.status, data: data, error: 'http' };
+  } catch (err) {
+    return { ok: false, status: 0, data: null, error: (err && err.name === 'AbortError') ? 'timeout' : 'network' };
+  }
 }
 
 /* What a failed read should say. A permission boundary, an outage and a timeout are not the same message
@@ -1089,6 +1159,60 @@ async function loadOverview() {
     } else {
         document.getElementById('auditList').innerHTML = '<p class="muted">No audit events recorded yet.</p>';
     }
+}
+
+
+async function loadBranding() {
+  const result = await apiResult('/tenant/branding');
+  const notice = document.getElementById('brandingNotice');
+  const form = document.getElementById('brandingForm');
+  if (!result.ok) {
+    // A 403 here is a permission boundary, not a fault: only certain roles may change a tenant identity.
+    notice.textContent = unavailableLabel(result) === 'Restricted'
+      ? 'Your role cannot read this tenant\u2019s branding.'
+      : 'Branding could not be loaded (' + unavailableLabel(result) + ').';
+    form.classList.add('hidden');
+    return;
+  }
+  form.classList.remove('hidden');
+  const b = result.data || {};
+  // Examples come from the token block rather than being written here, so colour keeps one definition.
+  document.getElementById('brandPrimary').placeholder = tokenValue('primary');
+  document.getElementById('brandSecondary').placeholder = tokenValue('accent');
+  document.getElementById('brandDisplay').value = b.display_name || '';
+  document.getElementById('brandPrimary').value = b.primary_color || '';
+  document.getElementById('brandSecondary').value = b.secondary_color || '';
+  document.getElementById('brandSupport').value = b.support_email || '';
+  document.getElementById('brandLogo').value = b.logo_url || '';
+  notice.textContent = (b.defaults_applied && b.defaults_applied.length)
+    ? 'Currently using defaults for: ' + b.defaults_applied.join(', ') + '.'
+    : 'Branding is fully set for this tenant.';
+  form.onsubmit = async (event) => {
+    event.preventDefault();
+    const fields = {};
+    const map = { display_name: 'brandDisplay', primary_color: 'brandPrimary', secondary_color: 'brandSecondary',
+                  support_email: 'brandSupport', logo_url: 'brandLogo' };
+    Object.keys(map).forEach(name => {
+      const el = document.getElementById(map[name]);
+      const value = (el.value || '').trim();
+      if (value) { fields[name] = value; }
+    });
+    if (!Object.keys(fields).length) { notice.textContent = 'Nothing to save: every field was left empty.'; return; }
+    notice.textContent = 'Saving\u2026';
+    const saved = await apiSend('PATCH', '/tenant/branding', fields);
+    if (saved.ok) {
+      notice.textContent = 'Saved. The header and colours now reflect this tenant.';
+      if (typeof applyBranding === 'function') { applyBranding(saved.data); }
+      return;
+    }
+    if (saved.status === 403) {
+      notice.textContent = 'Your role cannot change tenant branding.';
+    } else if (saved.status === 422) {
+      notice.textContent = 'The server rejected these values. Colours must be six-digit hex including the leading hash.';
+    } else {
+      notice.textContent = 'Not saved (' + unavailableLabel(saved) + ').';
+    }
+  };
 }
 
 async function loadFindings() {

@@ -176,3 +176,45 @@ def test_a_failed_read_states_which_failure_it_was():
     assert "unavailableLabel(result)" in HTML
     assert "'Restricted'" in HTML and "'Unreachable'" in HTML and "'Timed out'" in HTML
     assert "const result = await apiResult('/findings')" in HTML
+
+
+def test_the_page_can_be_skipped_into_and_has_labelled_landmarks():
+    # Without a skip link a keyboard user tabs through the whole navigation on every visit, and without a
+    # main landmark a screen reader cannot jump to the content at all.
+    assert 'class="skip-link" href="#main"' in HTML
+    assert 'id="main"' in HTML and 'role="main"' in HTML
+    assert '<nav aria-label="Primary">' in HTML
+
+
+def test_the_console_has_breakpoints_rather_than_one_desktop_width():
+    assert HTML.count('@media') >= 5
+    assert 'max-width:560px' in HTML
+    # a wide findings table must scroll in its own box, not push the whole page sideways
+    assert 'overflow-x:auto' in HTML
+
+
+def test_branding_is_a_real_route_with_a_real_form():
+    assert "branding:'Branding'" in HTML
+    assert 'data-route="branding"' in HTML
+    assert 'id="page-branding"' in HTML
+    assert "withBusy('branding', loadBranding)" in HTML
+    assert 'async function loadBranding' in HTML
+    assert "apiSend('PATCH', '/tenant/branding'" in HTML
+
+
+def test_a_refused_branding_change_is_stated_as_a_boundary():
+    # Only certain roles may change a tenant identity, so 403 is an expected answer and must read as one.
+    assert "saved.status === 403" in HTML
+    assert "cannot change tenant branding" in HTML
+    assert "saved.status === 422" in HTML
+
+
+def test_the_branding_page_does_not_offer_what_the_api_refuses():
+    # The API only updates the caller's own tenant. A provider control that the server would reject would
+    # be a lie about what the page can do, so the limit is written down instead.
+    assert "not offered here" in HTML
+    assert "caller's own tenant" in HTML
+
+
+def test_no_colour_examples_are_hardcoded_in_the_form():
+    assert 'placeholder="#' not in HTML
