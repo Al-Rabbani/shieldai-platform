@@ -25,6 +25,15 @@ if ! git checkout "$REF" >/dev/null 2>&1; then
   fail "cannot checkout $REF"; exit 4
 fi
 
+echo "  installing prometheus scrape config..."
+if [ -f config/prometheus/gds.yml ]; then
+  install -m 644 config/prometheus/gds.yml /etc/prometheus/gds.yml
+  chown prometheus:prometheus /etc/prometheus/gds.yml
+  systemctl is-active --quiet prometheus && systemctl reload prometheus || true
+else
+  echo "  WARNING: config/prometheus/gds.yml missing, leaving the scrape config untouched"
+fi
+
 echo "  installing web assets..."
 if [ -f web/gds_app.html ]; then
   install -m 644 web/gds_app.html /var/www/gds_app.html

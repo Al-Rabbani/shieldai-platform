@@ -37,7 +37,9 @@ logger = get_logger("gds_api.worker")
 
 
 async def main() -> None:
-    start_http_server(settings.worker_metrics_port)
+    # Bind loopback only. start_http_server defaults to 0.0.0.0, which published the worker's
+    # metrics past UFW on the public IP - the same class of exposure as the containers.
+    start_http_server(settings.worker_metrics_port, addr="127.0.0.1")
     logger.info("worker.metrics_server_started", port=settings.worker_metrics_port)
     client = await get_temporal_client()
     worker = Worker(
