@@ -66,3 +66,28 @@ def test_azure_and_gcp_are_documented_steps_not_a_pretend_one_click():
 def test_unknown_provider_is_rejected():
     with pytest.raises(ValueError):
         onboarding_package(provider="oracle", external_id=new_external_id())
+
+
+def test_template_also_grants_the_platform_user_assume_role():
+    """The role alone is not enough: SecurityAudit grants sts:GetAccessKeyInfo, not sts:AssumeRole."""
+    from gds_api.cloud.onboarding import onboarding_package
+
+    cfn = onboarding_package(provider="aws", external_id="gds-" + "a1" * 16)["cloudformation"]
+    grant = cfn["Resources"]["GDSAssumeRoleGrant"]["Properties"]
+    assert grant["PolicyDocument"]["Statement"][0]["Action"] == "sts:AssumeRole"
+    assert grant["Users"] == ["gds-security-scanner"]
+    assert grant["PolicyDocument"]["Statement"][0]["Resource"] == {
+        "Fn::GetAtt": ["GDSReadOnlyRole", "Arn"]
+    }
+    assert cfn["Parameters"]["GrantAssumeRoleToPlatformUser"]["Default"] == "true"
+    assert cfn["Conditions"]["IsPlatformAccount"] == {
+        "Fn::Equals": [{"Ref": "GrantAssumeRoleToPlatformUser"}, "true"]
+    }
+
+
+def test_base_template_is_not_mutated_by_the_grant():
+    from gds_api.cloud.onboarding import aws_cloudformation_template
+
+    base = aws_cloudformation_template(external_id="gds-" + "a1" * 16)
+    assert "GDSAssumeRoleGrant" not in base["Resources"]
+    assert "Parameters" not in base

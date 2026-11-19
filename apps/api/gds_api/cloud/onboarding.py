@@ -11,6 +11,7 @@ value it stores is a public identifier (role ARN, subscription, project) plus th
 """
 from __future__ import annotations
 
+import json
 import os
 import secrets
 from typing import Any
@@ -116,6 +117,56 @@ GCP_STEPS = (
 )
 
 
+DEFAULT_PLATFORM_USER = "gds-security-scanner"
+
+
+def with_platform_assume_grant(
+    template: dict[str, Any], *, platform_user_name: str = DEFAULT_PLATFORM_USER
+) -> dict[str, Any]:
+    """Add the identity-side half of the grant, which the role alone does not provide.
+
+    Measured 19 Nov 2026: the platform identity arn:aws:iam::696616821372:user/gds-security-scanner has
+    only SecurityAudit attached, and that policy grants sts:GetAccessKeyInfo but NOT sts:AssumeRole.
+    So creating the read-only role is only half the grant; without this policy the platform cannot
+    assume it. The parameter exists because a client running this stack in a different account has no
+    such user, and must set it false rather than have the stack fail on a missing user.
+    """
+    out = json.loads(json.dumps(template))  # never mutate the caller's dict
+    out.setdefault("Parameters", {})["GrantAssumeRoleToPlatformUser"] = {
+        "Type": "String",
+        "Default": "true",
+        "AllowedValues": ["true", "false"],
+        "Description": (
+            "Set false when this stack runs in a different AWS account from GDS: the platform user "
+            "does not exist there, so the role is trusted by principal instead."
+        ),
+    }
+    out["Conditions"] = {
+        "IsPlatformAccount": {
+            "Fn::Equals": [{"Ref": "GrantAssumeRoleToPlatformUser"}, "true"]
+        }
+    }
+    out["Resources"]["GDSAssumeRoleGrant"] = {
+        "Type": "AWS::IAM::Policy",
+        "Condition": "IsPlatformAccount",
+        "Properties": {
+            "PolicyName": "GDS-AssumeReadOnlyRole",
+            "Users": [platform_user_name],
+            "PolicyDocument": {
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Effect": "Allow",
+                        "Action": "sts:AssumeRole",
+                        "Resource": {"Fn::GetAtt": ["GDSReadOnlyRole", "Arn"]},
+                    }
+                ],
+            },
+        },
+    }
+    return out
+
+
 def onboarding_package(*, provider: str, external_id: str | None) -> dict[str, Any]:
     """Everything a client needs to grant access, plus what GDS will do with it.
 
@@ -133,7 +184,14 @@ def onboarding_package(*, provider: str, external_id: str | None) -> dict[str, A
             "external_id": external_id,
             "trust_principal": trust_principal(),
             "read_only_policies": list(READ_ONLY_POLICIES),
-            "cloudformation": aws_cloudformation_template(external_id=external_id),
+            "cloudformation": with_platform_assume_grant(
+                aws_cloudformation_template(external_id=external_id)
+            ),
+            "identity_side_grant": (
+                "the stack also grants the platform user sts:AssumeRole on this role, because "
+                "SecurityAudit alone does not permit assuming it; set "
+                "GrantAssumeRoleToPlatformUser=false for a different account"
+            ),
             "what_gds_stores": (
                 "the role ARN and this ExternalId only; GDS never receives or stores an access key"
             ),
