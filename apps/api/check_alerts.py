@@ -77,6 +77,11 @@ window_alerts = {sev: n for sev, n in windowed["by_severity"].items() if sev in 
 
 _ALERT_NAMESPACE = uuid.UUID("6f1d4f2b-3c7a-5e21-9a54-0c9f2f4b8d11")
 
+# Module scope: both the findings block and the scanner-silence block need this, and the
+# findings-only definition left the second block with a NameError.
+from sqlalchemy import create_engine, text
+DB_URL = os.getenv("DATABASE_URL", "").strip()
+
 
 def _hour_bucket(now: datetime) -> str:
     return now.strftime("%Y-%m-%dT%H")
@@ -147,5 +152,52 @@ if window_alerts:
                 else:
                     print(f"[{datetime.now(timezone.utc).isoformat()}] Already alerted this hour: {message}")
             conn.commit()
+
+
+# --- SCANNER SILENCE (B34) ---------------------------------------------------------------
+# A scanner that stops running is invisible to a findings count: the number simply stops moving
+# and every count-based rule stays quiet. This reads the schedules themselves. Silence is judged
+# against each schedule's OWN interval plus a grace window, so a daily scan is not flagged for
+# being a few hours old and an hourly one is not left silent for a day.
+if DB_URL:
+    from datetime import timedelta
+    now = datetime.now(timezone.utc)
+    engine_s = create_engine(DB_URL)
+    with engine_s.connect() as conn:
+        conn.execute(text("SELECT set_config('gds.tenant_id', :tid, false)"), {"tid": alert_tenant})
+        schedules = conn.execute(text(
+            "SELECT id, name, monitor_type, interval_minutes, last_run_at, next_run_at, last_error "
+            "FROM scan_schedules WHERE tenant_id = :tid AND status = 'active'"), {"tid": alert_tenant}).mappings().all()
+        for s in schedules:
+            interval = int(s["interval_minutes"] or 1440)
+            grace = timedelta(minutes=max(60, interval // 2))
+            if s["next_run_at"] is not None:
+                overdue = now - s["next_run_at"]
+                if overdue <= grace:
+                    continue
+                reason = "overdue by %d min (interval %d min)" % (int(overdue.total_seconds() // 60), interval)
+            elif s["last_run_at"] is None:
+                reason = "has never run"
+            else:
+                overdue = now - s["last_run_at"]
+                if overdue <= grace:
+                    continue
+                reason = "last ran %d min ago (interval %d min)" % (int(overdue.total_seconds() // 60), interval)
+            if s["last_error"]:
+                reason += "; last error: %s" % str(s["last_error"])[:120]
+            message = "Scanner silent: %s (%s) - %s" % (s["name"], s["monitor_type"], reason)
+            nid = str(uuid.uuid5(_ALERT_NAMESPACE, "%s:scanner_silence:%s:%s" % (alert_tenant, s["id"], _hour_bucket(now))))
+            inserted = conn.execute(text(
+                "INSERT INTO notifications (id, tenant_id, user_id, type, message, read_at, created_at) "
+                "VALUES (:id, :tid, :uid, 'alert', :msg, NULL, NOW()) ON CONFLICT DO NOTHING"),
+                {"id": nid, "tid": alert_tenant, "uid": recipient, "msg": message}).rowcount
+            if inserted:
+                print("[%s] Alert recorded: %s" % (datetime.now(timezone.utc).isoformat(), message))
+                _deliver({"severity": "high", "rule_name": "Scanner silence",
+                          "entity_type": "scan_schedule", "entity_id": str(s["id"]),
+                          "entity_title": message})
+            else:
+                print("[%s] Already alerted this hour: %s" % (datetime.now(timezone.utc).isoformat(), message))
+        conn.commit()
 
 print(f"[{datetime.now(timezone.utc).isoformat()}] Open findings (tenant-scoped): {totals['total']}")
