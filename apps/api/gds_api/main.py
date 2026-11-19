@@ -397,3 +397,73 @@ app.include_router(heartbeat_router)
 from gds_api.cloud.onboarding_api import router as cloud_onboarding_router  # noqa: E402
 
 app.include_router(cloud_onboarding_router)
+
+
+# --- OpenAPI security declarations (P4 / B21) ------------------------------------------------
+# The API had no securitySchemes at all: 0 of 324 operations declared how they are authenticated,
+# so generated clients and the docs could not tell a public endpoint from a protected one. These
+# declarations describe what the code ALREADY enforces - the access cookie read by
+# get_current_user, and the platform key the bridge handlers verify - rather than adding auth.
+# tests/test_openapi_security.py fails if a route is added without a declaration.
+from fastapi.openapi.utils import get_openapi  # noqa: E402
+from gds_api.security import ACCESS_COOKIE_NAME  # noqa: E402
+
+_PUBLIC_OPENAPI_PATHS = {
+    "/auth/login",
+    "/auth/register",
+    "/auth/refresh",
+    "/openapi.json",
+    "/docs",
+    "/docs/oauth2-redirect",
+    "/redoc",
+}
+
+
+def _declare_security(schema: dict) -> dict:
+    schemes = schema.setdefault("components", {}).setdefault("securitySchemes", {})
+    schemes["AccessCookie"] = {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": ACCESS_COOKIE_NAME,
+        "description": (
+            "Session cookie issued by POST /auth/login. Read by get_current_user on every "
+            "protected route and scoped to the caller's tenant."
+        ),
+    }
+    schemes["BridgePlatformKey"] = {
+        "type": "http",
+        "scheme": "bearer",
+        "description": (
+            "Platform key for /bridge/*, presented as 'Authorization: Bearer <key>' and verified "
+            "by _verify_auth in each handler. Bridge routes act for the GDS tenant, not a user."
+        ),
+    }
+    methods = ("get", "post", "put", "patch", "delete", "head", "options")
+    for path, operations in (schema.get("paths") or {}).items():
+        public = path in _PUBLIC_OPENAPI_PATHS or path.startswith("/health")
+        for method, operation in operations.items():
+            if method not in methods or not isinstance(operation, dict):
+                continue
+            if public:
+                operation["security"] = []
+            elif path.startswith("/bridge"):
+                operation["security"] = [{"BridgePlatformKey": []}]
+            else:
+                operation["security"] = [{"AccessCookie": []}]
+    return schema
+
+
+def _openapi_with_security() -> dict:
+    if app.openapi_schema:
+        return app.openapi_schema
+    schema = get_openapi(
+        title=app.title,
+        version=app.version,
+        description=app.description,
+        routes=app.routes,
+    )
+    app.openapi_schema = _declare_security(schema)
+    return app.openapi_schema
+
+
+app.openapi = _openapi_with_security

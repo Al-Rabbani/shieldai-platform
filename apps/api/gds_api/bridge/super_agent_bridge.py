@@ -16,7 +16,8 @@ from fastapi import Request
 import os, json, asyncio, uuid, logging
 import secrets
 from datetime import datetime
-from fastapi import APIRouter, Header, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Header, HTTPException, BackgroundTasks, Depends
+from gds_api.rate_limit import ip_rate_limit
 from pydantic import BaseModel
 from typing import Optional
 from gds_api.reasoning.kernel_agent_runner import run_kernel_agent_runner
@@ -194,7 +195,17 @@ async def list_missions(
     }
 
 
-@router.post("/agent/{agent_id}/invoke")
+# Every bridge route below runs LLM reasoning or a multi-agent mission, which is the most
+# expensive thing the platform does, and none of them had a limit. They are keyed by caller IP
+# because the bridge authenticates with a platform key rather than a tenant cookie, so there is no
+# tenant to key on until the payload is parsed.
+bridge_invoke_rate_limit = ip_rate_limit("bridge_invoke", max_requests=30, window_seconds=3600)
+bridge_auto_rate_limit = ip_rate_limit("bridge_auto", max_requests=20, window_seconds=3600)
+bridge_mission_rate_limit = ip_rate_limit("bridge_mission", max_requests=20, window_seconds=3600)
+bridge_assess_rate_limit = ip_rate_limit("bridge_assess", max_requests=10, window_seconds=3600)
+
+
+@router.post("/agent/{agent_id}/invoke", dependencies=[Depends(bridge_invoke_rate_limit)])
 async def invoke_agent_directly(
     agent_id: str,
     req: AgentInvokeRequest,
@@ -253,7 +264,7 @@ async def invoke_agent_directly(
         raise HTTPException(500, str(e))
 
 
-@router.post("/auto")
+@router.post("/auto", dependencies=[Depends(bridge_auto_rate_limit)])
 async def auto_select_and_run(
     req: AgentInvokeRequest,
     authorization: Optional[str] = Header(None)
@@ -343,7 +354,7 @@ async def _run_mission(mission_id: str, goal: str, agent_id: Optional[str], cont
 
 
 
-@router.post("/mission")
+@router.post("/mission", dependencies=[Depends(bridge_mission_rate_limit)])
 async def bridge_mission(request: Request, authorization: str = Header(None)):
     """Phase 6 v2: Multi-agent mission orchestration with async support."""
     # Found unguarded on 17 Nov 2026: every other bridge handler called _verify_auth and this one did
@@ -458,7 +469,7 @@ async def _assert_sandbox_principal(tenant_id: str, user_id: str) -> None:
             raise HTTPException(503, "Scoped assessment identity is not provisioned")
 
 
-@router.post("/sandbox/assess/platform-health")
+@router.post("/sandbox/assess/platform-health", dependencies=[Depends(bridge_assess_rate_limit)])
 async def assess_platform_health(authorization: Optional[str] = Header(None)):
     """Run one R0 read-only tool through a tenant-bound capability grant.
 
@@ -510,7 +521,7 @@ async def get_sandbox_assessment_plan(authorization: Optional[str] = Header(None
     return {"agents": assessment_plan(), "scope": "gds-assessment-sandbox"}
 
 
-@router.post("/sandbox/assess/agent/{agent_id}")
+@router.post("/sandbox/assess/agent/{agent_id}", dependencies=[Depends(bridge_assess_rate_limit)])
 async def assess_registered_agent(agent_id: str, authorization: Optional[str] = Header(None)):
     """Run a single fixed R0 case with a persisted mission and broker receipt."""
     _verify_auth(authorization)
