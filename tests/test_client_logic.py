@@ -34,7 +34,9 @@ def _block(start):
 
 
 def _fn(name):
-    return _block(JS.index("function " + name))
+    # The trailing "(" matters: "function formatDate" is a prefix of "function formatDateTime", so a
+    # bare name search silently extracts the wrong function and leaves the intended one undefined.
+    return _block(JS.index("function " + name + "("))
 
 
 def _const(name):
