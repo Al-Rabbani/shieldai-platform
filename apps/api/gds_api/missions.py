@@ -87,6 +87,10 @@ async def create_mission(
     except MissionTypeIneligible as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
 
+    # Reasoning costs tokens, and the plan sells a monthly token quota. Check before spending.
+    from gds_api import quota as _quota
+    await _quota.require(db, current_user.tenant_id, "tokens")
+
     mission = Mission(
         tenant_id=current_user.tenant_id,
         requested_by_user_id=current_user.user_id,

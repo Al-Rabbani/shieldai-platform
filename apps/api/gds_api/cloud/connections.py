@@ -54,6 +54,10 @@ async def create_connection_profile(
             f"'{provider}' (expected one of {provider_def.supported_authentication_mechanisms})"
         )
 
+    # A plan that sells one cloud account must refuse the second one.
+    from gds_api import quota as _quota
+    await _quota.require(db, tenant_id, "cloud_accounts")
+
     profile = CloudConnectionProfile(
         tenant_id=tenant_id,
         environment_id=environment_id,

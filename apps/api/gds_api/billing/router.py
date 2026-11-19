@@ -18,6 +18,7 @@ from .service import (
     handle_webhook_event,
 )
 from .models import Subscription
+from .plans import PLANS
 
 def _ensure_stripe():
     """Set stripe.api_key from environment."""
@@ -31,62 +32,15 @@ def _ensure_stripe():
 
 router = APIRouter(prefix="/billing", tags=["billing"])
 
+
+@router.get("/quota")
+async def get_quota(user=Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """What this tenant's plan allows, what it has used this month, and the remaining headroom."""
+    from gds_api import quota
+    return await quota.snapshot(db, user.tenant_id)
+
 # stripe.api_key set per-request via _ensure_stripe()
 STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "")
-
-PLANS = [
-    {
-        "tier": "starter",
-        "name": "Starter",
-        "price_monthly": 399,
-        "price_annual": 3990,
-        "currency": "GBP",
-        "symbol": "£",
-        "description": "Perfect for small teams getting started with autonomous security",
-        "features": [
-            "Cloud posture scan", "Basic findings dashboard", "1 cloud account",
-            "In-app notifications", "Email support", "Daily scan schedule"
-        ],
-        "max_cloud_accounts": 1,
-        "token_quota": 50000,
-    },
-    {
-        "tier": "professional",
-        "name": "Professional",
-        "price_monthly": 1199,
-        "price_annual": 11990,
-        "currency": "GBP",
-        "symbol": "£",
-        "description": "For security teams managing multiple cloud environments",
-        "features": [
-            "Everything in Starter", "Multi-cloud (AWS/Azure/GCP)",
-            "Threat intelligence feeds", "SSH network diagnostics",
-            "Email + Slack alerts", "5 cloud accounts", "Scheduled missions",
-            "API access", "Priority support"
-        ],
-        "max_cloud_accounts": 5,
-        "token_quota": 200000,
-    },
-    {
-        "tier": "enterprise",
-        "name": "Enterprise",
-        "price_monthly": 3999,
-        "price_annual": 39990,
-        "currency": "GBP",
-        "symbol": "£",
-        "description": "Full autonomous security operations for large enterprises and MSSPs",
-        "features": [
-            "Everything in Professional", "Red team operations",
-            "Purple team collaboration", "Compliance automation (SOC2/ISO27001/PCI)",
-            "Enterprise SSO (SAML/OIDC)", "Dedicated support engineer",
-            "Custom agent workflows", "Unlimited cloud accounts",
-            "On-premise deployment option", "SLA with credits"
-        ],
-        "max_cloud_accounts": 999,
-        "token_quota": 1000000,
-    },
-]
-
 
 class CheckoutRequest(BaseModel):
     plan_tier: str
