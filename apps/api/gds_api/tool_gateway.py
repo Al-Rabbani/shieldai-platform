@@ -286,13 +286,56 @@ async def _search_osv(params: dict) -> dict:
     return {"success": False, "tool": "osv", "error": f"HTTP {resp.status_code}"}
 
 
+def _target_covered(candidate: str, covered: set[str]) -> bool:
+    """True when the candidate URL or its host has a live authorisation entry."""
+    value = str(candidate).strip().lower()
+    host = value.split("://", 1)[-1].split("/")[0]
+    return value in covered or host in covered
+
+
+async def _authorised_target_refusal(params: dict, candidate: str) -> dict | None:
+    """Scope enforcement for external HTTP checks.
+
+    MEASURED DEFECT (19 Nov 2026): _check_url_headers and _check_domain_security fetched whatever
+    host the caller named - _check_domain_security even defaulted to a domain - while their
+    capability descriptions promised a Watchlist-authorised target. No check existed anywhere, so
+    the promise was false. This enforces it: an external check needs a live authorized_targets row
+    for the tenant, matched on the full URL or the host.
+    """
+    from sqlalchemy import text as _text
+
+    from gds_api.db import async_session_factory as _factory
+    from gds_api.tenant_binding import bind_tenant as _bind
+
+    tenant = params.get("_tenant_id") or params.get("tenant_id")
+    if not tenant:
+        return {"success": False, "tool": "target_authorisation", "code": "TENANT_REQUIRED",
+                "error": "an external check requires a tenant context and none was supplied"}
+    async with _factory() as db:
+        await _bind(db, tenant)
+        rows = (await db.execute(_text(
+            "SELECT target FROM authorized_targets WHERE tenant_id = :t AND status = 'active' "
+            "AND (valid_until IS NULL OR valid_until > now())"), {"t": str(tenant)})).scalars().all()
+    covered = {str(r).strip().lower() for r in rows}
+    if _target_covered(candidate, covered):
+        return None
+    host = str(candidate).split("://", 1)[-1].split("/")[0].lower()
+    return {"success": False, "tool": "target_authorisation", "code": "TARGET_NOT_AUTHORIZED",
+            "error": (f"{host} has no active authorized_targets row for this tenant; external checks "
+                      "require written scope"),
+            "authorised_targets": sorted(covered)[:10]}
+
+
 async def _check_url_headers(params: dict) -> dict:
     """Check security headers. params: url."""
     import httpx
     url = params.get("url", "")
     if not url:
         return {"success": False, "error": "url required"}
-    
+    refusal = await _authorised_target_refusal(params, url)
+    if refusal:
+        return refusal
+
     try:
         resp = await httpx.AsyncClient().get(url, timeout=10, follow_redirects=True)
         headers = dict(resp.headers)
@@ -434,7 +477,13 @@ async def _review_identity_posture(params: dict) -> dict:
     return await platform_data.identity_posture()
 async def _check_domain_security(params: dict) -> dict:
     """Check domain security (DNS, SSL, headers)."""
-    domain = params.get("domain", "globaldigitalsecurity.io")
+    domain = str(params.get("domain") or "").strip()
+    if not domain:
+        return {"success": False, "tool": "check_domain_security", "code": "MISSING_ARGUMENT",
+                "error": "domain is required; there is no default target"}
+    refusal = await _authorised_target_refusal(params, domain)
+    if refusal:
+        return refusal
     import httpx
     try:
         resp = await httpx.AsyncClient().get(f"https://{domain}", timeout=10, follow_redirects=True)
