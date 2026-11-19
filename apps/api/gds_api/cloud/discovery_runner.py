@@ -265,6 +265,16 @@ def _provider_not_connected(provider: str) -> dict:
     }
 
 
+def _uuid_or_none(value: object) -> "uuid.UUID | None":
+    """Parse a UUID, or None when the value is absent or is a non-UUID reference."""
+    if not value:
+        return None
+    try:
+        return uuid.UUID(str(value))
+    except (ValueError, AttributeError, TypeError):
+        return None
+
+
 async def discover_cloud_environment(payload: dict | None = None, **kwargs: object) -> dict:
     """Capability tool: create the discovery job, run it against the provider, report the outcome.
 
@@ -294,8 +304,12 @@ async def discover_cloud_environment(payload: dict | None = None, **kwargs: obje
                 "detail": "environment_id or provider is required to run discovery"}
 
     tenant_id = uuid.UUID(str(tenant_raw))
-    env_id = uuid.UUID(str(env_raw)) if env_raw else None
-    mission_id = uuid.UUID(str(raw_mission)) if raw_mission else None
+    env_id = _uuid_or_none(env_raw)
+    # 19 Nov 2026: a kernel-style mission reference ("mission-abc123") is not a UUID and raised
+    # "badly formed hexadecimal UUID string", so every agent-driven discovery failed before it
+    # touched AWS. The mission link is useful but not required: an unparseable reference is
+    # dropped and the discovery proceeds, rather than the whole scan dying on a label.
+    mission_id = _uuid_or_none(raw_mission)
 
     async with async_session_factory() as session:
         await bind_tenant(session, tenant_id)
