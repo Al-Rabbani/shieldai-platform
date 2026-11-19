@@ -364,9 +364,13 @@ async def bridge_mission(request: Request, authorization: str = Header(None)):
         if not goal:
             raise HTTPException(status_code=400, detail="goal is required")
         
-        if async_mode:
-            result = await _start_mission_async(goal, context)
-            return result
+        # 19 Nov 2026: missions now execute governed tools for real, so discovery-class work runs
+        # for minutes and a synchronous call died at the 125s gateway limit (Cloudflare 524,
+        # measured twice through the Base44 bridge). A mission is queued by default and read back
+        # through mission_status; a caller that genuinely wants to block asks for wait=true.
+        wait_for_result = bool(body.get("wait", False))
+        if async_mode or not wait_for_result:
+            return await _start_mission_async(goal, context)
         else:
             result = await _run_mission_async(goal, context)
             return {
