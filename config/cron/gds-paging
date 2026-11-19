@@ -1,0 +1,5 @@
+# Acknowledgement and escalation pager. Runs as postgres because 63 of 63 tenant tables are FORCE-RLS and an
+# unbound session reads zero rows - as any other user this would page nobody and look successful.
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+*/5 * * * * postgres /opt/gds-os/apps/api/venv/bin/python /usr/local/bin/gds-page.py >> /var/log/gds/gds-paging.log 2>&1

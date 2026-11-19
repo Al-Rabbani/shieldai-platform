@@ -1,0 +1,5 @@
+# Outbound webhook delivery, HMAC-signed. Same postgres requirement as the pager: an unbound session cannot see
+# any tenant's findings, so it would deliver nothing while reporting success.
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+*/5 * * * * postgres /opt/gds-os/apps/api/venv/bin/python /usr/local/bin/gds-webhook-dispatch.py >> /var/log/gds/gds-webhooks.log 2>&1
