@@ -260,6 +260,35 @@ class ConversationDetailOut(BaseModel):
     turns: list[MissionOut] = []
 
 
+class SecurityFindingOut(BaseModel):
+    """A row from security_findings, the table the scanners actually write.
+
+    Deliberately NOT FindingOut. That model describes the legacy `findings` table: UUID ids, a required
+    updated_at, a non-nullable kev_listed. security_findings uses integer ids, has no updated_at column, and
+    leaves kev_listed nullable, so reusing the old model produced a 500 with fifteen validation errors on the
+    first page. Enrichment columns are typed loosely on purpose: different scanner writers populate them with
+    different shapes, and a strict type here would turn a real finding into a 500 instead of a row.
+    """
+    id: int
+    source: str | None = None
+    external_id: str | None = None
+    title: str
+    description: str = ""
+    severity: str
+    risk_class: str | None = None
+    status: str
+    created_at: datetime | None = None
+    target: str | None = None
+    cve: str | None = None
+    confidence: Any = None
+    business_impact: Any = None
+    cvss: Any = None
+    epss: Any = None
+    kev_listed: Any = None
+    reachability: Any = None
+    exploitability: Any = None
+
+
 class FindingOut(BaseModel):
     id: uuid.UUID
     source: str

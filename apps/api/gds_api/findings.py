@@ -13,7 +13,7 @@ from gds_api.security import CurrentUser, require_permission
 router = APIRouter(prefix="/findings", tags=["findings"])
 
 
-@router.get("", response_model=list[FindingOut])
+@router.get("", response_model=list[SecurityFindingOut])
 async def list_findings(
     status_filter: str | None = Query(None, alias="status"),
     severity: str | None = None,
