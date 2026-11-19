@@ -189,6 +189,7 @@ tr:hover{background:var(--surface2)}
 <div id="page-agents" class="hidden">
 <div class="card">
 <div class="section-title">Agent Fleet</div>
+<div id="fleetVerification"></div>
 <div id="agentsList"><div class="spinner"></div></div>
 </div>
 </div>
@@ -332,6 +333,44 @@ async function apiGet(path) {
     } catch { return null; }
 }
 
+async function loadFleetVerification() {
+  // The registry knows which agents exist; it does not prove any worker is alive. The bridge is the
+  // only component that can say whether workers were actually verified, so ask it and report what it
+  // says - including "not verified", which is the current true state.
+  const note = document.getElementById('fleetVerification');
+  if (!note) return;
+  note.innerHTML = '<p role="status" class="muted">Checking worker verification state...</p>';
+  const bridge = await apiGet('/bridge/health');
+  if (bridge && typeof bridge.workers_verified === 'boolean') {
+    note.innerHTML = bridge.workers_verified
+      ? '<p class="muted" role="status" style="margin-top:0">Worker liveness verified by the bridge.</p>'
+      : `<p class="muted" role="alert" style="margin-top:0">Worker liveness <strong>not verified</strong> - the bridge reports &quot;${escapeHtml(String(bridge.verification_status || 'unverified'))}&quot;. The statuses below come from the agent registry, not from live worker heartbeats.</p>`;
+  } else {
+    note.innerHTML = '<p class="muted" role="alert" style="margin-top:0">Worker liveness unknown - backend status unavailable.</p>';
+  }
+}
+
+async function applyBranding() {
+  // A tenant sees its own name and colours, and when it has not configured them the platform
+  // default is used and the response says so rather than pretending it was chosen.
+  const brand = await apiGet('/tenant/branding');
+  if (!brand) return;
+  const h1 = document.querySelector('.sidebar h1, aside h1, h1');
+  if (h1 && brand.display_name) {
+    h1.textContent = brand.display_name;
+  }
+  if (brand.primary_color) {
+    document.documentElement.style.setProperty('--primary', brand.primary_color);
+    document.documentElement.style.setProperty('--accent', brand.primary_color);
+  }
+  if (brand.secondary_color) {
+    document.documentElement.style.setProperty('--primary-glow', brand.secondary_color);
+  }
+  if (brand.display_name) {
+    document.title = brand.display_name + ' — Security OS';
+  }
+}
+
 async function loadPosturePanel() {
   // Everything here is read from the API. A value the API cannot supply is reported as unknown or
   // unavailable - never defaulted to zero, and never rendered as if it were measured.
@@ -433,6 +472,7 @@ async function loadPosturePanel() {
 
 async function loadOverview() {
     loadPosturePanel();
+    applyBranding();
     const health = await apiGet('/health');
     if (health && health.services) {
         let html = '<table><tr><th>Service</th><th>Status</th><th>Latency</th></tr>';
@@ -564,6 +604,7 @@ async function loadAgents() {
   container.setAttribute('aria-live', 'polite');
   container.setAttribute('aria-busy', 'true');
   container.innerHTML = '<p role="status">Verifying the agent registry and mission activity...</p>';
+  loadFleetVerification();
   try {
     const responses = await Promise.all(['/agents', '/agents/activity', '/agents/planned'].map(path =>
       fetch(API + path, {credentials: 'include', cache: 'no-store'})));
