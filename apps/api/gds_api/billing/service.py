@@ -187,7 +187,7 @@ async def list_invoices(db: AsyncSession, user_id: str, limit: int = 10) -> list
     ]
 
 
-async def handle_webhook_event(db: AsyncSession, event: dict) -> dict:
+async def handle_webhook_event(db: AsyncSession, event: dict, tenant_id=None, user_id=None) -> dict:
     """Process a Stripe webhook event."""
     event_type = event["type"]
     data = event["data"]["object"]
@@ -199,9 +199,9 @@ async def handle_webhook_event(db: AsyncSession, event: dict) -> dict:
     elif event_type == "customer.subscription.deleted":
         return await _handle_subscription_deleted(db, data)
     elif event_type == "invoice.payment_succeeded":
-        return await _handle_payment_succeeded(db, data)
+        return await _handle_payment_succeeded(db, data, tenant_id=tenant_id, user_id=user_id)
     elif event_type == "invoice.payment_failed":
-        return await _handle_payment_failed(db, data)
+        return await _handle_payment_failed(db, data, tenant_id=tenant_id, user_id=user_id)
     else:
         return {"processed": False, "event_type": event_type, "message": "Unhandled event type"}
 
@@ -277,7 +277,7 @@ async def _handle_subscription_deleted(db: AsyncSession, data: dict) -> dict:
     return {"processed": False, "reason": "Subscription not found"}
 
 
-async def _handle_payment_succeeded(db: AsyncSession, data: dict) -> dict:
+async def _handle_payment_succeeded(db: AsyncSession, data: dict, tenant_id=None, user_id=None) -> dict:
     stripe_customer_id = data.get("customer")
     amount_paid = data.get("amount_paid", 0) / 100  # Stripe uses pence for GBP
     invoice_url = data.get("hosted_invoice_url")
@@ -290,7 +290,8 @@ async def _handle_payment_succeeded(db: AsyncSession, data: dict) -> dict:
 
     payment = PaymentHistory(
         subscription_id=sub.id if sub else None,
-        user_id=sub.user_id if sub else None,
+        user_id=sub.user_id if sub else user_id,
+        tenant_id=tenant_id or (sub.tenant_id if sub else None),
         stripe_invoice_id=data.get("id"),
         amount_paid=amount_paid,
         currency=data.get("currency", "gbp"),
@@ -306,7 +307,7 @@ async def _handle_payment_succeeded(db: AsyncSession, data: dict) -> dict:
     return {"processed": True, "amount": amount_paid, "currency": "gbp", "status": "paid"}
 
 
-async def _handle_payment_failed(db: AsyncSession, data: dict) -> dict:
+async def _handle_payment_failed(db: AsyncSession, data: dict, tenant_id=None, user_id=None) -> dict:
     stripe_customer_id = data.get("customer")
 
     result = await db.execute(
@@ -316,7 +317,8 @@ async def _handle_payment_failed(db: AsyncSession, data: dict) -> dict:
 
     payment = PaymentHistory(
         subscription_id=sub.id if sub else None,
-        user_id=sub.user_id if sub else None,
+        user_id=sub.user_id if sub else user_id,
+        tenant_id=tenant_id or (sub.tenant_id if sub else None),
         stripe_invoice_id=data.get("id"),
         amount_paid=0,
         currency=data.get("currency", "gbp"),

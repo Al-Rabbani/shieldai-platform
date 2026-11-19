@@ -329,7 +329,8 @@ async def webhook(request: Request, db: AsyncSession = Depends(get_db)):
     record_id = str(row[0])
 
     try:
-        result = await handle_webhook_event(db=db, event=event)
+        await _bind(db, tenant_id)          # the insert commit above dropped the bind
+        result = await handle_webhook_event(db=db, event=event, tenant_id=tenant_id, user_id=user_id)
         await _bind(db, tenant_id)          # handle_webhook_event commits; the bind is gone
         await _sync_tenant_from_event(db, tenant_id, event)
         await _bind(db, tenant_id)

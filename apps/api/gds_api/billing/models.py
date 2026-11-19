@@ -38,6 +38,7 @@ class PaymentHistory(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     subscription_id = Column(UUID(as_uuid=True), ForeignKey("billing_subscriptions.id"), nullable=True)
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=True)
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
 
     stripe_invoice_id = Column(String(255), nullable=True)
