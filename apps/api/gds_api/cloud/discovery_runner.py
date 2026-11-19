@@ -356,7 +356,11 @@ async def discover_cloud_environment(payload: dict | None = None, **kwargs: obje
             env = candidates[0]
         env_id = env.id
 
-        user_id = uuid.UUID(str(raw_user)) if raw_user else None
+        # _actor_id from the capability gateway is the AGENT name ("security_architecture"),
+        # not a user id, so a naive uuid.UUID() raised and killed the whole discovery. A
+        # non-UUID actor is treated as unknown here and the mission's real initiator is used
+        # instead; if neither yields a real user the function refuses with UNKNOWN_INITIATOR.
+        user_id = _uuid_or_none(raw_user)
         if user_id is None and mission_id is not None:
             mission = (
                 await session.execute(

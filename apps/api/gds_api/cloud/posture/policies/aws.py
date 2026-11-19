@@ -559,7 +559,7 @@ register_policy(
     PolicyDefinition(
         policy_id="CSPM.AWS.LOGGING.CLOUDTRAIL_ENABLED",
         version=1,
-        name="CloudTrail trail present in environment",
+        name="CloudTrail logging enabled",
         description=(
             "Fails when no CloudTrail trail asset is discovered anywhere in the "
             "environment."
@@ -595,7 +595,7 @@ register_policy(
     PolicyDefinition(
         policy_id="CSPM.AWS.SECURITY_SERVICES.GUARDDUTY_ENABLED",
         version=1,
-        name="GuardDuty detector present and enabled",
+        name="GuardDuty detector enabled",
         description=(
             "Fails when no GuardDuty detector is discovered, or a discovered "
             "detector is disabled."
@@ -633,7 +633,7 @@ register_policy(
     PolicyDefinition(
         policy_id="CSPM.AWS.MONITORING.CONFIG_RECORDER_ENABLED",
         version=1,
-        name="AWS Config recorder present",
+        name="AWS Config recorder enabled",
         description=(
             "Fails when no AWS Config configuration recorder is discovered in "
             "the environment."

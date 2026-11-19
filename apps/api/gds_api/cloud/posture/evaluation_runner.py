@@ -81,6 +81,17 @@ async def run_evaluation(
     }
 
 
+def _uuid_or_none(value: object):
+    """Parse a UUID, or None when the value is absent or is a non-UUID reference."""
+    import uuid as _uuid
+    if not value:
+        return None
+    try:
+        return _uuid.UUID(str(value))
+    except (ValueError, AttributeError, TypeError):
+        return None
+
+
 async def evaluate_cloud_posture(payload: dict | None = None, **kwargs: object) -> dict:
     """Create a posture evaluation run for an environment, execute it, report real counts."""
     from gds_api.db import async_session_factory
@@ -89,32 +100,66 @@ async def evaluate_cloud_posture(payload: dict | None = None, **kwargs: object) 
     payload = payload or {}
     tenant_raw = payload.get("_tenant_id") or payload.get("tenant_id") or kwargs.get("tenant_id")
     env_raw = payload.get("environment_id")
+    provider_raw = str(payload.get("provider") or kwargs.get("provider") or "").strip().lower()
     raw_mission = (payload.get("_mission_id") or payload.get("mission_id")
                    or kwargs.get("mission_id"))
     raw_user = (payload.get("initiated_by_user_id") or payload.get("user_id")
                 or payload.get("_actor_id") or kwargs.get("user_id"))
-    if not tenant_raw or not env_raw:
+    if not tenant_raw:
         return {"success": False, "code": "MISSING_ARGUMENT",
-                "detail": "tenant_id and environment_id are required to evaluate posture"}
+                "detail": "tenant_id is required to evaluate posture"}
+    if not env_raw and not provider_raw:
+        return {"success": False, "code": "MISSING_ARGUMENT",
+                "detail": "environment_id or provider is required to evaluate posture"}
 
-    tenant_id = uuid.UUID(str(tenant_raw))
-    env_id = uuid.UUID(str(env_raw))
-    mission_id = uuid.UUID(str(raw_mission)) if raw_mission else None
+    tenant_id = _uuid_or_none(tenant_raw)
+    if tenant_id is None:
+        return {"success": False, "code": "INVALID_TENANT",
+                "detail": "tenant_id is not a UUID"}
+    env_id = _uuid_or_none(env_raw)
+    # 19 Nov 2026: _actor_id is the agent name, and a kernel-style mission reference is not a
+    # UUID. Both raised "badly formed hexadecimal UUID string" before any posture work ran, so
+    # every agent-driven evaluation failed. Non-UUID values are treated as absent and the
+    # mission's real initiator is used instead.
+    mission_id = _uuid_or_none(raw_mission)
 
     async with async_session_factory() as session:
         await bind_tenant(session, tenant_id)
-        environment = (
-            await session.execute(
-                select(CloudEnvironment).where(
-                    CloudEnvironment.id == env_id, CloudEnvironment.tenant_id == tenant_id
+        if env_id is not None:
+            environment = (
+                await session.execute(
+                    select(CloudEnvironment).where(
+                        CloudEnvironment.id == env_id, CloudEnvironment.tenant_id == tenant_id
+                    )
                 )
-            )
-        ).scalars().first()
+            ).scalars().first()
+        else:
+            candidates = (
+                await session.execute(
+                    select(CloudEnvironment).where(
+                        CloudEnvironment.tenant_id == tenant_id,
+                        CloudEnvironment.provider == provider_raw,
+                    )
+                )
+            ).scalars().all()
+            if not candidates:
+                return {"success": False, "code": "PROVIDER_NOT_CONNECTED",
+                        "provider": provider_raw,
+                        "detail": f"no {provider_raw} environment is registered for this tenant"}
+            if len(candidates) > 1:
+                return {"success": False, "code": "AMBIGUOUS_ENVIRONMENT",
+                        "provider": provider_raw,
+                        "environments": [{"environment_id": str(c.id), "native_id": c.native_id}
+                                         for c in candidates],
+                        "detail": f"this tenant has {len(candidates)} {provider_raw} environments; "
+                                  "name one with environment_id"}
+            environment = candidates[0]
         if environment is None:
             return {"success": False, "code": "ENVIRONMENT_NOT_FOUND",
                     "detail": f"no cloud environment {env_id} for this tenant"}
+        env_id = environment.id
 
-        user_id = uuid.UUID(str(raw_user)) if raw_user else None
+        user_id = _uuid_or_none(raw_user)
         if user_id is None and mission_id is not None:
             mission = (
                 await session.execute(

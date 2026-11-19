@@ -150,7 +150,12 @@ async def _create_finding(
         tenant_id=tenant_id,
         source="cspm",
         external_id=record.policy_id,
-        title=policy.name,
+        # 19 Nov 2026: title came straight from the policy name, so a FAILING "CloudTrail
+        # logging enabled" control was filed as "CloudTrail trail present in environment" -
+        # the register asserted the opposite of the measured truth (verified: no trail, no
+        # Config recorder, no GuardDuty detector in account 696616821372). A created finding
+        # only ever exists because a control FAILED, so the title says so.
+        title=f"{policy.name}: not satisfied",
         description=record.explanation,
         severity=policy.severity.value,
         risk_class=policy.severity.value,
@@ -183,14 +188,11 @@ async def _create_finding(
             evaluation_record_id=record.id,
         )
     )
-    await _walk_status(
-        db,
-        tenant_id=tenant_id,
-        finding=finding,
-        steps=_CREATION_WALK,
-        evaluation_run_id=run.id,
-        evaluation_record_id=record.id,
-    )
+    # 19 Nov 2026: this walked every new finding TRIAGED -> ENRICHED -> PRIORITISED ->
+    # AWAITING_VALIDATION -> VALIDATED the instant one automated evaluation observed a
+    # failure. Nothing was triaged, enriched, prioritised or validated, yet the register
+    # said "validated" - fabricated assurance of exactly the kind this platform forbids.
+    # A finding is now created OBSERVED and stays there until a real process moves it.
 
     evidence_summary = {
         "finding_id": str(finding.id),
