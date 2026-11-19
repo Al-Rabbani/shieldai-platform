@@ -244,7 +244,7 @@ async def invoke_agent_directly(
             "duration_ms": result.duration_ms,
             "error": result.error,
             "kernel_managed": getattr(result, 'kernel_managed', False),
-            "pid": result.pid
+            "pid": getattr(result, "pid", None)
         }
     except HTTPException:
         raise
@@ -282,7 +282,7 @@ async def auto_select_and_run(
             "duration_ms": result.duration_ms,
             "error": result.error,
             "kernel_managed": getattr(result, 'kernel_managed', False),
-            "pid": result.pid
+            "pid": getattr(result, "pid", None)
         }
     except Exception as e:
         logger.error(f"Auto-run error: {e}")
@@ -329,7 +329,7 @@ async def _run_mission(mission_id: str, goal: str, agent_id: Optional[str], cont
             "duration_ms": result.duration_ms,
             "error": result.error,
             "kernel_managed": getattr(result, 'kernel_managed', False),
-            "pid": result.pid
+            "pid": getattr(result, "pid", None)
         }
         _mission_store[mission_id]["completed_at"] = datetime.utcnow().isoformat()
         
