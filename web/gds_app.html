@@ -119,6 +119,8 @@ tr:hover{background:var(--surface2)}
 <a href="#/findings" data-route="findings" id="nav-findings">Findings</a>
 <a href="#/incidents" data-route="incidents" id="nav-incidents">Incidents</a>
 <a href="#/cloud" data-route="cloud" id="nav-cloud">Cloud</a>
+<a href="#/compliance" data-route="compliance" id="nav-compliance">Compliance</a>
+<a href="#/mssp" data-route="mssp" id="nav-mssp">MSSP</a>
 <a href="#/agents" data-route="agents" id="nav-agents">Agents</a>
 <a href="https://api.globaldigitalsecurity.io/docs" target="_blank">API Docs</a>
 <a href="#" onclick="logout();return false" id="nav-user" style="color:var(--primary);font-weight:600"></a>
@@ -186,6 +188,29 @@ tr:hover{background:var(--surface2)}
 </div>
 
 <!-- Agents Page -->
+<div id="page-compliance" class="hidden">
+<h2>Compliance</h2>
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px">
+<div class="stat"><div class="stat-val" id="comp-score">--</div><div class="stat-lbl">Pass rate (assessed)</div></div>
+<div class="stat"><div class="stat-val" id="comp-assessed">--</div><div class="stat-lbl">Controls assessed</div></div>
+<div class="stat"><div class="stat-val" id="comp-passing">--</div><div class="stat-lbl">Passing</div></div>
+<div class="stat"><div class="stat-val" id="comp-failing">--</div><div class="stat-lbl">Failing</div></div>
+</div>
+<div id="compBasis"></div>
+<div id="compFrameworks"></div>
+<div id="compFailing"></div>
+</div>
+
+<div id="page-mssp" class="hidden">
+<h2>Managed customers</h2>
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px">
+<div class="stat"><div class="stat-val" id="mssp-count">--</div><div class="stat-lbl">Customers</div></div>
+<div class="stat"><div class="stat-val" id="mssp-onboarded">--</div><div class="stat-lbl">Onboarded</div></div>
+<div class="stat"><div class="stat-val" id="mssp-assessed">--</div><div class="stat-lbl">With telemetry</div></div>
+</div>
+<div id="msspCustomers"></div>
+</div>
+
 <div id="page-agents" class="hidden">
 <div class="card">
 <div class="section-title">Agent Fleet</div>
@@ -305,12 +330,93 @@ function showDashboard() {
     loadOverview();
 }
 
+async function loadCompliance() {
+  // The number shown is a pass rate over controls that were actually assessed. It is deliberately not
+  // presented as "percent of the framework compliant", and the server's own basis text is displayed
+  // beside it, because a framework at 15% coverage is not 92% done.
+  const data = await apiGet('/compliance/frameworks');
+  const ids = ['comp-score','comp-assessed','comp-passing','comp-failing'];
+  if (data === null) {
+    ids.forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'Unavailable'; });
+    document.getElementById('compFrameworks').innerHTML = '<p role="alert">Unable to verify compliance. Refresh or check your access.</p>';
+    return;
+  }
+  const pct = v => (v === null || v === undefined) ? 'n/a' : Number(v).toFixed(1) + '%';
+  document.getElementById('comp-score').textContent = pct(data.score_over_assessed);
+  document.getElementById('comp-assessed').textContent = data.total_assessed;
+  document.getElementById('comp-passing').textContent = data.passing;
+  document.getElementById('comp-failing').textContent = data.failing;
+
+  document.getElementById('compBasis').innerHTML =
+    (data.score_basis ? '<p class="muted">' + escapeHtml(data.score_basis) + '</p>' : '') +
+    (data.note ? '<p class="muted">' + escapeHtml(data.note) + '</p>' : '');
+
+  let html = '<table><tr><th>Framework</th><th>Assessed</th><th>Coverage</th><th>Pass</th><th>Fail</th><th>Score</th><th>Last assessed</th></tr>';
+  (data.frameworks || []).forEach(f => {
+    html += '<tr><td>' + escapeHtml(f.name) + '</td><td>' + f.assessed + ' / ' + f.catalogued + '</td><td>' +
+      pct(f.coverage_pct) + '</td><td>' + f.passing + '</td><td class="' + (f.failing ? 'sev-h' : '') + '">' +
+      f.failing + '</td><td>' + pct(f.score_over_assessed) + '</td><td class="muted">' +
+      (f.last_assessed ? new Date(f.last_assessed).toLocaleString() : 'never') + '</td></tr>';
+  });
+  document.getElementById('compFrameworks').innerHTML = html + '</table>';
+
+  const assessments = await apiGet('/compliance/assessments');
+  const failing = ((assessments && assessments.assessments) || []).filter(a => a.status === 'fail');
+  document.getElementById('compFailing').innerHTML = failing.length
+    ? '<h3>Failing controls</h3><table><tr><th>Framework</th><th>Control</th><th>Name</th><th>Severity</th></tr>' +
+      failing.slice(0, 15).map(a => '<tr><td>' + escapeHtml(a.framework) + '</td><td>' + escapeHtml(a.control_id) +
+        '</td><td>' + escapeHtml(a.control_name) + '</td><td class="' +
+        (a.severity === 'critical' ? 'sev-c' : a.severity === 'high' ? 'sev-h' : 'sev-m') + '">' +
+        escapeHtml(a.severity) + '</td></tr>').join('') + '</table>'
+    : '<p class="muted">No control is currently failing.</p>';
+}
+
+async function loadMssp() {
+  // /mssp/customers is cross-tenant and provider-only, so a 403 is an expected answer, not a fault.
+  // It is reported as a permission boundary rather than as an empty customer list, because an empty
+  // list would read as "you have no customers".
+  const host = document.getElementById('msspCustomers');
+  const statIds = ['mssp-count','mssp-onboarded','mssp-assessed'];
+  const res = await fetch(API + '/mssp/customers', { credentials: 'include' });
+  if (res.status === 401) {
+    host.innerHTML = '<p role="alert">Your session has expired. Please sign in again.</p>';
+    return;
+  }
+  if (res.status === 403) {
+    statIds.forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'Restricted'; });
+    host.innerHTML = '<p role="alert">This view lists every customer and is limited to a provider administrator. Your account does not hold that role.</p>';
+    return;
+  }
+  if (!res.ok) {
+    host.innerHTML = '<p role="alert">Unable to verify customers. Refresh or check your access.</p>';
+    return;
+  }
+  const data = await res.json();
+  document.getElementById('mssp-count').textContent = data.count;
+  document.getElementById('mssp-onboarded').textContent = data.onboarded;
+  document.getElementById('mssp-assessed').textContent = data.assessed;
+
+  const badge = st => st === 'at_risk' ? 'badge-red' : st === 'monitored' ? 'badge-green' : 'badge-blue';
+  let html = '<table><tr><th>Customer</th><th>Plan</th><th>Onboarding</th><th>Users</th><th>Findings</th><th>Health</th></tr>';
+  (data.customers || []).forEach(c => {
+    const h = c.health || {};
+    html += '<tr><td>' + escapeHtml(c.display_name || c.name || c.slug) + '</td><td class="muted">' +
+      escapeHtml(c.plan_tier || 'none') + '</td><td><span class="badge ' +
+      (c.onboarding_status === 'complete' ? 'badge-green' : 'badge-blue') + '">' +
+      escapeHtml(c.onboarding_status || 'pending') + '</span></td><td>' + c.active_users + '</td><td>' +
+      c.findings + (c.critical_findings ? ' <span class="sev-c">(' + c.critical_findings + ' critical)</span>' : '') +
+      '</td><td><span class="badge ' + badge(h.status) + '">' + escapeHtml(h.status || 'unknown') + '</span>' +
+      (h.reason ? ' <span class="muted">' + escapeHtml(h.reason) + '</span>' : '') + '</td></tr>';
+  });
+  host.innerHTML = html + '</table>' + (data.note ? '<p class="muted">' + escapeHtml(data.note) + '</p>' : '');
+}
+
 /* ---- Routing (P10) ------------------------------------------------------------------------------
    The nav used to call showPage() directly, so a page had no address: it could not be linked,
    bookmarked or reached with the back button, and a refresh always dropped the reader on Overview.
    The route now lives in the hash, so #/findings is a real location that survives reload and
    history navigation. routeFromHash is deliberately pure so it can be tested outside a browser. */
-const ROUTES = { overview:'Overview', findings:'Findings', incidents:'Incidents', cloud:'Cloud', agents:'Agents' };
+const ROUTES = { overview:'Overview', findings:'Findings', incidents:'Incidents', cloud:'Cloud', compliance:'Compliance', mssp:'MSSP', agents:'Agents' };
 
 function routeFromHash(hash) {
   const raw = String(hash == null ? '' : hash).replace(/^#\/?/, '').split('?')[0];
@@ -362,7 +468,7 @@ function applyRoute() {
 window.addEventListener('hashchange', applyRoute);
 
 function showPage(page) {
-    ['overview','findings','incidents','cloud','agents'].forEach(p => {
+    ['overview','findings','incidents','cloud','compliance','mssp','agents'].forEach(p => {
         document.getElementById('page-'+p).classList.toggle('hidden', p !== page);
         const nav = document.getElementById('nav-'+p);
         if (nav) nav.classList.toggle('active', p === page);
@@ -370,6 +476,8 @@ function showPage(page) {
     if (page === 'findings') withBusy('findings', loadFindings);
     if (page === 'incidents') withBusy('incidents', loadIncidents);
     if (page === 'cloud') withBusy('cloud', loadCloud);
+    if (page === 'compliance') withBusy('compliance', loadCompliance);
+    if (page === 'mssp') withBusy('mssp', loadMssp);
     if (page === 'agents') withBusy('agents', loadAgents);
 }
 

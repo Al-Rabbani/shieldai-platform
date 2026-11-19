@@ -49,7 +49,7 @@ def test_busy_state_exists_so_loading_is_not_mistaken_for_empty():
     assert "async function withBusy" in HTML
     assert "aria-busy" in HTML
     # Every loader must run under the busy wrapper.
-    for loader in ("loadFindings", "loadIncidents", "loadCloud", "loadAgents"):
+    for loader in ("loadFindings", "loadIncidents", "loadCloud", "loadCompliance", "loadMssp", "loadAgents"):
         assert re.search(r"withBusy\('%s'|withBusy\(\"[a-z]+\", %s\)" % ("[a-z]+", loader), HTML), \
             f"{loader} is not wrapped in withBusy"
 
@@ -71,3 +71,25 @@ def test_branding_name_is_not_overwritten_by_the_router():
     assert "window.__gdsBrandName = (ROUTES" not in HTML
     router = HTML[HTML.index("function setActiveNav"):HTML.index("async function withBusy")]
     assert "__gdsBrandName || 'GDS OS'" in router
+
+
+def test_compliance_view_reads_real_endpoints_and_states_its_basis():
+    # A compliance percentage with no stated basis is the most misleading number a console can show:
+    # 92% of 52 assessed controls is not 92% of the framework.
+    assert "apiGet('/compliance/frameworks')" in HTML
+    assert "apiGet('/compliance/assessments')" in HTML
+    assert "data.score_basis" in HTML and "data.note" in HTML
+
+
+def test_mssp_view_treats_403_as_a_permission_boundary_not_an_empty_list():
+    # /mssp/customers is cross-tenant and provider-only. Rendering a refused request as an empty table
+    # would tell the reader they have no customers, which is a different and false statement.
+    assert "res.status === 403" in HTML
+    assert "provider administrator" in HTML
+    assert "/mssp/customers" in HTML
+
+
+def test_views_do_not_invent_numbers_when_a_call_fails():
+    # "Unavailable" and "Restricted" are answers; a zero would be a lie.
+    assert "'Unavailable'" in HTML
+    assert "'Restricted'" in HTML
