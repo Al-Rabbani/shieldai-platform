@@ -202,12 +202,13 @@ tr:hover{background:var(--surface2)}
 </div>
 
 <div id="page-mssp" class="hidden">
-<h2>Managed customers</h2>
+<h2>Managed tenants</h2>
 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px">
-<div class="stat"><div class="stat-val" id="mssp-count">--</div><div class="stat-lbl">Customers</div></div>
+<div class="stat"><div class="stat-val" id="mssp-count">--</div><div class="stat-lbl">Tenants</div></div>
 <div class="stat"><div class="stat-val" id="mssp-onboarded">--</div><div class="stat-lbl">Onboarded</div></div>
 <div class="stat"><div class="stat-val" id="mssp-assessed">--</div><div class="stat-lbl">With telemetry</div></div>
 </div>
+<p class="muted" id="msspScope">Every tenant on this platform, including the provider's own and any test tenants. This is not a count of paying customers.</p>
 <div id="msspCustomers"></div>
 </div>
 

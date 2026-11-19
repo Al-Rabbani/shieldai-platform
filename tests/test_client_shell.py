@@ -93,3 +93,11 @@ def test_views_do_not_invent_numbers_when_a_call_fails():
     # "Unavailable" and "Restricted" are answers; a zero would be a lie.
     assert "'Unavailable'" in HTML
     assert "'Restricted'" in HTML
+
+
+def test_mssp_count_is_labelled_as_tenants_not_paying_customers():
+    # The endpoint lists every tenant, including the provider's own and test tenants. Calling that a
+    # customer count would overstate the business, which is the one number an owner must never see wrong.
+    assert "Managed tenants" in HTML
+    assert 'id="msspScope"' in HTML
+    assert "not a count of paying customers" in HTML
