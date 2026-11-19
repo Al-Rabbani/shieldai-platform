@@ -40,7 +40,7 @@ async def list_findings(
         where.append("severity = :severity")
         params["severity"] = severity
     rows = (await db.execute(text(
-        "SELECT id, coalesce(source, scanner) AS source, external_id, title, coalesce(details, '') AS description, "
+        "SELECT id, coalesce(source, scanner) AS source, external_id, title, coalesce(details::text, '') AS description, "
         "       severity, risk_class, status, detected_at AS created_at, confidence, business_impact, cve, "
         "       target, cvss, epss, kev_listed, reachability, exploitability "
         "FROM security_findings WHERE " + " AND ".join(where) +
