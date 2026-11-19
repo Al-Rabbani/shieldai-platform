@@ -334,6 +334,36 @@ _ALL_TOOL_DEFINITIONS = [
             }
         }
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "discover_cloud_environment",
+            "description": "Enumerate the real resources in a connected cloud environment (AWS today) and store them as assets. Returns the discovery job outcome with asset counts. Call this before judging cloud posture.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "environment_id": {"type": "string", "description": "Cloud environment UUID. Omit to use the tenant's single environment for the provider."},
+                    "provider": {"type": "string", "description": "Provider name such as aws, azure, gcp. Used only when environment_id is omitted."}
+                },
+                "required": []
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "evaluate_cloud_posture",
+            "description": "Run the cloud posture policy pack against a discovered environment and record real findings. Use after discover_cloud_environment has stored assets.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "environment_id": {"type": "string", "description": "Cloud environment UUID. Omit to use the tenant's single environment for the provider."},
+                    "provider": {"type": "string", "description": "Provider name such as aws, azure, gcp. Used only when environment_id is omitted."}
+                },
+                "required": []
+            }
+        }
+    }
 ]
 
 
@@ -344,7 +374,7 @@ _ALL_TOOL_DEFINITIONS = [
 _AGENT_TOOL_MAP = {
     "ai-recon-agent": ["nmap_scan", "masscan_scan", "subfinder_scan", "httpx_scan", "store_finding"],
     "ai-vuln-director": ["nmap_scan", "nuclei_scan", "nikto_scan", "sqlmap_scan", "ffuf_scan", "gobuster_scan", "wpscan_scan", "cisa_kev_check", "osv_check", "store_finding", "get_findings"],
-    "ai-cloud-director": ["aws_iam_scan", "store_finding", "get_findings"],
+    "ai-cloud-director": ["discover_cloud_environment", "evaluate_cloud_posture", "get_findings"],
     "ai-threat-hunter": ["nmap_scan", "nuclei_scan", "cisa_kev_check", "security_headers_check", "get_findings", "store_finding"],
     "ai-redteam-director": ["nmap_scan", "nuclei_scan", "nikto_scan", "sqlmap_scan", "ffuf_scan", "gobuster_scan", "wpscan_scan", "store_finding"],
     "ai-triage-agent": ["get_findings", "store_finding"],

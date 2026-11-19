@@ -92,3 +92,21 @@ def test_foundation_agent_cannot_reach_offensive_scanning():
     agent = AGENT_REGISTRY["executive_advisor"]
     assert not _broker_allows(CAPABILITY_REGISTRY["network.port_scan"], agent)
     assert "nmap_scan" not in reachable_tool_names("ai-chief-ciso")
+
+
+def test_every_reachable_tool_has_a_function_schema():
+    """Reachable but undescribed is still unusable: the model cannot call a tool it has no
+    schema for. Found 19 Nov 2026 - ai-cloud-director could reach discover_cloud_environment
+    through the broker but was offered nothing, because no schema existed for it."""
+    from gds_api.reasoning.tool_definitions import _ALL_TOOL_DEFINITIONS
+
+    described = {t["function"]["name"] for t in _ALL_TOOL_DEFINITIONS}
+    for reasoning_agent in sorted(_AGENT_TOOL_MAP):
+        reachable = reachable_tool_names(reasoning_agent)
+        undescribed = sorted(reachable - described)
+        assert not undescribed, f"{reasoning_agent} can reach {undescribed} but has no schema for them"
+
+
+def test_cloud_agent_can_discover_and_evaluate():
+    offered = set(get_tool_names("ai-cloud-director"))
+    assert {"discover_cloud_environment", "evaluate_cloud_posture", "get_findings"} <= offered

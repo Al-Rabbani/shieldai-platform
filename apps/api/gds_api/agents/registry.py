@@ -385,11 +385,21 @@ AGENT_REGISTRY: dict[str, AgentManifest] = {
             "the actual architecture - never invent a control that isn't really "
             "configured."
         ),
-        tool_names=("review_platform_architecture",),
+        tool_names=(
+            "review_platform_architecture",
+            "discover_cloud_environment",
+            "evaluate_cloud_posture",
+            "list_open_findings",
+        ),
         team=Team.BLUE,
         department="Security Architecture",
-        risk_ceiling=RiskCeiling.R1,
-        allowed_capability_ids=("compliance.review_architecture",),
+        risk_ceiling=RiskCeiling.R2,
+        allowed_capability_ids=(
+            "compliance.review_architecture",
+            "cloud.discover_environment",
+            "cloud.posture.evaluate_environment",
+            "finding.list_open",
+        ),
         workforce="purple-cybersecurity-workforce",
         purple_role_id="purple-19",
         purple_role_name="Governance, Risk, Compliance and Evidence Agent",
