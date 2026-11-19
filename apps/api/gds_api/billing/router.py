@@ -314,19 +314,27 @@ async def webhook(request: Request, db: AsyncSession = Depends(get_db)):
     tenant_id, user_id = await _resolve_event_tenant(db, event)
     await _bind(db, tenant_id)
 
-    inserted = await db.execute(text(
-        "INSERT INTO billing_events (stripe_event_id, event_type, livemode, tenant_id, user_id, "
-        "signature_verified, payload) VALUES (:eid, :et, :lm, :tid, :uid, :sv, CAST(:pl AS jsonb)) "
-        "ON CONFLICT (stripe_event_id) DO NOTHING RETURNING id"),
+    # Recorded through a narrow SECURITY DEFINER helper, not a direct INSERT. INSERT ... RETURNING
+    # applies the SELECT policy to the returned row, and an event with no resolvable tenant is
+    # deliberately invisible under that policy - so a direct INSERT ... RETURNING was rejected with an
+    # RLS violation for exactly the events an MSSP most needs (deleted customers, unknown buyers).
+    # Stripe saw 500 and retried; billing_events stayed empty.
+    recorded = await db.execute(text(
+        "SELECT record_id, duplicate FROM billing_event_record("
+        ":eid, :et, :lm, CAST(:tid AS uuid), CAST(:uid AS uuid), :sv, CAST(:pl AS jsonb))"),
         {"eid": event_id, "et": event.get("type", "unknown"), "lm": event.get("livemode"),
-         "tid": tenant_id, "uid": user_id, "sv": signature_verified, "pl": json.dumps(event)})
-    row = inserted.first()
+         "tid": str(tenant_id) if tenant_id else None,
+         "uid": str(user_id) if user_id else None,
+         "sv": signature_verified, "pl": json.dumps(event)})
+    row = recorded.first()
     await db.commit()
 
-    if not row:
-        return {"received": True, "duplicate": True, "event_id": event_id}
+    if row is None:
+        raise HTTPException(status_code=500, detail="billing event could not be recorded")
+    record_id, duplicate = str(row[0]), bool(row[1])
 
-    record_id = str(row[0])
+    if duplicate:
+        return {"received": True, "duplicate": True, "event_id": event_id}
 
     try:
         await _bind(db, tenant_id)          # the insert commit above dropped the bind
@@ -335,15 +343,16 @@ async def webhook(request: Request, db: AsyncSession = Depends(get_db)):
         await _sync_tenant_from_event(db, tenant_id, event)
         await _bind(db, tenant_id)
         await db.execute(text(
-            "UPDATE billing_events SET processed = true, processing_result = CAST(:r AS jsonb) WHERE id = :i"),
+            "SELECT billing_event_mark(CAST(:i AS uuid), true, CAST(:r AS jsonb), NULL)"),
             {"r": json.dumps(result, default=str), "i": record_id})
         await db.commit()
         return {"received": True, "event_id": event_id, "result": result}
     except Exception as e:
         await db.rollback()
         await _bind(db, tenant_id)
-        await db.execute(text("UPDATE billing_events SET error = :e WHERE id = :i"),
-                         {"e": f"{type(e).__name__}: {e}"[:500], "i": record_id})
+        await db.execute(text(
+            "SELECT billing_event_mark(CAST(:i AS uuid), false, NULL, :e)"),
+            {"e": f"{type(e).__name__}: {e}"[:500], "i": record_id})
         await db.commit()
         raise HTTPException(status_code=500,
                             detail=f"Webhook processing error: {type(e).__name__}: {str(e)}")
