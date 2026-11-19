@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,29 +15,62 @@ router = APIRouter(prefix="/findings", tags=["findings"])
 
 @router.get("", response_model=list[FindingOut])
 async def list_findings(
+    status_filter: str | None = Query(None, alias="status"),
+    severity: str | None = None,
+    limit: int = 500,
+    offset: int = 0,
     current_user: CurrentUser = Depends(require_permission("findings:read")),
     db: AsyncSession = Depends(get_db),
-) -> list[Finding]:
-    # RLS on security_findings is FORCE-enabled (Phase C 002_enforce_rls), so a
-    # connection without gds.tenant_id set sees zero rows regardless of the ORM
-    # predicate. Scope this transaction to the authenticated caller's tenant.
-    await db.execute(
-        text("SELECT set_config('gds.tenant_id', :tid, true)"),
-        {"tid": str(current_user.tenant_id)},
-    )
+) -> list[dict]:
+    """The canonical findings read, over the table that actually holds them.
 
-    findings = (
-        (
-            await db.execute(
-                select(Finding)
-                .where(Finding.tenant_id == current_user.tenant_id)
-                .order_by(Finding.created_at.desc())
-            )
-        )
-        .scalars()
-        .all()
-    )
-    return list(findings)
+    This used to read the legacy `findings` table through the ORM, which holds stale rows with an `observed`
+    status that nothing writes any more. The console's Findings page therefore showed 317 rows while 873
+    findings were open in `security_findings` - the page was reading the wrong table and the `status` filter
+    was silently ignored. Both are fixed here: one authoritative table, real filters, and explicit paging so a
+    truncated page can never be mistaken for the whole set.
+    """
+    await db.execute(text("SELECT set_config('gds.tenant_id', :tid, true)"), {"tid": str(current_user.tenant_id)})
+    where = ["tenant_id = :tid"]
+    params: dict = {"tid": str(current_user.tenant_id), "limit": min(max(limit, 1), 1000), "offset": max(offset, 0)}
+    if status_filter:
+        where.append("status = :status")
+        params["status"] = status_filter
+    if severity:
+        where.append("severity = :severity")
+        params["severity"] = severity
+    rows = (await db.execute(text(
+        "SELECT id, coalesce(source, scanner) AS source, external_id, title, coalesce(details, '') AS description, "
+        "       severity, risk_class, status, detected_at AS created_at, confidence, business_impact, cve, "
+        "       target, cvss, epss, kev_listed, reachability, exploitability "
+        "FROM security_findings WHERE " + " AND ".join(where) +
+        " ORDER BY detected_at DESC NULLS LAST LIMIT :limit OFFSET :offset"), params)).mappings().all()
+    return [dict(r) for r in rows]
+
+
+@router.get("/summary", response_model=dict)
+async def findings_summary(
+    current_user: CurrentUser = Depends(require_permission("findings:read")),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Counts over the whole set, so a chart can never be built from a truncated page.
+
+    Aggregated in SQL rather than by counting returned rows: the console previously derived its severity bars
+    from whatever list it had fetched, which is wrong the moment the list is paged.
+    """
+    await db.execute(text("SELECT set_config('gds.tenant_id', :tid, true)"), {"tid": str(current_user.tenant_id)})
+    row = (await db.execute(text("""
+        SELECT count(*) AS total,
+               count(*) FILTER (WHERE status = 'open') AS open,
+               count(*) FILTER (WHERE status = 'resolved') AS resolved,
+               count(*) FILTER (WHERE status = 'open' AND severity = 'critical') AS critical,
+               count(*) FILTER (WHERE status = 'open' AND severity = 'high') AS high,
+               count(*) FILTER (WHERE status = 'open' AND severity = 'medium') AS medium,
+               count(*) FILTER (WHERE status = 'open' AND severity = 'low') AS low,
+               count(*) FILTER (WHERE status = 'open' AND kev_listed) AS kev
+        FROM security_findings WHERE tenant_id = :tid
+    """), {"tid": str(current_user.tenant_id)})).mappings().first()
+    return dict(row)
 
 
 @router.get("/security", response_model=list[dict])
