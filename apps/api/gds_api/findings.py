@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from gds_api.db import get_db
 from gds_api.memory import get_finding_correlation
 from gds_api.models import Finding
-from gds_api.schemas import FindingCorrelationOut, FindingOut
+from gds_api.schemas import FindingCorrelationOut, FindingOut, SecurityFindingOut
 from gds_api.security import CurrentUser, require_permission
 
 router = APIRouter(prefix="/findings", tags=["findings"])
