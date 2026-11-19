@@ -71,6 +71,15 @@ if [ -f config/nginx/gds-os ]; then
 fi
 echo "  installing prometheus scrape config..."
 if [ -f config/prometheus/gds.yml ]; then
+  # Scheduled jobs were hand-typed on the host, so a rebuild silently lost paging and webhook delivery.
+  # The log directory must exist and be postgres-writable: /var/log itself is not, which is why both jobs ran
+  # for days with no output anywhere and nobody could prove they had ever executed.
+  install -d -o postgres -g postgres -m 0755 /var/log/gds
+  for f in config/cron/*; do
+    [ -f "$f" ] || continue
+    install -m 644 "$f" "/etc/cron.d/$(basename "$f")"
+    install -o postgres -g postgres -m 0644 /dev/null "/var/log/gds/$(basename "$f").log"
+  done
   install -m 644 config/prometheus/gds.yml /etc/prometheus/gds.yml
   chown prometheus:prometheus /etc/prometheus/gds.yml
   systemctl is-active --quiet prometheus && systemctl reload prometheus || true
