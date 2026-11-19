@@ -140,3 +140,20 @@ def test_the_console_subscribes_to_the_real_stream_and_states_its_health():
 def test_the_stream_is_closed_on_sign_out():
     logout = HTML[HTML.index("function logout"):]
     assert "stopLiveStream()" in logout[:400]
+
+
+def test_each_framework_states_the_jurisdiction_it_binds_in():
+    # DORA is an EU instrument and HIPAA a US one; a reader could not tell that before, because nothing
+    # in the console said so.
+    assert "<th>Jurisdiction</th>" in HTML
+    assert "f.jurisdiction" in HTML
+    assert "Unspecified" in HTML
+
+
+def test_the_locale_control_localises_formatting_and_says_so():
+    # Every string in this page is English. A selector that appeared to translate the interface would be
+    # claiming something untrue, so it is labelled as a formatting locale.
+    assert 'id="localeSelect"' in HTML
+    assert 'aria-label="Formatting locale"' in HTML
+    assert "function formatDateTime" in HTML and "function formatNumber" in HTML
+    assert "Intl.DateTimeFormat" in HTML

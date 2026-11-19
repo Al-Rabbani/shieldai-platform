@@ -45,7 +45,7 @@ async def list_frameworks(
     counted separately rather than being allowed to lift the score.
     """
     fw_rows = (await db.execute(text(
-        "SELECT framework_key, name, version, official_control_count "
+        "SELECT framework_key, name, version, official_control_count, jurisdiction "
         "FROM compliance_frameworks ORDER BY framework_key"
     ))).mappings().all()
 
@@ -78,6 +78,8 @@ async def list_frameworks(
             "name": f["name"],
             "version": f["version"],
             "official_control_count": official,
+            # Which legal order this framework binds in. Stated, never inferred by the browser.
+            "jurisdiction": f["jurisdiction"],
             "catalogued": (passing + failing + not_tested),
             "assessed": assessed,
             "passing": passing,

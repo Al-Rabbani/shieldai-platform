@@ -48,11 +48,18 @@ SOURCE = "\n".join([
     _fn("routeFromHash"),
     _fn("returnRoute"),
     _fn("svgGroupedBars"),
+    _fn("uiLocale"),
+    _fn("formatDateTime"),
+    _fn("formatDate"),
+    _fn("formatNumber"),
 ])
 
 
+STUBS = "var localStorage={getItem:function(){return null},setItem:function(){}}; var navigator={language:'de-DE'};\n"
+
+
 def run(expr):
-    return dukpy.evaljs(SOURCE + "\n" + expr)
+    return dukpy.evaljs(STUBS + SOURCE + "\n" + expr)
 
 
 def test_route_from_hash_maps_addresses():
@@ -133,3 +140,27 @@ def test_planted_or_unknown_values_are_never_restored():
 
 def test_an_absent_return_route_is_empty_not_a_default():
     assert run("returnRoute(null, '#/cloud');") == ""
+
+
+def test_an_unparseable_timestamp_renders_nothing_rather_than_invalid_date():
+    # "Invalid Date" on a dashboard looks like a data fault; an empty cell reads as "no date recorded".
+    assert run("formatDateTime('not-a-date');") == ""
+    assert run("formatDate('not-a-date');") == ""
+    assert run("formatDateTime(null);") == ""
+
+
+def test_a_missing_number_is_reported_not_coerced_to_zero():
+    assert run("formatNumber(null);") == "n/a"
+    assert run("formatNumber(undefined);") == "n/a"
+
+
+def test_formatting_survives_an_engine_without_intl():
+    # Duktape has no Intl, which makes this the fallback path a real browser would also take if Intl were
+    # stripped. It must produce an unambiguous UTC timestamp, never throw.
+    out = run("formatDateTime('2026-11-19T18:05:00+00:00');")
+    assert "UTC" in out and "2026-11-19" in out
+    assert run("formatDate('2026-11-19T18:05:00+00:00');") == "2026-11-19"
+
+
+def test_the_locale_falls_back_to_the_browser_then_to_a_default():
+    assert run("uiLocale();") == "de-DE"

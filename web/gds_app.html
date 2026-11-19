@@ -125,6 +125,7 @@ tr:hover{background:var(--surface2)}
 <a href="https://api.globaldigitalsecurity.io/docs" target="_blank">API Docs</a>
 <a href="#" onclick="logout();return false" id="nav-user" style="color:var(--primary);font-weight:600"></a>
 <span id="sessionNote" class="muted" style="font-size:11px"></span>
+<select id="localeSelect" aria-label="Formatting locale" onchange="setLocale(this.value)" style="background:transparent;color:var(--muted);border:1px solid var(--border,#2a3444);border-radius:6px;font-size:11px;padding:2px 4px"><option value="en-IE">en-IE</option><option value="en-GB">en-GB</option><option value="de-DE">de-DE</option><option value="fr-FR">fr-FR</option><option value="nl-NL">nl-NL</option></select>
 </div>
 </div>
 </nav>
@@ -341,6 +342,62 @@ function showDashboard() {
     loadOverview();
 }
 
+/* ---- Locale (C12) -------------------------------------------------------------------------------
+   Dates and numbers are formatted for the reader's locale rather than assuming one. The locale is chosen
+   from storage, then the browser, then en-IE, and it is changeable because a DORA reader in Frankfurt and
+   a NIS2 reader in Dublin do not write 03/04/2026 the same way.
+
+   STATED LIMIT: this localises formatting only. Every string in this page is English, so a selector that
+   appeared to translate the interface would be lying about what it does. The control is labelled
+   "formatting locale" for that reason.
+
+   Intl is used when present and falls back to ISO when it is not, so a missing Intl degrades to an
+   unambiguous timestamp instead of throwing or printing "Invalid Date". */
+function uiLocale() {
+  try {
+    const stored = localStorage.getItem('gds_locale');
+    if (stored) { return stored; }
+  } catch (_) { /* storage can be blocked; the browser locale is still a good answer */ }
+  if (typeof navigator !== 'undefined' && navigator.language) { return navigator.language; }
+  return 'en-IE';
+}
+
+function formatDateTime(iso) {
+  if (!iso) { return ''; }
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) { return ''; }
+  try {
+    return new Intl.DateTimeFormat(uiLocale(), { dateStyle: 'medium', timeStyle: 'short' }).format(d);
+  } catch (_) {
+    return d.toISOString().replace('T', ' ').slice(0, 16) + ' UTC';
+  }
+}
+
+function formatDate(iso) {
+  if (!iso) { return ''; }
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) { return ''; }
+  try {
+    return new Intl.DateTimeFormat(uiLocale(), { dateStyle: 'medium' }).format(d);
+  } catch (_) {
+    return d.toISOString().slice(0, 10);
+  }
+}
+
+function formatNumber(value) {
+  if (value === null || value === undefined || isNaN(value)) { return 'n/a'; }
+  try {
+    return new Intl.NumberFormat(uiLocale()).format(value);
+  } catch (_) {
+    return String(value);
+  }
+}
+
+function setLocale(tag) {
+  try { localStorage.setItem('gds_locale', tag); } catch (_) { /* not fatal */ }
+  applyRoute();
+}
+
 /* ---- Live stream (C11) --------------------------------------------------------------------------
    The server streams this tenant's findings over SSE. The page reports the state it actually has: an
    EventSource that is retrying says so, and nothing here claims to be live when it is not. Named events
@@ -376,7 +433,7 @@ function startLiveStream() {
       row.className = 'muted';
       row.textContent = (payload.severity || 'unknown') + ' \u00b7 ' + (payload.title || 'finding') +
         (payload.scanner ? ' \u00b7 ' + payload.scanner : '') +
-        (payload.detected_at ? ' \u00b7 ' + new Date(payload.detected_at).toLocaleTimeString() : '');
+        (payload.detected_at ? ' \u00b7 ' + formatDateTime(payload.detected_at) : '');
       host.prepend(row);
       while (host.children.length > 10) { host.removeChild(host.lastChild); }
     }
@@ -534,12 +591,13 @@ async function loadCompliance() {
     (data.score_basis ? '<p class="muted">' + escapeHtml(data.score_basis) + '</p>' : '') +
     (data.note ? '<p class="muted">' + escapeHtml(data.note) + '</p>' : '');
 
-  let html = '<table><tr><th>Framework</th><th>Assessed</th><th>Coverage</th><th>Pass</th><th>Fail</th><th>Score</th><th>Last assessed</th></tr>';
+  let html = '<table><tr><th>Framework</th><th>Jurisdiction</th><th>Assessed</th><th>Coverage</th><th>Pass</th><th>Fail</th><th>Score</th><th>Last assessed</th></tr>';
   (data.frameworks || []).forEach(f => {
-    html += '<tr><td>' + escapeHtml(f.name) + '</td><td>' + f.assessed + ' / ' + f.catalogued + '</td><td>' +
+    html += '<tr><td>' + escapeHtml(f.name) + '</td><td><span class="badge badge-blue">' + escapeHtml(f.jurisdiction || 'Unspecified') +
+      '</span></td><td>' + f.assessed + ' / ' + f.catalogued + '</td><td>' +
       pct(f.coverage_pct) + '</td><td>' + f.passing + '</td><td class="' + (f.failing ? 'sev-h' : '') + '">' +
       f.failing + '</td><td>' + pct(f.score_over_assessed) + '</td><td class="muted">' +
-      (f.last_assessed ? new Date(f.last_assessed).toLocaleString() : 'never') + '</td></tr>';
+      (f.last_assessed ? formatDateTime(f.last_assessed) : 'never') + '</td></tr>';
   });
   document.getElementById('compFrameworks').innerHTML = html + '</table>';
 
@@ -886,7 +944,7 @@ async function loadFindings() {
         let html = '<table><tr><th>Severity</th><th>Title</th><th>Source</th><th>Status</th><th>Created</th></tr>';
         findings.slice(0,25).forEach(f => {
             const sevClass = f.severity === 'critical' ? 'sev-c' : f.severity === 'high' ? 'sev-h' : f.severity === 'medium' ? 'sev-m' : 'sev-l';
-            html += `<tr><td class="${sevClass}" style="font-weight:600;text-transform:uppercase">${escapeHtml(f.severity)}</td><td>${escapeHtml(f.title)}</td><td class="muted">${escapeHtml(f.source)}</td><td><span class="badge ${f.status==='open'?'badge-red':'badge-green'}">${escapeHtml(f.status)}</span></td><td class="muted">${new Date(f.created_at).toLocaleDateString()}</td></tr>`;
+            html += `<tr><td class="${sevClass}" style="font-weight:600;text-transform:uppercase">${escapeHtml(f.severity)}</td><td>${escapeHtml(f.title)}</td><td class="muted">${escapeHtml(f.source)}</td><td><span class="badge ${f.status==='open'?'badge-red':'badge-green'}">${escapeHtml(f.status)}</span></td><td class="muted">${formatDate(f.created_at)}</td></tr>`;
         });
         html += '</table>';
         document.getElementById('findingsList').innerHTML = html;
