@@ -23,13 +23,13 @@ echo "deploying $REF (previous $PREV on $PREV_BRANCH)"
 git fetch --all --prune >/dev/null 2>&1 || echo "  note: fetch failed, using local refs"
 if ! git checkout "$REF" >/dev/null 2>&1; then
   fail "cannot checkout $REF"; exit 4
+fi
 
 echo "  installing web assets..."
 if [ -f web/gds_app.html ]; then
   install -m 644 web/gds_app.html /var/www/gds_app.html
 else
   echo "  WARNING: web/gds_app.html missing, leaving the served file untouched"
-fi
 fi
 NEW=$(git rev-parse HEAD)
 echo "  target commit: $NEW"
