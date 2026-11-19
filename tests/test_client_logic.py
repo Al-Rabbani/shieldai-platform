@@ -46,6 +46,7 @@ SOURCE = "\n".join([
     _fn("escapeHtml"),
     _fn("formatValue"),
     _fn("routeFromHash"),
+    _fn("returnRoute"),
     _fn("svgGroupedBars"),
 ])
 
@@ -116,3 +117,19 @@ def test_coverage_and_pass_rate_are_drawn_as_separate_series():
     svg = run("svgGroupedBars([{label:'CIS', a:15.0, b:87.0}], {aria:'x', legend:{a:'Coverage', b:'Pass rate'}, suffix:'%'});")
     assert "15.0%" in svg and "87.0%" in svg
     assert svg.count("<rect") >= 3
+
+
+def test_a_valid_route_is_restored_after_signing_back_in():
+    assert run("returnRoute('#/findings', '');") == "#/findings"
+    assert run("returnRoute('#/mssp', '');") == "#/mssp"
+
+
+def test_planted_or_unknown_values_are_never_restored():
+    # The stored value is attacker-writable storage, so it is only honoured if it is one of this page's
+    # own routes in exactly that form.
+    for junk in ("javascript:alert(1)", "https://elsewhere.example", "#/nope", "#/findings?x=1", ""):
+        assert run("returnRoute(%s, '');" % json.dumps(junk)) == "", junk
+
+
+def test_an_absent_return_route_is_empty_not_a_default():
+    assert run("returnRoute(null, '#/cloud');") == ""

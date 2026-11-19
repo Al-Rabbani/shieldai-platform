@@ -101,3 +101,25 @@ def test_mssp_count_is_labelled_as_tenants_not_paying_customers():
     assert "Managed tenants" in HTML
     assert 'id="msspScope"' in HTML
     assert "not a count of paying customers" in HTML
+
+
+def test_session_is_verified_against_the_server_not_assumed():
+    # The cookie is httpOnly, so the page cannot read its own expiry; the only honest claim is the one
+    # the server just confirmed.
+    assert "apiGet" in HTML and "/auth/refresh" in HTML
+    assert "async function verifySession" in HTML
+    assert "Session verified " in HTML
+
+
+def test_an_expired_session_remembers_where_the_reader_was():
+    assert "gds_return_to" in HTML
+    assert "function sessionExpired" in HTML
+    assert "returnRoute" in HTML
+
+
+def test_no_mfa_screen_is_offered_because_the_api_has_no_second_factor():
+    # A code box that nothing verifies is worse than an honest absence. This checks the rendered markup
+    # only: the script comment explaining why MFA is absent legitimately mentions the word.
+    markup = HTML.split("<script>")[0].lower()
+    assert "mfa" not in markup
+    assert 'id="mfa' not in HTML.lower()

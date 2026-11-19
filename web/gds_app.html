@@ -124,6 +124,7 @@ tr:hover{background:var(--surface2)}
 <a href="#/agents" data-route="agents" id="nav-agents">Agents</a>
 <a href="https://api.globaldigitalsecurity.io/docs" target="_blank">API Docs</a>
 <a href="#" onclick="logout();return false" id="nav-user" style="color:var(--primary);font-weight:600"></a>
+<span id="sessionNote" class="muted" style="font-size:11px"></span>
 </div>
 </div>
 </nav>
@@ -281,6 +282,9 @@ async function doLogin(e) {
         currentUser = data;
         sessionStorage.setItem('gds_user', JSON.stringify(data));
         showDashboard();
+        const back = returnRoute(sessionStorage.getItem('gds_return_to'), location.hash);
+        sessionStorage.removeItem('gds_return_to');
+        if (back && location.hash !== back) { location.hash = back; } else { applyRoute(); }
     } catch(err) {
         showErr('Cannot reach API server. Check your connection.');
     }
@@ -332,6 +336,61 @@ function showDashboard() {
     document.getElementById('nav-user').textContent = currentUser.email.split('@')[0];
     loadOverview();
 }
+
+/* ---- Session upkeep (C5) ------------------------------------------------------------------------
+   The session cookie is httpOnly, so this page cannot read its expiry. The only honest way to know a
+   session is still good is to ask the server, so every ten minutes while the tab is visible the page
+   calls /auth/refresh: it either renews the cookie or says the session is gone. Nothing is claimed
+   about the session that the server has not just confirmed.
+
+   MFA is deliberately absent. The API exposes no second factor to enrol, verify or challenge - there is
+   no MFA field on any auth route - so a code box here would collect six digits that nothing checks.
+
+   returnRoute is pure and refuses to restore anything that is not one of this page's own routes, so a
+   value planted in storage cannot send the reader somewhere unexpected. */
+let sessionVerifiedAt = null;
+
+function returnRoute(stored, currentHash) {
+  const candidate = String(stored == null ? '' : stored);
+  const name = routeFromHash(candidate);
+  if (!candidate) { return ''; }
+  if (!Object.prototype.hasOwnProperty.call(ROUTES, name)) { return ''; }
+  return candidate === '#/' + name ? candidate : '';
+}
+
+function paintSession() {
+  const el = document.getElementById('sessionNote');
+  if (!el) { return; }
+  el.textContent = sessionVerifiedAt ? 'Session verified ' + sessionVerifiedAt.toLocaleTimeString() : '';
+}
+
+function sessionExpired() {
+  currentUser = null;
+  sessionStorage.removeItem('gds_user');
+  if (location.hash) { sessionStorage.setItem('gds_return_to', location.hash); }
+  document.getElementById('dashView').classList.add('hidden');
+  document.getElementById('authView').classList.remove('hidden');
+  showErr('Your session has expired. Please sign in again.');
+}
+
+async function verifySession() {
+  if (document.hidden) { return; }
+  const el = document.getElementById('sessionNote');
+  try {
+    const res = await fetch(API + '/auth/refresh', { method: 'POST', credentials: 'include' });
+    if (res.ok) {
+      sessionVerifiedAt = new Date();
+      paintSession();
+      return;
+    }
+    if (res.status === 401) { sessionExpired(); return; }
+    if (el) { el.textContent = 'Session could not be verified (HTTP ' + res.status + ').'; }
+  } catch (_) {
+    if (el) { el.textContent = 'Session could not be verified: the API is unreachable.'; }
+  }
+}
+
+document.addEventListener('visibilitychange', () => { if (!document.hidden) { verifySession(); } });
 
 /* ---- Visualisation (C9) -------------------------------------------------------------------------
    Inline SVG built in the page: no chart library, no network request, nothing to load. Two rules are
@@ -562,6 +621,7 @@ async function apiGet(path) {
     if (res.status === 401) {
       currentUser = null;
       sessionStorage.removeItem('gds_user');
+      if (location.hash) { sessionStorage.setItem('gds_return_to', location.hash); }
       document.getElementById('dashView').classList.add('hidden');
       document.getElementById('authView').classList.remove('hidden');
       showErr('Your session has expired. Please sign in again.');
@@ -898,6 +958,8 @@ async function loadAgents() {
 }
 
 /* Start on the address the reader arrived at, not always on Overview. */
+setInterval(verifySession, 10 * 60 * 1000);
+
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', applyRoute);
 } else {
