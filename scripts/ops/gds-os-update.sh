@@ -50,7 +50,15 @@ before=$(apt-get -s upgrade 2>/dev/null | grep -c '^Inst')
 log "pending packages: $before"
 if [ "$before" -eq 0 ]; then
     log "nothing to do"
-    crontab -l 2>/dev/null | grep -v 'gds-os-update.sh apply' | crontab - 2>/dev/null
+    # Re-assess compliance immediately, so the patch_currency control reflects the new state on the same
+# night rather than waiting for the next 03:15 run. Evidence should move when the facts move.
+if /opt/gds-os/apps/api/venv/bin/python /opt/gds-os/scripts/ops/assess_compliance.py >>"$LOG" 2>&1; then
+    log "compliance re-assessed"
+else
+    log "WARN compliance re-assessment failed"
+fi
+
+crontab -l 2>/dev/null | grep -v 'gds-os-update.sh apply' | crontab - 2>/dev/null
     notify "Update window" "no pending packages, nothing changed"
     exit 0
 fi
