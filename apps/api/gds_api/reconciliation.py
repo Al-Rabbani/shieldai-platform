@@ -22,6 +22,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from gds_api.audit import record_audit_event
+from gds_api.tenant_binding import bind_tenant
 from gds_api.models import Mission, WorkflowRun
 from gds_api.temporal_client import get_temporal_client
 from gds_api.workflow_sync import TEMPORAL_STATUS_NAMES, sync_workflow_run
@@ -59,6 +60,9 @@ async def reconcile_tenant_workflows(
 ) -> list[ReconciliationFinding]:
     findings: list[ReconciliationFinding] = []
 
+    # 19 Nov 2026 (P2): missions is FORCE-RLS. This sweep is explicitly tenant-scoped, so bind
+    # that tenant before the read; unbound it would reconcile nothing and report success.
+    await bind_tenant(db, tenant_id)
     missions = (
         (await db.execute(select(Mission).where(Mission.tenant_id == tenant_id))).scalars().all()
     )

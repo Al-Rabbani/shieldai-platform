@@ -17,6 +17,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from gds_api.events import publish_mission_event
+from gds_api.tenant_binding import bind_tenant
 from gds_api.models import Approval, EngineeringSession, EngineeringTask, Mission, MissionPlan
 
 _DEFAULT_STALE_AFTER_SECONDS = 1800
@@ -62,6 +63,10 @@ async def recover_engineering_sessions(
             "session; this one's real workspace state is preserved for inspection."
         )
         session.completed_at = now
+        # 19 Nov 2026 (P2): missions is FORCE-RLS, so a by-PK read on a session that has not
+        # bound a tenant returns None and the mission would silently stay "running" forever.
+        # The sweep already knows this row's tenant, so bind it before the read.
+        await bind_tenant(db, session.tenant_id)
         mission = await db.get(Mission, session.mission_id)
         if mission is not None:
             mission.status = "failed"
@@ -90,6 +95,7 @@ async def recover_engineering_sessions(
             session.status = "REJECTED"
             session.failure_reason = "The real approval for this session's commit was rejected."
             session.completed_at = now
+            await bind_tenant(db, session.tenant_id)
             mission = await db.get(Mission, session.mission_id)
             if mission is not None:
                 mission.status = "failed"
