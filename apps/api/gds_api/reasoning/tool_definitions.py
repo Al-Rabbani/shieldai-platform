@@ -5,16 +5,56 @@ as the `tools` parameter. The LLM uses these to decide which tool to call.
 """
 
 
+def reachable_tool_names(agent_id: str) -> set[str]:
+    """The tools this reasoning agent can actually execute through the capability broker.
+
+    Derived from the capability catalogue and the broker's own scope rules, so the menu the
+    model sees can never advertise a tool the gate will refuse. Measured 19 Nov 2026: the
+    static _AGENT_TOOL_MAP offered 64 tool slots across 15 agents and only 15 were reachable,
+    which is why every mission ended with denials or CAPABILITY_NOT_MAPPED.
+    """
+    from gds_api.agents.registry import AGENT_REGISTRY
+    from gds_api.capabilities.catalog import CAPABILITY_REGISTRY
+    from gds_api.capabilities.definitions import CapabilityStatus
+    from gds_api.reasoning.agent_loop import TOOL_NAME_MAP
+    from gds_api.reasoning.governed_tools import resolve_requesting_agent
+
+    registered_id = resolve_requesting_agent(agent_id)
+    agent = AGENT_REGISTRY.get(registered_id) if registered_id else None
+    if agent is None:
+        return set()
+
+    grants = set(getattr(agent, "allowed_capability_ids", ()) or ())
+    canonical: set[str] = set()
+    for key, capability in CAPABILITY_REGISTRY.items():
+        if capability.status != CapabilityStatus.OPERATIONAL:
+            continue
+        scoped = bool(capability.allowed_team_types or capability.allowed_agent_ids)
+        if not scoped:
+            # Rabbani-direct only. The broker refuses every agent for these by design.
+            continue
+        if not (
+            agent.name in (capability.allowed_agent_ids or ())
+            or agent.team in (capability.allowed_team_types or ())
+            or key in grants
+        ):
+            continue
+        canonical |= set(capability.required_tool_ids or ())
+
+    reverse = {canonical_id: name for name, canonical_id in TOOL_NAME_MAP.items()}
+    return {reverse.get(tool, tool) for tool in canonical}
+
+
 def get_tool_definitions(agent_id: str = None) -> list[dict]:
     """Get tool definitions for an agent. If agent_id is provided,
-    return only the tools that agent is authorized to use."""
-    
+    return only the tools that agent can actually execute."""
+
     all_tools = _ALL_TOOL_DEFINITIONS
-    
+
     if agent_id and agent_id in _AGENT_TOOL_MAP:
-        allowed = set(_AGENT_TOOL_MAP[agent_id])
+        allowed = set(_AGENT_TOOL_MAP[agent_id]) & reachable_tool_names(agent_id)
         return [t for t in all_tools if t["function"]["name"] in allowed]
-    
+
     return all_tools
 
 

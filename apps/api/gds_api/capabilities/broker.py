@@ -468,9 +468,16 @@ async def _evaluate_and_decide(
                     "agent_required",
                     "This capability requires a specific agent; it cannot be requested directly.",
                 )
+            # 19 Nov 2026: an explicit per-agent grant in the agent's manifest is now
+            # honoured. allowed_capability_ids existed on every manifest and the broker
+            # ignored it, so a narrow, auditable grant was impossible: an agent either
+            # qualified by team (wide) or was refused outright. This is the narrowest of
+            # the three routes and never widens a team scope.
             allowed = (
                 agent.name in capability.allowed_agent_ids
                 or agent.team in capability.allowed_team_types
+                or capability.stable_key
+                in (getattr(agent, "allowed_capability_ids", ()) or ())
             )
             if not allowed:
                 raise CapabilityDenied(

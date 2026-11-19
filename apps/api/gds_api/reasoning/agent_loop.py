@@ -61,6 +61,12 @@ TOOL_NAME_MAP = {
     # nmap_scan, nuclei_scan, semgrep_scan, trivy_scan, nikto_scan,
     # sqlmap_scan, masscan_scan, subfinder_scan, httpx_probe (note: httpx_scan not httpx_probe),
     "httpx_scan": "httpx_probe",
+    # Aligned 19 Nov 2026: these reasoning names were offered to the model but resolved
+    # to no declared capability, so every call died CAPABILITY_NOT_MAPPED. Each now maps
+    # to the registered gateway tool that a real governed capability already declares.
+    "osv_check": "search_osv_vulnerabilities",
+    "semgrep_scan": "sast_scan",
+    "trivy_scan": "container_scan",
     # ffuf_scan, gobuster_scan, wpscan_scan — all match directly
 }
 

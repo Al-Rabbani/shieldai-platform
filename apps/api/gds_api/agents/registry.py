@@ -116,11 +116,16 @@ AGENT_REGISTRY: dict[str, AgentManifest] = {
             "recent mission activity for leadership: what was done, what risk it "
             "carried, and the real outcome - never embellished, never speculative."
         ),
-        tool_names=("list_recent_missions",),
+        tool_names=("list_recent_missions", "list_open_findings", "check_url_security_headers"),
         team=Team.FOUNDATION,
         department="Executive Advisory",
-        risk_ceiling=RiskCeiling.R1,
-        allowed_capability_ids=("mission.list_recent",),
+        risk_ceiling=RiskCeiling.R2,
+        allowed_capability_ids=(
+            "mission.list_recent",
+            "finding.list_open",
+            "network.check_url_headers",
+            "risk.calculate_exposure",
+        ),
     ),
     "threat_intelligence": AgentManifest(
         name="threat_intelligence",

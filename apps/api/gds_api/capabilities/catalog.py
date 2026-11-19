@@ -278,6 +278,40 @@ CAPABILITY_REGISTRY: dict[str, CapabilityDefinition] = {
         allowed_team_types=(Team.BLUE,),
         allows_network=True,
     ),
+    "recon.subdomain_enum": CapabilityDefinition(
+        stable_key="recon.subdomain_enum",
+        display_name="Subdomain Enumeration",
+        description=(
+            "Real subfinder passive subdomain enumeration against an explicitly "
+            "authorized domain only."
+        ),
+        category="network",
+        risk_class=RiskClass.R2,
+        side_effect_type=SideEffectType.READ_EXTERNAL,
+        required_tool_ids=("subfinder_scan",),
+        target_types=("domain",),
+        allowed_team_types=(Team.RED,),
+        requires_target_authorisation=True,
+        allows_network=True,
+        audit_level="elevated",
+    ),
+    "recon.http_probe": CapabilityDefinition(
+        stable_key="recon.http_probe",
+        display_name="HTTP Probe",
+        description=(
+            "Real httpx probe against an explicitly authorized target only: status, "
+            "title, server and technology headers."
+        ),
+        category="network",
+        risk_class=RiskClass.R2,
+        side_effect_type=SideEffectType.READ_EXTERNAL,
+        required_tool_ids=("httpx_probe",),
+        target_types=("url", "domain"),
+        allowed_team_types=(Team.RED,),
+        requires_target_authorisation=True,
+        allows_network=True,
+        audit_level="elevated",
+    ),
     "network.check_url_headers": CapabilityDefinition(
         stable_key="network.check_url_headers",
         display_name="Check URL Security Headers",
@@ -342,6 +376,103 @@ CAPABILITY_REGISTRY: dict[str, CapabilityDefinition] = {
         allowed_team_types=(Team.BLUE,),
         requires_human_approval=True,
         allows_network=True,
+    ),
+    "network.port_scan": CapabilityDefinition(
+        stable_key="network.port_scan",
+        display_name="Port Scan",
+        description=(
+            "Real nmap port scan against an explicitly authorized target only. Records "
+            "port and service evidence; no exploitation."
+        ),
+        category="network",
+        risk_class=RiskClass.R4,
+        side_effect_type=SideEffectType.OFFENSIVE,
+        required_tool_ids=("nmap_scan",),
+        target_types=("domain", "ip"),
+        allowed_team_types=(Team.RED,),
+        requires_target_authorisation=True,
+        requires_human_approval=True,
+        allows_network=True,
+        audit_level="elevated",
+    ),
+    "network.vulnerability_scan": CapabilityDefinition(
+        stable_key="network.vulnerability_scan",
+        display_name="Template Vulnerability Scan",
+        description=(
+            "Real nuclei template scan against an explicitly authorized target only, "
+            "using the installed template set. Records what the templates returned."
+        ),
+        category="network",
+        risk_class=RiskClass.R3,
+        side_effect_type=SideEffectType.OFFENSIVE,
+        required_tool_ids=("nuclei_scan",),
+        target_types=("domain", "ip"),
+        allowed_team_types=(Team.RED,),
+        requires_target_authorisation=True,
+        allows_network=True,
+        audit_level="elevated",
+    ),
+    "network.web_server_scan": CapabilityDefinition(
+        stable_key="network.web_server_scan",
+        display_name="Web Server Scan",
+        description="Real nikto web server check against an explicitly authorized target only.",
+        category="network",
+        risk_class=RiskClass.R3,
+        side_effect_type=SideEffectType.OFFENSIVE,
+        required_tool_ids=("nikto_scan",),
+        target_types=("domain", "ip"),
+        allowed_team_types=(Team.RED,),
+        requires_target_authorisation=True,
+        allows_network=True,
+        audit_level="elevated",
+    ),
+    "network.injection_scan": CapabilityDefinition(
+        stable_key="network.injection_scan",
+        display_name="Injection Probe",
+        description=(
+            "Real sqlmap probe against an explicitly authorized target only. Active "
+            "injection testing - needs target authorisation and human approval."
+        ),
+        category="network",
+        risk_class=RiskClass.R4,
+        side_effect_type=SideEffectType.OFFENSIVE,
+        required_tool_ids=("sqlmap_scan",),
+        target_types=("url", "domain"),
+        allowed_team_types=(Team.RED,),
+        requires_target_authorisation=True,
+        requires_human_approval=True,
+        allows_network=True,
+        audit_level="elevated",
+    ),
+    "network.content_discovery": CapabilityDefinition(
+        stable_key="network.content_discovery",
+        display_name="Content Discovery",
+        description=(
+            "Real ffuf or gobuster path discovery against an explicitly authorized target only."
+        ),
+        category="network",
+        risk_class=RiskClass.R3,
+        side_effect_type=SideEffectType.OFFENSIVE,
+        required_tool_ids=("ffuf_scan", "gobuster_scan"),
+        target_types=("url", "domain"),
+        allowed_team_types=(Team.RED,),
+        requires_target_authorisation=True,
+        allows_network=True,
+        audit_level="elevated",
+    ),
+    "network.cms_scan": CapabilityDefinition(
+        stable_key="network.cms_scan",
+        display_name="CMS Scan",
+        description="Real wpscan CMS enumeration against an explicitly authorized target only.",
+        category="network",
+        risk_class=RiskClass.R3,
+        side_effect_type=SideEffectType.OFFENSIVE,
+        required_tool_ids=("wpscan_scan",),
+        target_types=("url", "domain"),
+        allowed_team_types=(Team.RED,),
+        requires_target_authorisation=True,
+        allows_network=True,
+        audit_level="elevated",
     ),
     # ---- Red team -------------------------------------------------------------------
     "red_team.recon_passive": CapabilityDefinition(
