@@ -146,7 +146,14 @@ async def login(
         select(User, Role).join(Role, User.role_id == Role.id).where(User.email == body.email)
     )
     row = result.first()
-    password_ok = row is not None and verify_password(body.password, row[0].password_hash)
+    try:
+        password_ok = row is not None and verify_password(body.password, row[0].password_hash)
+    except Exception:
+        # A stored hash that cannot be parsed (corrupted row, a placeholder, an algorithm the
+        # verifier does not know) must fail closed as an authentication failure. It previously
+        # raised, turning a routine rejected login into a 500 - which both signals that the account
+        # exists and tells the caller the stored hash is malformed.
+        password_ok = False
 
     if row is None or not row[0].is_active or not password_ok:
         # R2.1: audit_events is FORCE-RLS protected, so the failure event can only be written
