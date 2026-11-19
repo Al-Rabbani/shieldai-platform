@@ -93,7 +93,10 @@ def main():
                  "score is reported rather than a default") if findings == 0 and missions == 0 else "",
     }
 
-    psql(f"""INSERT INTO mssp_onboarding_records
+    # mssp_onboarding_records is FORCE RLS (migration 030), so the row's tenant must be bound in the same
+    # session as the insert. psql runs both statements in one session, so the setting carries.
+    psql(f"""SELECT set_config('gds.tenant_id', {q(tid)}, false);
+             INSERT INTO mssp_onboarding_records
              (tenant_id, plan_tier, sla_tier, services_provisioned, isolation_verified,
               isolation_evidence, baseline, performed_by)
              VALUES ({q(tid)}, {q(a.plan)}, {q(a.sla)}, {q(json.dumps(services))}::jsonb, {'true' if ok else 'false'},

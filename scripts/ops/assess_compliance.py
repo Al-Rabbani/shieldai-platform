@@ -204,25 +204,45 @@ def chk_monitoring():
     return (ok(obs, f"{len(up)} scrape targets up") if up and not down
             else bad(obs, f"down: {down}"))
 
+def classify_operations(spec):
+    """Split published operations three ways.
+
+    OpenAPI distinguishes "nobody decided" from "deliberately public": a MISSING security key means the
+    operation was never classified, while an explicit empty list means the authors decided it is public.
+    Counting both as failures made this control permanently fail on /auth/login, which is public by design,
+    so the check could never reflect reality and its verdict carried no information.
+    """
+    methods = {"get", "post", "put", "patch", "delete"}
+    declared = public = missing = 0
+    missing_ops = []
+    for path, item in (spec or {}).get("paths", {}).items():
+        for m, op in item.items():
+            if m not in methods or not isinstance(op, dict):
+                continue
+            if "security" not in op:
+                missing += 1
+                missing_ops.append(f"{m.upper()} {path}")
+            elif op.get("security"):
+                declared += 1
+            else:
+                public += 1
+    return {"operations": declared + public + missing, "declared": declared,
+            "public": public, "missing": missing, "missing_operations": sorted(missing_ops)}
+
+
 def chk_auth_declared():
     rc, out, _ = sh(["curl", "-s", "-m", "15", "http://127.0.0.1:8000/openapi.json"])
     try:
         spec = json.loads(out)
     except Exception:
         return unknown("openapi.json unreadable", {})
-    methods = {"get", "post", "put", "patch", "delete"}
-    total = declared = 0
-    for path, item in spec.get("paths", {}).items():
-        for m, op in item.items():
-            if m in methods:
-                total += 1
-                if op.get("security"):
-                    declared += 1
-    obs = {"operations": total, "declaring_auth": declared}
-    if total == 0:
-        return unknown("no operations in the OpenAPI document", obs)
-    return (ok(obs, f"{declared} of {total} operations declare auth") if declared == total
-            else bad(obs, f"{total - declared} operations declare no auth"))
+    counts = classify_operations(spec)
+    if counts["operations"] == 0:
+        return unknown("no operations in the OpenAPI document", counts)
+    detail = (f"{counts['declared']} authenticated, {counts['public']} deliberately public, "
+              f"{counts['missing']} undeclared")
+    return (bad(counts, detail) if counts["missing"] else ok(counts, detail))
+
 
 def chk_deploy_gated():
     p = "/opt/gds-os/scripts/ops/deploy.sh"
@@ -306,15 +326,100 @@ COLLECTORS = {
 
 # ---------------------------------------------------------------- catalog
 FRAMEWORKS = [
-    ("cis_v8",        "CIS Critical Security Controls v8",           "8.0", 153),
-    ("nist_ai_rmf",   "NIST AI Risk Management Framework",           "1.0",  72),
-    ("hipaa",         "HIPAA Security Rule (45 CFR 164)",            "2013", 75),
-    ("dora",          "DORA (EU) 2022/2554",                         "2022", 58),
-    ("soc2_type2",    "SOC 2 Type II (AICPA TSC 2017)",              "2017", 61),
+    # (key, name, version, official control count, jurisdiction, source)
+    ("cis_v8",        "CIS Critical Security Controls v8",           "8.0", 153, "International", "catalogued 2026-11-19"),
+    ("nist_ai_rmf",   "NIST AI Risk Management Framework",           "1.0",  72, "US", "catalogued 2026-11-19"),
+    ("hipaa",         "HIPAA Security Rule (45 CFR 164)",            "2013", 75, "US", "catalogued 2026-11-19"),
+    ("dora",          "DORA (EU) 2022/2554",                         "2022", 58, "EU", "catalogued 2026-11-19"),
+    ("soc2_type2",    "SOC 2 Type II (AICPA TSC 2017)",              "2017", 61, "International", "catalogued 2026-11-19"),
+    ("nis2",          "NIS2 Directive (EU) 2022/2555",               "2022/2555", 75, "EU",
+     "technical decomposition of Art.20, Art.21 and Art.23 into 75 checkable controls; the directive "
+     "publishes no official control list, so this count is ours and the mapping requires legal review"),
 ]
 
 # (framework, ref, title, category, check_key or None, severity, mapping_basis)
 CATALOG = [
+    # --- NIS2 (Directive (EU) 2022/2555) ---------------------------------------------------------------
+    # A technical decomposition of Articles 20, 21 and 23. Where a control has a collector it is because
+    # that collector genuinely evidences it; everywhere else the basis says what evidence is missing,
+    # which is the useful output. The directive publishes no official control list, so this count is ours
+    # and the mapping needs legal review before it is used in a regulatory statement.
+    ("nis2", 'Art.20.1', 'Management body approves and oversees the cyber risk management measures', 'governance', None, 'high', 'Requires approved governance minutes or a board resolution; no such record exists in this platform.'),
+    ("nis2", 'Art.20.1.b', 'Management body accountability for compliance is assigned', 'governance', None, 'high', 'Requires a named accountable owner recorded against the framework; none is recorded.'),
+    ("nis2", 'Art.20.2', 'Management body members receive cyber risk management training', 'governance', None, 'medium', 'Requires training records for the management body; none are held.'),
+    ("nis2", 'Art.20.3', 'Cyber risk management expertise is available to the management body', 'governance', None, 'medium', 'Requires evidence of an appointed security function or adviser; not evidenced.'),
+    ("nis2", 'Art.20.4', 'Governance arrangements are reviewed and minuted on a defined cadence', 'governance', None, 'medium', 'Requires review minutes; no governance review record exists.'),
+    ("nis2", 'Art.21.1', 'An all-hazards framework covers confidentiality, integrity and availability', 'governance', None, 'high', 'Requires a documented framework; technical controls exist but no risk framework document does.'),
+    ("nis2", 'Art.21.1.b', 'Risk analysis is performed and a risk register is maintained', 'governance', None, 'high', 'Requires a risk register; none is held in this platform.'),
+    ("nis2", 'Art.21.1.c', 'Measures are proportionate and their selection is documented', 'governance', None, 'medium', 'Requires documented proportionality decisions; not evidenced.'),
+    ("nis2", 'Art.21.1.d', 'The framework and its measures are reviewed periodically', 'governance', None, 'medium', 'Requires a review record with dates; none exists.'),
+    ("nis2", 'Art.21.2.a.1', 'A documented information security policy is approved by the management body', 'policy', None, 'high', 'Requires an approved policy document; not held here.'),
+    ("nis2", 'Art.21.2.a.2', 'A defined risk analysis methodology is used', 'policy', None, 'high', 'Requires the methodology document; not held here.'),
+    ("nis2", 'Art.21.2.a.3', 'Access control policy is enforced in systems, not only written down', 'policy', 'rls_forced', 'high', None),
+    ("nis2", 'Art.21.2.a.4', 'Acceptable use of assets and systems is defined', 'policy', None, 'medium', 'Requires an acceptable use policy; not held here.'),
+    ("nis2", 'Art.21.2.a.5', 'Policies are reviewed on a defined cadence', 'policy', None, 'medium', 'Requires review dates per policy; none recorded.'),
+    ("nis2", 'Art.21.2.a.6', 'Exceptions to policy are approved and time-bound', 'policy', None, 'medium', 'Requires an exception register; none exists.'),
+    ("nis2", 'Art.21.2.a.7', 'Ownership is assigned for each information system', 'policy', None, 'medium', 'Requires named asset owners; not recorded.'),
+    ("nis2", 'Art.21.2.a.8', 'Security requirements are defined for each system class', 'policy', None, 'medium', 'Requires per-class requirements; not documented.'),
+    ("nis2", 'Art.21.2.b.1', 'An incident response plan is documented', 'incident', 'incident_response', 'high', None),
+    ("nis2", 'Art.21.2.b.2', 'Incident detection operates continuously', 'incident', 'monitoring', 'high', None),
+    ("nis2", 'Art.21.2.b.3', 'An incident register is maintained', 'incident', None, 'high', 'The incidents table exists but holds no rows, so a register cannot be evidenced.'),
+    ("nis2", 'Art.21.2.b.4', 'Incident severity classification is defined', 'incident', None, 'medium', 'Requires a classification scheme; not documented.'),
+    ("nis2", 'Art.21.2.b.5', 'Incident roles and escalation paths are assigned', 'incident', None, 'medium', 'Requires named roles; not recorded.'),
+    ("nis2", 'Art.21.2.b.6', 'Post-incident lessons learned are recorded', 'incident', None, 'medium', 'Requires post-incident reviews; none recorded.'),
+    ("nis2", 'Art.21.2.b.7', 'Incident evidence is preserved with integrity', 'incident', None, 'medium', 'Requires an evidence chain of custody; not evidenced.'),
+    ("nis2", 'Art.21.2.c.1', 'The backup process is automated and current', 'continuity', 'backup_automated', 'high', None),
+    ("nis2", 'Art.21.2.c.2', 'A backup copy is held isolated from the primary system', 'continuity', 'backup_offhost', 'high', None),
+    ("nis2", 'Art.21.2.c.3', 'Restore is rehearsed and integrity is verified', 'continuity', 'backup_restore_tested', 'high', None),
+    ("nis2", 'Art.21.2.c.4', 'A disaster recovery plan is documented', 'continuity', None, 'high', 'Requires a DR plan document; not versioned here.'),
+    ("nis2", 'Art.21.2.c.5', 'Recovery time and recovery point objectives are defined and tested', 'continuity', None, 'high', 'Requires declared RTO and RPO with a test record; not documented.'),
+    ("nis2", 'Art.21.2.c.6', 'Crisis management roles are defined', 'continuity', None, 'medium', 'Requires crisis roles; not recorded.'),
+    ("nis2", 'Art.21.2.d.1', 'A supplier and service provider inventory is maintained', 'supply_chain', None, 'high', 'Requires a supplier register; not held here.'),
+    ("nis2", 'Art.21.2.d.2', 'Security requirements are included in supplier agreements', 'supply_chain', None, 'high', 'Requires contractual terms; not evidenced.'),
+    ("nis2", 'Art.21.2.d.3', 'Suppliers are classified by risk', 'supply_chain', None, 'medium', 'Requires a risk classification per supplier; not held.'),
+    ("nis2", 'Art.21.2.d.4', 'Vulnerabilities in supplied software components are tracked', 'supply_chain', None, 'high', 'Dependency advisories exist in scanner data, but no control ties them to a supplier obligation.'),
+    ("nis2", 'Art.21.2.d.5', 'Supplier access to systems is controlled and reviewed', 'supply_chain', None, 'high', 'Requires supplier access records; not held.'),
+    ("nis2", 'Art.21.2.d.6', 'Concentration risk across suppliers is assessed', 'supply_chain', None, 'medium', 'Requires a concentration assessment; not performed.'),
+    ("nis2", 'Art.21.2.e.1', 'A secure development lifecycle is defined', 'development', None, 'high', 'Requires an SDLC standard; not documented.'),
+    ("nis2", 'Art.21.2.e.2', 'A vulnerability handling process is defined', 'development', None, 'high', 'Requires a documented handling process; not held.'),
+    ("nis2", 'Art.21.2.e.3', 'A vulnerability disclosure contact is published', 'development', None, 'medium', 'Requires a published disclosure route; not published.'),
+    ("nis2", 'Art.21.2.e.4', 'Security testing is performed before release', 'development', None, 'high', 'The deploy gate runs smoke tests but no security testing stage, so this is not evidenced.'),
+    ("nis2", 'Art.21.2.e.5', 'Change control gates deployment', 'development', 'deploy_gated', 'high', None),
+    ("nis2", 'Art.21.2.e.6', 'Security patches are applied within a defined window', 'development', 'patch_currency', 'high', None),
+    ("nis2", 'Art.21.2.e.7', 'A software component inventory is maintained per release', 'development', None, 'medium', 'Requires an SBOM per release; none is generated.'),
+    ("nis2", 'Art.21.2.e.8', 'Remediation deadlines are defined by severity', 'development', None, 'medium', 'Requires declared remediation SLAs; severity is recorded but no deadline is.'),
+    ("nis2", 'Art.21.2.f.1', 'Control effectiveness is measured', 'assurance', None, 'high', 'This assessment records verdicts but no effectiveness metric, so effectiveness is unmeasured.'),
+    ("nis2", 'Art.21.2.f.2', 'An independent review or internal audit is performed', 'assurance', None, 'high', 'Requires an audit report; none exists.'),
+    ("nis2", 'Art.21.2.f.3', 'Penetration testing is performed', 'assurance', None, 'high', 'Requires a penetration test report; none is on record.'),
+    ("nis2", 'Art.21.2.f.4', 'Security metrics are reviewed by management', 'assurance', 'monitoring', 'medium', None),
+    ("nis2", 'Art.21.2.f.5', 'Corrective actions are tracked to closure', 'assurance', None, 'medium', 'Requires a corrective action register; not held.'),
+    ("nis2", 'Art.21.2.g.1', 'A baseline configuration standard is defined', 'people', None, 'medium', 'Requires a baseline standard; not documented.'),
+    ("nis2", 'Art.21.2.g.2', 'A security awareness programme is delivered', 'people', None, 'high', 'Requires awareness delivery records; none held.'),
+    ("nis2", 'Art.21.2.g.3', 'Training completion records are retained', 'people', None, 'medium', 'Requires training records; none held.'),
+    ("nis2", 'Art.21.2.g.4', 'Social engineering resistance is tested', 'people', None, 'medium', 'Requires campaign results; none recorded.'),
+    ("nis2", 'Art.21.2.g.5', 'Privileged users receive additional training', 'people', None, 'medium', 'Requires role-specific training records; none held.'),
+    ("nis2", 'Art.21.2.h.1', 'A cryptography policy is defined', 'crypto', None, 'high', 'Requires a cryptography policy; not documented.'),
+    ("nis2", 'Art.21.2.h.2', 'Encryption in transit is enforced', 'crypto', 'tls_hsts', 'high', None),
+    ("nis2", 'Art.21.2.h.3', 'Encryption at rest is applied', 'crypto', 'encryption_at_rest', 'high', None),
+    ("nis2", 'Art.21.2.h.4', 'Key management is defined and operated', 'crypto', None, 'high', 'Requires key management records; not evidenced.'),
+    ("nis2", 'Art.21.2.h.5', 'The certificate lifecycle is managed', 'crypto', None, 'medium', 'Requires a certificate inventory and renewal records; not held.'),
+    ("nis2", 'Art.21.2.i.1', 'An asset inventory is maintained', 'access', None, 'high', 'Findings exist but no asset register does, so the inventory cannot be evidenced.'),
+    ("nis2", 'Art.21.2.i.2', 'Least privilege is enforced for system access', 'access', 'least_priv_db', 'high', None),
+    ("nis2", 'Art.21.2.i.3', 'Access rights are reviewed periodically', 'access', 'access_review', 'high', None),
+    ("nis2", 'Art.21.2.i.4', 'Joiner, mover and leaver processes are operated', 'access', None, 'high', 'Requires provisioning and revocation records; not evidenced.'),
+    ("nis2", 'Art.21.2.i.5', 'Tenant and data separation is enforced', 'access', 'tenant_isolation', 'high', None),
+    ("nis2", 'Art.21.2.i.6', 'Administrative interfaces require authentication', 'access', 'auth_declared', 'high', None),
+    ("nis2", 'Art.21.2.j.1', 'Multi-factor authentication protects privileged access', 'access', 'mfa_enforced', 'high', None),
+    ("nis2", 'Art.21.2.j.2', 'Multi-factor authentication protects remote access', 'access', None, 'high', 'No second factor is implemented in this platform, so remote MFA cannot be evidenced.'),
+    ("nis2", 'Art.21.2.j.3', 'Secured communications are used for voice, video and text', 'access', None, 'medium', 'Requires evidence of secured channels; not evidenced.'),
+    ("nis2", 'Art.21.2.j.4', 'Secured emergency communication channels exist', 'access', None, 'medium', 'Requires a tested emergency channel; not evidenced.'),
+    ("nis2", 'Art.21.2.j.5', 'Administrative and session channels are hardened', 'access', 'ports_minimal', 'medium', None),
+    ("nis2", 'Art.23.1', 'An early warning is issued within 24 hours of a significant incident', 'reporting', None, 'high', 'Requires a reporting procedure and record; the platform has no incident reporting workflow.'),
+    ("nis2", 'Art.23.2', 'An incident notification is issued within 72 hours', 'reporting', None, 'high', 'Requires a notification record; not held.'),
+    ("nis2", 'Art.23.3', 'A final report is issued within one month', 'reporting', None, 'high', 'Requires a final report record; not held.'),
+    ("nis2", 'Art.23.4', 'Affected users are informed of significant threats', 'reporting', None, 'medium', 'Requires a user notification record; not held.'),
+    ("nis2", 'Art.23.5', 'The reporting procedure is documented and rehearsed', 'reporting', None, 'medium', 'Requires a rehearsed procedure; not evidenced.'),
+
     # CIS Controls v8 — controls this platform can genuinely evidence, plus ones it cannot yet.
     ("cis_v8","1.1","Inventory of enterprise assets","inventory",None,"medium",None),
     ("cis_v8","3.3","Configure data access control lists","data",'rls_forced',"high","RLS FORCE on every tenant table is a row-level access control list enforced by the database, not the application"),
@@ -465,12 +570,13 @@ def jq(obj):
 
 def main():
     # 1. frameworks
-    for key, name, version, count in FRAMEWORKS:
-        psql(f"""INSERT INTO compliance_frameworks (framework_key, name, version, official_control_count, source)
-                 VALUES ({q(key)}, {q(name)}, {q(version)}, {count}, 'catalogued 2026-11-19')
+    for key, name, version, count, jurisdiction, source in FRAMEWORKS:
+        psql(f"""INSERT INTO compliance_frameworks (framework_key, name, version, official_control_count, jurisdiction, source)
+                 VALUES ({q(key)}, {q(name)}, {q(version)}, {count}, {q(jurisdiction)}, {q(source)})
                  ON CONFLICT (framework_key) DO UPDATE
                  SET name = EXCLUDED.name, version = EXCLUDED.version,
-                     official_control_count = EXCLUDED.official_control_count;""")
+                     official_control_count = EXCLUDED.official_control_count,
+                     jurisdiction = EXCLUDED.jurisdiction, source = EXCLUDED.source;""")
 
     # 2. catalog
     for fw, ref, title, cat, check, sev, basis in CATALOG:
@@ -519,7 +625,7 @@ def main():
     print("\n" + "=" * 96)
     print(f"{'framework':16s} {'official':>8s} {'catalog':>7s} {'assessed':>8s} {'pass':>5s} {'fail':>5s} {'n/t':>4s} {'cov%':>6s} {'score*':>7s}")
     print("=" * 96)
-    for key, name, version, official in FRAMEWORKS:
+    for key, name, version, official, *_ in FRAMEWORKS:
         row = one(f"""SELECT count(*) || '|' ||
                       count(*) FILTER (WHERE status='pass') || '|' ||
                       count(*) FILTER (WHERE status='fail') || '|' ||
