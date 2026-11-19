@@ -142,13 +142,25 @@ apps/api/venv/bin/python scripts/ops/measure_platform.py
 
 Stated because a runbook that implies more coverage than exists is worse than none:
 
-- **No paging integration is configured.** Alerts are written to the notifications table and delivered by
-  Slack webhook and Resend email. There is no on-call rota, no escalation phone tree, and nobody is paged.
+- **Paging is acknowledgement-based, not provider-based.** A notification marked `requires_ack` is
+  re-delivered on a widening ladder (5 min, 15 min, 60 min) until a human acknowledges it via
+  `POST /notifications/{id}/acknowledge`; after the final rung it is marked unanswered, so the record shows
+  the silence rather than implying somebody handled it. `gds-page.py` runs every 5 minutes as the postgres
+  user, because with 63/63 tenant tables FORCE-RLS an unbound app-role read would see zero rows and page
+  nobody. Still absent: no paging provider (no PagerDuty or Opsgenie key exists in this environment), no
+  phone tree, and no rota naming more than one person, so a page at 03:00 reaches whoever is watching Slack.
+  MEASURED 19 Nov 2026: the Slack leg returned 200; the email leg returned 403 because the Resend account is
+  still in test mode and only delivers to the account owner's address. Until a sending domain is verified the
+  email leg of a page does not reach a real recipient.
 - **Single host.** No failover, no standby. Host loss means downtime until rebuild, bounded by the off-host
   backup and the restore drill.
 - **No staging environment.** Deploys go to production behind a smoke gate and rollback, not through a
   pre-production stage.
 - **NIS2 mapping is a technical decomposition**, not a legal opinion. Any regulatory statement needs legal
   review first.
-- **No documented RTO/RPO commitment to a customer.** The restore drill proves recovery works; it does not
-  prove a contractual time.
+- **RTO and RPO are measured for the data, not committed for the service.** MEASURED 19 Nov 2026:
+  restoring the latest off-host dump (944 KB; 380 findings, 4 tenants, 126 missions) into a scratch database
+  took 1964 ms. RPO against host loss is up to 24 hours, because the off-host copy is the 02:30 daily; the
+  continuous WAL archive that gives minute-level recovery lives on the same host and is lost with it. A
+  contractual RTO cannot be stated: there is no standby, so the unmeasured part of recovery is provisioning a
+  host, not restoring the data.

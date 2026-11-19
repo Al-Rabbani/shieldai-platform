@@ -7,7 +7,7 @@ import uuid
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from gds_api.db import get_db
@@ -45,3 +45,42 @@ async def mark_read(
         await db.commit()
         await db.refresh(notification)
     return notification
+
+
+@router.get("/pending")
+async def pending_acknowledgements(
+    current_user: CurrentUser = Depends(require_permission("notifications:read")),
+    db: AsyncSession = Depends(get_db),
+) -> list[dict]:
+    """What is still unanswered for this user, and how far it has climbed.
+
+    A page that nobody answers is the failure this endpoint exists to make visible: escalation_level shows the
+    rung, and a row at the top rung is a recorded silence, not a handled alert.
+    """
+    rows = (await db.execute(text("""
+        SELECT id, type, message, severity, escalation_level, notify_count, last_notified_at,
+               last_delivery, created_at
+        FROM notifications
+        WHERE user_id = :u AND requires_ack AND acknowledged_at IS NULL
+        ORDER BY created_at
+    """), {"u": str(current_user.user_id)})).mappings().all()
+    return [dict(r) for r in rows]
+
+
+@router.post("/{notification_id}/acknowledge")
+async def acknowledge(
+    notification_id: uuid.UUID,
+    current_user: CurrentUser = Depends(require_permission("notifications:read")),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Stop the escalation. Only the user the page was raised to can answer it."""
+    row = (await db.execute(text("""
+        UPDATE notifications
+        SET acknowledged_at = now(), acknowledged_by = :u, read_at = coalesce(read_at, now())
+        WHERE id = :id AND user_id = :u AND requires_ack AND acknowledged_at IS NULL
+        RETURNING id, acknowledged_at, escalation_level, notify_count
+    """), {"id": str(notification_id), "u": str(current_user.user_id)})).mappings().first()
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No open acknowledgement for that notification")
+    await db.commit()
+    return dict(row)
