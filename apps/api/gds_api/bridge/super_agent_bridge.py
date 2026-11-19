@@ -127,11 +127,15 @@ async def bridge_health():
         from gds_api.reasoning.prompts import AGENT_REGISTRY
         from gds_api.tool_gateway import TOOL_REGISTRY
         
+        from gds_api.bridge.verification import collect_verification
+        verification = await collect_verification()
         return {
             "status": "reachable",
-            "verification_status": "registry_loaded_only",
-            "workers_verified": False,
-            "tool_execution_verified": False,
+            "verification_status": verification["verification_status"],
+            "workers_verified": verification["workers_verified"],
+            "tool_execution_verified": verification["tool_canary_verified"],
+            "verification_evidence": verification["evidence"],
+            "unverified_reasons": verification["unverified_reasons"],
             "bridge": "base44-rabbani",
             "agents_available": len(AGENT_REGISTRY),
             "tools_available": len(TOOL_REGISTRY),
@@ -422,17 +426,23 @@ def _release_sha() -> str | None:
 async def bridge_diagnostics(authorization: Optional[str] = Header(None)):
     """Bounded metadata for deployment verification; never secrets or customer data."""
     _verify_auth(authorization)
+    from gds_api.bridge.verification import collect_verification
     from gds_api.reasoning.prompts import AGENT_REGISTRY
     from gds_api.tool_gateway import TOOL_REGISTRY
+    verification = await collect_verification()
     return {
         "schema_version": 1,
         "release_sha": _release_sha(),
         "registry_counts": {"agents": len(AGENT_REGISTRY), "tools": len(TOOL_REGISTRY)},
-        "workers_verified": False,
-        "tool_canary_verified": False,
-        "database_isolation_verified": False,
-        "recovery_verified": False,
-        "production_ready": False,
+        "workers_verified": verification["workers_verified"],
+        "tool_canary_verified": verification["tool_canary_verified"],
+        "database_isolation_verified": verification["database_isolation_verified"],
+        "recovery_verified": verification["recovery_verified"],
+        "production_ready": verification["production_ready"],
+        "production_ready_scope": "workers, tool canary, database isolation and recovery only - not a "
+                                  "statement about incident handling, commercial readiness or compliance",
+        "verification_evidence": verification["evidence"],
+        "unverified_reasons": verification["unverified_reasons"],
         "legacy_raw_execution": "disabled_in_this_release",
         "service_scope_configured": bool(os.environ.get("SECURITY_SERVICE_PRINCIPAL_ID") and os.environ.get("SECURITY_SERVICE_TENANT_ID")),
         "timestamp": datetime.utcnow().isoformat(),
