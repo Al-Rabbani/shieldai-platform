@@ -522,7 +522,12 @@ async def execute_mission(
         ],
         "unified_report": unified_report,
         "duration_ms": duration_ms,
-        "kernel_managed": KERNEL_AVAILABLE,
+        # 19 Nov 2026: this reported KERNEL_AVAILABLE, i.e. "the kernel module is importable", as
+        # though the mission had run through the kernel. Every agent now runs through the governed
+        # loop, so the mission reports kernel-managed only when an agent actually was.
+        "kernel_managed": any(
+            ar.get("kernel_managed") for ar in (agent_results or [])
+        ),
         "mission_pid": mission_pid,
         "total_tool_calls": total_tool_calls,
         "successful_agents": successful_agents,
@@ -571,7 +576,7 @@ async def start_mission_async(goal: str, context: Optional[Dict[str, Any]] = Non
         "successful_agents": 0,
         "total_agents": 0,
         "duration_ms": 0,
-        "kernel_managed": KERNEL_AVAILABLE,
+        "kernel_managed": False,
     })
     
     # Start background task
