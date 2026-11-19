@@ -31,6 +31,23 @@ if [ -f config/prometheus/node-exporter.default ]; then
   systemctl restart prometheus-node-exporter 2>/dev/null || true
 fi
 
+# Nginx site config is versioned for the same reason the scrape config is: a rebuilt host must not lose
+# the SSE locations, and a hand-edited server block is invisible to review. Test before reloading, and
+# restore the previous file if the test fails, so a bad config can never take the site down.
+if [ -f config/nginx/gds-os ]; then
+  if ! cmp -s config/nginx/gds-os /etc/nginx/sites-available/gds-os; then
+    echo "  installing nginx site config..."
+    cp /etc/nginx/sites-available/gds-os "/etc/nginx/sites-available/gds-os.bak.$(date +%s)"
+    install -m 644 config/nginx/gds-os /etc/nginx/sites-available/gds-os
+    if nginx -t >/dev/null 2>&1; then
+      systemctl reload nginx && echo "    nginx reloaded"
+    else
+      echo "    ERROR: nginx -t failed; restoring the previous config"
+      cp "$(ls -t /etc/nginx/sites-available/gds-os.bak.* | head -1)" /etc/nginx/sites-available/gds-os
+      nginx -t >/dev/null 2>&1 && systemctl reload nginx || true
+    fi
+  fi
+fi
 echo "  installing prometheus scrape config..."
 if [ -f config/prometheus/gds.yml ]; then
   install -m 644 config/prometheus/gds.yml /etc/prometheus/gds.yml

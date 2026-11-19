@@ -37,6 +37,7 @@ from gds_api import (
     policy,
     redteam,
     repository_api,
+    platform_stream,
     streaming,
     workflow_runs,
 )
@@ -195,6 +196,7 @@ app.include_router(memory.router)
 app.include_router(redteam.router)
 app.include_router(conversations.router)
 app.include_router(streaming.router)
+app.include_router(platform_stream.router)
 app.include_router(capabilities_api.router)
 app.include_router(repository_api.router)
 app.include_router(engineering_api.router)

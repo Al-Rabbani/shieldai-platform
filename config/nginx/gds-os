@@ -1,0 +1,146 @@
+# GDS OS — app.globaldigitalsecurity.io (main application)
+server {
+    server_name app.globaldigitalsecurity.io;
+
+    # API routes go to FastAPI backend
+    # Server-sent events (gap C11). Buffering is the whole problem here: with it on, nginx holds
+    # frames until its buffer fills, so a working stream looks dead. These settings exist so the
+    # transport cannot silently defeat the feature, and the read timeout outlives a browser session.
+    location /api/stream/ {
+        proxy_pass http://127.0.0.1:8000/stream/;
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_buffering off;
+        proxy_cache off;
+        gzip off;
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+    }
+
+    location /api/ {
+        proxy_pass http://127.0.0.1:8000/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 300s;
+        proxy_connect_timeout 75s;
+    }
+
+    # Health check
+    location /health {
+        proxy_pass http://127.0.0.1:8000/health;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+
+    # OpenAPI docs
+    location /docs {
+        proxy_pass http://127.0.0.1:8000/docs;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+
+    location /openapi.json {
+        proxy_pass http://127.0.0.1:8000/openapi.json;
+        proxy_set_header Host $host;
+    }
+
+    # Frontend SPA — try static files first, fallback to index
+    location / {
+        root /var/www;
+        index gds_app.html;
+        try_files $uri $uri/ /gds_app.html;
+    }
+
+    listen 443 ssl; # managed by Certbot
+    ssl_certificate /etc/letsencrypt/live/app.globaldigitalsecurity.io/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/app.globaldigitalsecurity.io/privkey.pem;
+    include /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+}
+
+# GDS OS — api.globaldigitalsecurity.io (API only)
+server {
+    server_name api.globaldigitalsecurity.io;
+
+    # Server-sent events for direct API clients (same reasoning as the app host above).
+    location /stream/ {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_buffering off;
+        proxy_cache off;
+        gzip off;
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+    }
+
+    location / {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 300s;
+        proxy_connect_timeout 75s;
+    }
+
+    listen 443 ssl;
+    ssl_certificate /etc/letsencrypt/live/app.globaldigitalsecurity.io/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/app.globaldigitalsecurity.io/privkey.pem;
+    include /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+}
+
+# GDS OS — www.globaldigitalsecurity.io (marketing placeholder)
+server {
+    server_name www.globaldigitalsecurity.io globaldigitalsecurity.io;
+
+    location / {
+        return 200 "GDS OS — Global Digital Security. Full platform coming soon. Contact: president@globaldigitalstreams.com";
+        add_header Content-Type text/plain;
+    }
+
+    listen 443 ssl;
+    ssl_certificate /etc/letsencrypt/live/app.globaldigitalsecurity.io/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/app.globaldigitalsecurity.io/privkey.pem;
+    include /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+}
+
+# HTTP → HTTPS redirects
+server {
+    if ($host = app.globaldigitalsecurity.io) {
+        return 301 https://$host$request_uri;
+    }
+    listen 80;
+    server_name app.globaldigitalsecurity.io;
+    return 404;
+}
+
+server {
+    if ($host = api.globaldigitalsecurity.io) {
+        return 301 https://$host$request_uri;
+    }
+    listen 80;
+    server_name api.globaldigitalsecurity.io;
+    return 404;
+}
+
+server {
+    if ($host = www.globaldigitalsecurity.io) {
+        return 301 https://$host$request_uri;
+    }
+    listen 80;
+    server_name www.globaldigitalsecurity.io globaldigitalsecurity.io;
+    return 404;
+}

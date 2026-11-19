@@ -123,3 +123,20 @@ def test_no_mfa_screen_is_offered_because_the_api_has_no_second_factor():
     markup = HTML.split("<script>")[0].lower()
     assert "mfa" not in markup
     assert 'id="mfa' not in HTML.lower()
+
+
+def test_the_console_subscribes_to_the_real_stream_and_states_its_health():
+    # A live indicator that cannot say "interrupted" is worse than none: it teaches people to trust a
+    # silent screen.
+    assert "new EventSource(API + '/stream/platform')" in HTML
+    assert "addEventListener('finding'" in HTML
+    assert "Live stream connecting" in HTML
+    assert "Live stream interrupted" in HTML
+    assert "function stopLiveStream" in HTML
+    assert 'id="liveState"' in HTML and 'role="status"' in HTML
+    assert 'id="liveActivity"' in HTML and 'aria-live="polite"' in HTML
+
+
+def test_the_stream_is_closed_on_sign_out():
+    logout = HTML[HTML.index("function logout"):]
+    assert "stopLiveStream()" in logout[:400]

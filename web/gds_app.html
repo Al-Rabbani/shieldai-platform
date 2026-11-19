@@ -132,6 +132,8 @@ tr:hover{background:var(--surface2)}
 
 <!-- Overview Page -->
 <div id="page-overview">
+<p id="liveState" class="muted" role="status">Live stream not started</p>
+<div id="liveActivity" aria-live="polite"></div>
 <div class="grid-4 mb" style="margin-bottom:24px">
 <div class="stat"><div class="stat-val" id="stat-health">--</div><div class="stat-lbl">Services</div></div>
 <div class="stat"><div class="stat-val" id="stat-routes">--</div><div class="stat-lbl">API Routes</div></div>
@@ -319,6 +321,7 @@ async function doRegister(e) {
 }
 
 async function logout() {
+    stopLiveStream();
   try {
     const response = await fetch(API + '/auth/logout', {method: 'POST', credentials: 'include'});
     if (!response.ok && response.status !== 401) throw new Error('logout');
@@ -331,10 +334,65 @@ async function logout() {
 }
 
 function showDashboard() {
+    startLiveStream();
     document.getElementById('authView').classList.add('hidden');
     document.getElementById('dashView').classList.remove('hidden');
     document.getElementById('nav-user').textContent = currentUser.email.split('@')[0];
     loadOverview();
+}
+
+/* ---- Live stream (C11) --------------------------------------------------------------------------
+   The server streams this tenant's findings over SSE. The page reports the state it actually has: an
+   EventSource that is retrying says so, and nothing here claims to be live when it is not. Named events
+   (event: finding) never reach onmessage, so they are handled with addEventListener.
+
+   The browser reconnects on its own after a drop, so an error is reported as "interrupted, retrying"
+   rather than as a failure, and the count of received events is shown so a quiet stream is visibly
+   quiet instead of ambiguously silent. */
+let liveSource = null;
+let liveEvents = 0;
+
+function paintLive(state, detail) {
+  const el = document.getElementById('liveState');
+  if (!el) { return; }
+  el.textContent = detail ? state + ' \u00b7 ' + detail : state;
+}
+
+function startLiveStream() {
+  if (liveSource || typeof EventSource === 'undefined') { return; }
+  paintLive('Live stream connecting');
+  liveSource = new EventSource(API + '/stream/platform');
+  liveSource.addEventListener('open', () => {
+    paintLive('Live stream connected', liveEvents + ' event(s) received');
+  });
+  liveSource.addEventListener('finding', ev => {
+    let payload;
+    try { payload = JSON.parse(ev.data); } catch (_) { return; }
+    liveEvents += 1;
+    paintLive('Live stream connected', liveEvents + ' event(s) received');
+    const host = document.getElementById('liveActivity');
+    if (host) {
+      const row = document.createElement('p');
+      row.className = 'muted';
+      row.textContent = (payload.severity || 'unknown') + ' \u00b7 ' + (payload.title || 'finding') +
+        (payload.scanner ? ' \u00b7 ' + payload.scanner : '') +
+        (payload.detected_at ? ' \u00b7 ' + new Date(payload.detected_at).toLocaleTimeString() : '');
+      host.prepend(row);
+      while (host.children.length > 10) { host.removeChild(host.lastChild); }
+    }
+    const stat = document.getElementById('stat-findings');
+    if (stat && /^\d+$/.test(stat.textContent)) {
+      stat.textContent = String(Number(stat.textContent) + 1);
+    }
+  });
+  liveSource.addEventListener('error', () => {
+    paintLive('Live stream interrupted', 'the browser is retrying automatically');
+  });
+}
+
+function stopLiveStream() {
+  if (liveSource) { liveSource.close(); liveSource = null; }
+  paintLive('Live stream not connected');
 }
 
 /* ---- Session upkeep (C5) ------------------------------------------------------------------------
