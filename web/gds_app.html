@@ -1024,9 +1024,9 @@ async function loadPosturePanel() {
   if (!panel) return;
   panel.innerHTML = '<p role="status">Reading live posture from the API...</p>';
 
-  const [score, findings, agents, bridge, spec] = await Promise.all([
+  const [score, summary, agents, bridge, spec] = await Promise.all([
     apiGet('/cloud/posture/score'),
-    apiGet('/findings'),
+    apiGet('/findings/summary'),
     apiGet('/agents'),
     apiGet('/bridge/health'),
     apiGet('/openapi.json')
@@ -1061,14 +1061,12 @@ async function loadPosturePanel() {
       <p role="alert" class="muted">Score unavailable - the API did not answer.</p></div>`);
   }
 
-  if (Array.isArray(findings)) {
-    const order = ['critical', 'high', 'medium', 'low', 'info'];
-    const colours = { critical: 'var(--sev-critical)', high: 'var(--sev-high)', medium: 'var(--sev-medium)', low: 'var(--sev-low)', info: 'var(--sev-info)' };
-    const counts = {};
-    findings.forEach(f => {
-      const k = String(f.severity || 'unknown').toLowerCase();
-      counts[k] = (counts[k] || 0) + 1;
-    });
+  if (summary && typeof summary.open === 'number') {
+    // Counts come from the server aggregate, never from a fetched page: a page is capped at 500 rows while
+    // this tenant holds 872 open findings, so counting the list understated every bar.
+    const order = ['critical', 'high', 'medium', 'low'];
+    const colours = { critical: 'var(--sev-critical)', high: 'var(--sev-high)', medium: 'var(--sev-medium)', low: 'var(--sev-low)' };
+    const counts = { critical: summary.critical || 0, high: summary.high || 0, medium: summary.medium || 0, low: summary.low || 0 };
     const max = Math.max(1, ...order.map(k => counts[k] || 0));
     const bars = order.map(k => {
       const n = counts[k] || 0;
@@ -1084,7 +1082,10 @@ async function loadPosturePanel() {
     }).join('');
     blocks.push(`<div style="margin-bottom:20px">${label('Open findings by severity')}
       <div style="margin-top:8px">${bars}</div>
-      <div class="muted" style="font-size:12px">${findings.length} open findings in this tenant</div></div>`);
+      <div class="muted" style="font-size:12px">${summary.open} open of ${summary.total} findings &middot; ${summary.kev || 0} on the CISA KEV list</div></div>`);
+  } else if (summary === null) {
+    blocks.push(`<div style="margin-bottom:20px">${label('Open findings by severity')}
+      <div class="muted" style="font-size:12px;margin-top:8px">Not verified: the summary could not be read, so no count is shown.</div></div>`);
   } else {
     blocks.push(`<div style="margin-bottom:20px">${label('Open findings by severity')}
       <p role="alert" class="muted">Findings unavailable - the API did not answer.</p></div>`);
@@ -1216,32 +1217,45 @@ async function loadBranding() {
 }
 
 async function loadFindings() {
-    const result = await apiResult('/findings');
-    const findings = result.ok ? result.data : null;
+    // Two reads on purpose: the list is capped by paging, the summary is not. The page states how many rows it
+    // is showing out of how many exist, so a truncated table is never mistaken for the whole estate.
+    const [summaryResult, listResult] = await Promise.all([
+        apiResult('/findings/summary'),
+        apiResult('/findings?status=open&limit=200')
+    ]);
+    const findings = listResult.ok ? listResult.data : null;
+    const summary = summaryResult.ok ? summaryResult.data : null;
     if (findings === null) {
-        // The reason is stated, because "unavailable" covers a permission boundary, an outage and a
-        // timeout, and an operator should not have to guess which one they are looking at.
-        const label = unavailableLabel(result);
+        const label = unavailableLabel(listResult);
         const why = label === 'Restricted' ? 'Your account cannot read findings on this platform.'
             : label === 'Unreachable' ? 'The API could not be reached, so nothing is known about this list.'
             : label === 'Timed out' ? 'The API did not answer in time, so nothing is known about this list.'
-            : 'Findings could not be verified (HTTP ' + result.status + ').';
+            : 'Findings could not be verified (HTTP ' + listResult.status + ').';
         document.getElementById('findingsList').innerHTML = '<p role="alert">' + escapeHtml(why) + '</p>';
         document.getElementById('stat-findings').textContent = label;
         return;
     }
-    if (findings && findings.length > 0) {
-        let html = '<table><tr><th>Severity</th><th>Title</th><th>Source</th><th>Status</th><th>Created</th></tr>';
-        findings.slice(0,25).forEach(f => {
+    const openCount = summary && typeof summary.open === 'number' ? summary.open : null;
+    document.getElementById('stat-findings').textContent = openCount === null ? String(findings.length) : String(openCount);
+    if (findings.length > 0) {
+        const shown = Math.min(25, findings.length);
+        let html = '<table><tr><th>Severity</th><th>Title</th><th>Source</th><th>Status</th><th>Detected</th></tr>';
+        findings.slice(0, shown).forEach(f => {
             const sevClass = f.severity === 'critical' ? 'sev-c' : f.severity === 'high' ? 'sev-h' : f.severity === 'medium' ? 'sev-m' : 'sev-l';
-            html += `<tr><td class="${sevClass}" style="font-weight:600;text-transform:uppercase">${escapeHtml(f.severity)}</td><td>${escapeHtml(f.title)}</td><td class="muted">${escapeHtml(f.source)}</td><td><span class="badge ${f.status==='open'?'badge-red':'badge-green'}">${escapeHtml(f.status)}</span></td><td class="muted">${formatDate(f.created_at)}</td></tr>`;
+            const detected = f.created_at ? new Date(f.created_at).toLocaleString() : 'unknown';
+            html += `<tr><td class="${sevClass}" style="font-weight:600;text-transform:uppercase">${escapeHtml(f.severity)}</td>`
+                 + `<td>${escapeHtml(String(f.title || ''))}</td>`
+                 + `<td>${escapeHtml(String(f.source || 'unknown'))}</td>`
+                 + `<td>${escapeHtml(String(f.status || ''))}</td>`
+                 + `<td>${escapeHtml(detected)}</td></tr>`;
         });
         html += '</table>';
-        document.getElementById('findingsList').innerHTML = html;
-        document.getElementById('stat-findings').textContent = findings.length;
+        const scope = openCount === null
+            ? `Showing ${shown} of the ${findings.length} open findings this page fetched. The total is unknown because the summary could not be read.`
+            : `Showing ${shown} of ${openCount} open findings, newest first. ${summary.resolved || 0} resolved and ${summary.kev || 0} on the CISA KEV list.`;
+        document.getElementById('findingsList').innerHTML = html + `<p class="muted" style="font-size:12px">${escapeHtml(scope)}</p>`;
     } else {
-        document.getElementById('findingsList').innerHTML = '<p class="muted">No findings recorded. Run a scan to generate findings.</p>';
-        document.getElementById('stat-findings').textContent = '0';
+        document.getElementById('findingsList').innerHTML = '<p>No open findings are recorded for this tenant.</p>';
     }
 }
 
