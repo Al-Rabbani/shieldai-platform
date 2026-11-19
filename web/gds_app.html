@@ -115,11 +115,11 @@ tr:hover{background:var(--surface2)}
 <div class="nav-inner">
 <a href="/" class="logo">GDS<span>OS</span></a>
 <div class="nav-links">
-<a href="#" onclick="showPage('overview');return false" id="nav-overview" class="active">Overview</a>
-<a href="#" onclick="showPage('findings');return false" id="nav-findings">Findings</a>
-<a href="#" onclick="showPage('incidents');return false" id="nav-incidents">Incidents</a>
-<a href="#" onclick="showPage('cloud');return false" id="nav-cloud">Cloud</a>
-<a href="#" onclick="showPage('agents');return false" id="nav-agents">Agents</a>
+<a href="#/overview" data-route="overview" id="nav-overview">Overview</a>
+<a href="#/findings" data-route="findings" id="nav-findings">Findings</a>
+<a href="#/incidents" data-route="incidents" id="nav-incidents">Incidents</a>
+<a href="#/cloud" data-route="cloud" id="nav-cloud">Cloud</a>
+<a href="#/agents" data-route="agents" id="nav-agents">Agents</a>
 <a href="https://api.globaldigitalsecurity.io/docs" target="_blank">API Docs</a>
 <a href="#" onclick="logout();return false" id="nav-user" style="color:var(--primary);font-weight:600"></a>
 </div>
@@ -305,16 +305,72 @@ function showDashboard() {
     loadOverview();
 }
 
+/* ---- Routing (P10) ------------------------------------------------------------------------------
+   The nav used to call showPage() directly, so a page had no address: it could not be linked,
+   bookmarked or reached with the back button, and a refresh always dropped the reader on Overview.
+   The route now lives in the hash, so #/findings is a real location that survives reload and
+   history navigation. routeFromHash is deliberately pure so it can be tested outside a browser. */
+const ROUTES = { overview:'Overview', findings:'Findings', incidents:'Incidents', cloud:'Cloud', agents:'Agents' };
+
+function routeFromHash(hash) {
+  const raw = String(hash == null ? '' : hash).replace(/^#\/?/, '').split('?')[0];
+  return Object.prototype.hasOwnProperty.call(ROUTES, raw) ? raw : 'overview';
+}
+
+function setActiveNav(page) {
+  document.querySelectorAll('.nav-links a[data-route]').forEach(a => {
+    const on = a.getAttribute('data-route') === page;
+    a.classList.toggle('active', on);
+    if (on) { a.setAttribute('aria-current', 'page'); } else { a.removeAttribute('aria-current'); }
+  });
+  window.__gdsBrandName = (ROUTES[page] + ' \u00b7 GDS OS'); document.title = window.__gdsBrandName;
+}
+
+async function withBusy(page, loader) {
+  // aria-busy plus a visible status line: a view that is still fetching must not look like a view
+  // that found nothing, which is the failure mode that makes an operator distrust the whole console.
+  const el = document.getElementById('page-' + page);
+  if (!el) return loader();
+  el.setAttribute('aria-busy', 'true');
+  let status = el.querySelector('.route-loading');
+  if (!status) {
+    status = document.createElement('p');
+    status.className = 'route-loading muted';
+    status.setAttribute('role', 'status');
+    el.prepend(status);
+  }
+  status.textContent = 'Loading ' + ROUTES[page] + '\u2026';
+  try { await loader(); }
+  finally {
+    el.setAttribute('aria-busy', 'false');
+    const done = el.querySelector('.route-loading');
+    if (done) { done.remove(); }
+  }
+}
+
+function applyRoute() {
+  const page = routeFromHash(location.hash);
+  showPage(page);
+  setActiveNav(page);
+  const main = document.getElementById('page-' + page);
+  if (main) {
+    if (!main.hasAttribute('tabindex')) main.setAttribute('tabindex', '-1');
+    main.focus({ preventScroll: true });
+  }
+}
+
+window.addEventListener('hashchange', applyRoute);
+
 function showPage(page) {
     ['overview','findings','incidents','cloud','agents'].forEach(p => {
         document.getElementById('page-'+p).classList.toggle('hidden', p !== page);
         const nav = document.getElementById('nav-'+p);
         if (nav) nav.classList.toggle('active', p === page);
     });
-    if (page === 'findings') loadFindings();
-    if (page === 'incidents') loadIncidents();
-    if (page === 'cloud') loadCloud();
-    if (page === 'agents') loadAgents();
+    if (page === 'findings') withBusy('findings', loadFindings);
+    if (page === 'incidents') withBusy('incidents', loadIncidents);
+    if (page === 'cloud') withBusy('cloud', loadCloud);
+    if (page === 'agents') withBusy('agents', loadAgents);
 }
 
 async function apiGet(path) {
@@ -653,6 +709,13 @@ async function loadAgents() {
   } finally {
     container.setAttribute('aria-busy', 'false');
   }
+}
+
+/* Start on the address the reader arrived at, not always on Overview. */
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', applyRoute);
+} else {
+  applyRoute();
 }
 </script>
 </body>
