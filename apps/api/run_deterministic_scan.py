@@ -115,12 +115,68 @@ async def check_headers(db, tenant_id, base_url):
 
 
 async def check_ports(db, tenant_id, host="127.0.0.1"):
-    """Real nmap through the existing governed executor."""
+    """Real nmap through the governed capability path.
+
+    This used to call gds_api.tool_gateway.execute_tool, which routes to the legacy kernel executor
+    and refuses every governed tool with GOVERNED_CAPABILITY_REQUIRED - so port coverage could never
+    work, at any time, regardless of authorisation. The governed path is: propose a capability
+    request against a real mission, let the broker decide, and only then execute. If the target is
+    not authorised or the required human approval is absent, the decision is reported instead of a
+    generic tool failure, so the reason is visible rather than hidden.
+    """
+    import uuid as _uuid
+    from gds_api.capabilities.broker import evaluate_capability_request
+    from gds_api.capabilities.gateway import execute_capability_request
+
+    tid = _uuid.UUID(str(tenant_id))
+    owner = (os.environ.get("GDS_OWNER_USER_ID", "") or "").strip()
+    if not owner:
+        log(f"nmap {host}: NOT ATTEMPTED - GDS_OWNER_USER_ID is not configured, so a capability request cannot be attributed")
+        return {"new": 0, "dupe": 0, "failed": 1, "reason": "no owner identity"}
+    uid = _uuid.UUID(owner)
+
+    from sqlalchemy import text as _text
+    mission_id = _uuid.uuid4()
+    await db.execute(_text("SELECT set_config('gds.tenant_id', :t, true)"), {"t": str(tid)})
+    await db.execute(_text(
+        "INSERT INTO missions (id, tenant_id, requested_by_user_id, objective, status, mission_type, created_at) "
+        "VALUES (:id, :tid, :uid, :obj, 'running', 'port_scan', NOW())"),
+        {"id": str(mission_id), "tid": str(tid), "uid": str(uid),
+         "obj": f"Scheduled port coverage of {host}"})
+    await db.commit()
+
+    # Re-bind AFTER the commit. The commit returns the pooled connection, so the tenant context
+    # from before it is gone; the broker's authorisation step reads the user table under FORCE RLS
+    # and an unbound read makes the requesting user invisible, which reports as
+    # "The requesting user could not be authorized".
+    await db.execute(_text("SELECT set_config('gds.tenant_id', :t, true)"), {"t": str(tid)})
+
     try:
-        from gds_api.tool_gateway import execute_tool
-        res = await execute_tool("nmap_scan", action="execute", payload={"target": host})
+        evaluation = await evaluate_capability_request(
+            db, tenant_id=tid, user_id=uid, mission_id=mission_id,
+            requesting_agent_id="penetration_testing_coordinator", supervising_agent_id=None,
+            capability_key="network.port_scan", requested_tool_id="nmap_scan",
+            target_type="domain", target_reference=host, target_scope=None,
+            purpose=f"scheduled exposure scan: port coverage of {host}"[:200],
+            requested_parameters={"target": host},
+        )
     except Exception as e:
-        log(f"nmap {host}: TOOL FAILED {type(e).__name__}: {e}")
+        log(f"nmap {host}: capability request raised {type(e).__name__}: {e}")
+        return {"new": 0, "dupe": 0, "failed": 1}
+
+    if evaluation.decision != "ALLOW":
+        log(f"nmap {host}: capability {evaluation.decision} - {getattr(evaluation, 'safe_message', '') or 'no reason given'}"
+            f" (approval_id={getattr(evaluation, 'approval_id', None)})")
+        return {"new": 0, "dupe": 0, "failed": 1, "decision": evaluation.decision}
+
+    try:
+        res = await execute_capability_request(
+            db, tenant_id=tid, request_id=evaluation.request_id,
+            tool_name="nmap_scan", input_data={"target": host},
+            user_id=uid, mission_id=mission_id,
+        )
+    except Exception as e:
+        log(f"nmap {host}: governed execution failed {type(e).__name__}: {e}")
         return {"new": 0, "dupe": 0, "failed": 1}
 
     if not isinstance(res, dict) or not res.get("success", True):
@@ -209,7 +265,10 @@ async def main():
             for k in totals:
                 totals[k] += r[k]
 
-        r = await check_ports(db, tenant_id)
+        # The scheduled scan measures the real internet-facing surface, not a loopback listener:
+        # a private host is never an exposure and the scan deliberately files no finding for one.
+        _port_host = os.environ.get("GDS_SCAN_PUBLIC_HOST", "www.globaldigitalsecurity.io").strip()
+        r = await check_ports(db, tenant_id, host=_port_host)
         for k in totals:
             totals[k] += r[k]
 

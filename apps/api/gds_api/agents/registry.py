@@ -970,13 +970,13 @@ AGENT_REGISTRY: dict[str, AgentManifest] = {
             "list - you never run a technique the engagement prohibits, and you "
             "never touch a target outside its explicit scope."
         ),
-        tool_names=("coordinate_pentest_engagement",),
+        tool_names=("coordinate_pentest_engagement", "nmap_scan"),
         team=Team.RED,
         department="Penetration Testing",
         risk_ceiling=RiskCeiling.R4,
         status=AgentStatus.DEGRADED,
         target_authorisation_required=True,
-        allowed_capability_ids=("red_team.coordinate_pentest_engagement",),
+        allowed_capability_ids=("red_team.coordinate_pentest_engagement", "network.port_scan"),
         workforce="purple-cybersecurity-workforce",
         purple_role_id="purple-07",
         purple_role_name="Penetration Testing Coordinator Agent",

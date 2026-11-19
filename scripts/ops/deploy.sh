@@ -25,6 +25,12 @@ if ! git checkout "$REF" >/dev/null 2>&1; then
   fail "cannot checkout $REF"; exit 4
 fi
 
+echo "  installing node-exporter listen config..."
+if [ -f config/prometheus/node-exporter.default ]; then
+  install -m 644 config/prometheus/node-exporter.default /etc/default/prometheus-node-exporter
+  systemctl restart prometheus-node-exporter 2>/dev/null || true
+fi
+
 echo "  installing prometheus scrape config..."
 if [ -f config/prometheus/gds.yml ]; then
   install -m 644 config/prometheus/gds.yml /etc/prometheus/gds.yml
