@@ -59,6 +59,17 @@ if [ -n "${OFFHOST_TARGET:-}" ]; then
     echo "[$(date -u +%FT%TZ)] OFFHOST FAILED -> $OFFHOST_TARGET" >> "$LOG"
     exit 3
   fi
+elif [ -n "${B2_BUCKET:-}" ]; then
+  # Encrypted push to Backblaze B2. The dump is gpg-symmetric AES256 encrypted before it leaves the
+  # host, so the bucket never holds readable tenant data. Exit non-zero on failure so the watcher
+  # keeps alerting rather than silently reporting a copy that did not happen.
+  if /opt/gds-os/apps/api/venv/bin/python /usr/local/bin/gds-b2-upload.py "$OUT" "$OUT.sha256" "$MANIFEST" >>"$LOG" 2>&1; then
+    date -u +%FT%TZ > /var/lib/gds-offhost.last
+    echo "[$(date -u +%FT%TZ)] OFFHOST_B2 ok -> $B2_BUCKET (encrypted)" >> "$LOG"
+  else
+    echo "[$(date -u +%FT%TZ)] OFFHOST_B2 FAILED -> $B2_BUCKET" >> "$LOG"
+    exit 3
+  fi
 else
   echo "[$(date -u +%FT%TZ)] OFFHOST_NOT_CONFIGURED: dump exists only on this host" >> "$LOG"
 fi

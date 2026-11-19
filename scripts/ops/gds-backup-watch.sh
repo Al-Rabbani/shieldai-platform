@@ -66,8 +66,8 @@ else
 fi
 
 set -a; . /opt/.env 2>/dev/null || true; set +a
-if [ -z "${OFFHOST_TARGET:-}" ]; then
-    alert offhost "no off-host backup target configured (OFFHOST_TARGET unset): every dump exists only on this host"
+if [ -z "${OFFHOST_TARGET:-}" ] && [ -z "${B2_BUCKET:-}" ]; then
+    alert offhost "no off-host backup target configured (neither OFFHOST_TARGET nor B2_BUCKET is set): every dump exists only on this host"
     rc=1
 else
     if [ -f /var/lib/gds-offhost.last ]; then
@@ -79,7 +79,7 @@ else
             rm -f "$STATEDIR/offhost"
         fi
     else
-        alert offhost "OFFHOST_TARGET is configured but no successful copy has ever been recorded"
+        alert offhost "an off-host target is configured (${OFFHOST_TARGET:-B2:$B2_BUCKET}) but no successful copy has ever been recorded"
         rc=1
     fi
 fi
