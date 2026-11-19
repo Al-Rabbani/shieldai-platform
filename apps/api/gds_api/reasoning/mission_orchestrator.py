@@ -15,7 +15,7 @@ import uuid
 import asyncio
 import json
 import threading
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Dict, Any, List, Optional
 
 logger = logging.getLogger("gds.kernel.mission")
@@ -632,9 +632,36 @@ def get_mission_status(mission_id: str) -> Dict[str, Any]:
     # Check PostgreSQL
     db_result = _load_mission_from_db(mission_id)
     if db_result:
-        return {
+        # 19 Nov 2026: missions live in process memory, so a deploy restart kills an in-flight one.
+        # Its row still said "running" and the status endpoint repeated that indefinitely, telling
+        # the caller work was progressing when no worker existed. A mission claiming to be active
+        # but untouched for 15 minutes is now reported as interrupted, with the reason.
+        status_value = db_result.get("status", "unknown")
+        last_seen = None
+        for key in ("updated_at", "completed_at", "started_at", "created_at"):
+            if db_result.get(key):
+                last_seen = db_result.get(key)
+                break
+        age_seconds = None
+        if last_seen is not None:
+            try:
+                parsed = last_seen if isinstance(last_seen, datetime) else datetime.fromisoformat(
+                    str(last_seen).replace("Z", "+00:00"))
+                if parsed.tzinfo is None:
+                    parsed = parsed.replace(tzinfo=UTC)
+                age_seconds = (datetime.now(UTC) - parsed).total_seconds()
+            except (TypeError, ValueError):
+                age_seconds = None
+        interrupted = (
+            str(status_value) in {"running", "planning", "queued", "executing", "starting"}
+            and age_seconds is not None
+            and age_seconds > 900
+        )
+        if interrupted:
+            status_value = "interrupted"
+        result = {
             "mission_id": mission_id,
-            "status": db_result.get("status", "unknown"),
+            "status": status_value,
             "goal": db_result.get("goal", ""),
             "agent_results": db_result.get("agent_results", []),
             "unified_report": db_result.get("unified_report", ""),
@@ -646,6 +673,15 @@ def get_mission_status(mission_id: str) -> Dict[str, Any]:
             "mission_pid": db_result.get("mission_pid", ""),
             "source": "postgresql"
         }
+        if age_seconds is not None:
+            result["seconds_since_update"] = int(age_seconds)
+        if interrupted:
+            result["detail"] = (
+                "no worker is advancing this mission: its last recorded update was "
+                f"{int(age_seconds // 60)} minutes ago. Missions run in process memory, so an API "
+                "restart (for example a deploy) interrupts one mid-flight."
+            )
+        return result
     
     return {"mission_id": mission_id, "status": "not_found"}
 

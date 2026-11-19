@@ -418,7 +418,7 @@ async def list_cloud_posture_results(
 # ---- Cloud Score ----------------------------------------------------------------
 
 
-@router.get("/score")
+@router.get("/posture/score")
 async def get_cloud_score(
     environment_id: uuid.UUID | None = None,
     current_user: CurrentUser = Depends(require_permission("cloud:evaluations:read")),
