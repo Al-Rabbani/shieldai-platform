@@ -184,6 +184,8 @@ app.include_router(audit.router)
 app.include_router(policy.router)
 app.include_router(approvals.router)
 app.include_router(evidence.router)
+from gds_api import webhooks as _webhooks  # noqa: E402
+app.include_router(_webhooks.router)
 app.include_router(notifications.router)
 app.include_router(missions.router)
 app.include_router(agents_router.router)

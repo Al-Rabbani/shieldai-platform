@@ -41,20 +41,7 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: python scripts/security_gate_client.py gate
 
-  autofix-trigger:
-    name: Request policy-approved AutoFix
-    runs-on: ubuntu-latest
-    needs: security-gate
-    if: ${{ always() && needs.security-gate.outputs.verdict == 'blocked' && vars.SHIELDAI_AUTOFIX_ENABLED == 'true' }}
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
-        with:
-          python-version: '3.11'
-      - name: Request fixes only for a validated blocking verdict
-        env:
-          SHIELDAI_AUTOFIX_URL: ${{ secrets.SHIELDAI_AUTOFIX_URL }}
-          SHIELDAI_AUTOFIX_AUTHORIZATION: ${{ secrets.SHIELDAI_AUTOFIX_AUTHORIZATION }}
-          GATE_VERDICT: ${{ needs.security-gate.outputs.verdict }}
-          AUTOFIX_ENABLED: ${{ vars.SHIELDAI_AUTOFIX_ENABLED }}
-        run: python scripts/security_gate_client.py autofix
+  # The autofix job was removed on 19 Nov 2026. It posted to SHIELDAI_AUTOFIX_URL, which no endpoint
+  # serves (openapi.json has zero autofix paths), and an unattended job that commits fixes would bypass
+  # the governed approval path. Fixes come from tool_gateway._auto_fix_finding as a mission plan that a
+  # human approves. The gate blocks; it does not rewrite code.
