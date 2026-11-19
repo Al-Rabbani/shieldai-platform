@@ -196,6 +196,21 @@ async def invoices(
     return {"invoices": await list_invoices(db=db, user_id=str(user.user_id if hasattr(user, "user_id") else user.id))}
 
 
+async def _bind(db, tenant_id):
+    """Re-assert the tenant on the CURRENT transaction.
+
+    set_config(..., true) is transaction-local, so any commit or rollback anywhere in the call chain
+    silently drops it - including a commit inside handle_webhook_event. After that, the next write is
+    filtered away by the RLS policy and reports success while changing nothing, which is how the
+    processed flag ended up false on a row whose processing had in fact succeeded. Every write below
+    therefore re-binds immediately before it runs.
+    """
+    from sqlalchemy import text
+
+    if tenant_id:
+        await db.execute(text("SELECT set_config('gds.tenant_id', :t, true)"), {"t": str(tenant_id)})
+
+
 async def _resolve_event_tenant(db, event):
     """Work out which tenant a Stripe event belongs to, before any tenant is bound.
 
@@ -297,8 +312,7 @@ async def webhook(request: Request, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=400, detail="Event has no id")
 
     tenant_id, user_id = await _resolve_event_tenant(db, event)
-    if tenant_id:
-        await db.execute(text("SELECT set_config('gds.tenant_id', :t, true)"), {"t": str(tenant_id)})
+    await _bind(db, tenant_id)
 
     inserted = await db.execute(text(
         "INSERT INTO billing_events (stripe_event_id, event_type, livemode, tenant_id, user_id, "
@@ -313,14 +327,12 @@ async def webhook(request: Request, db: AsyncSession = Depends(get_db)):
         return {"received": True, "duplicate": True, "event_id": event_id}
 
     record_id = str(row[0])
-    # The commit returned the pooled connection, so the tenant bind is gone; re-assert it before
-    # touching the row again or the update is filtered away by the very policy that protects it.
-    if tenant_id:
-        await db.execute(text("SELECT set_config('gds.tenant_id', :t, true)"), {"t": str(tenant_id)})
 
     try:
         result = await handle_webhook_event(db=db, event=event)
+        await _bind(db, tenant_id)          # handle_webhook_event commits; the bind is gone
         await _sync_tenant_from_event(db, tenant_id, event)
+        await _bind(db, tenant_id)
         await db.execute(text(
             "UPDATE billing_events SET processed = true, processing_result = CAST(:r AS jsonb) WHERE id = :i"),
             {"r": json.dumps(result, default=str), "i": record_id})
@@ -328,8 +340,7 @@ async def webhook(request: Request, db: AsyncSession = Depends(get_db)):
         return {"received": True, "event_id": event_id, "result": result}
     except Exception as e:
         await db.rollback()
-        if tenant_id:
-            await db.execute(text("SELECT set_config('gds.tenant_id', :t, true)"), {"t": str(tenant_id)})
+        await _bind(db, tenant_id)
         await db.execute(text("UPDATE billing_events SET error = :e WHERE id = :i"),
                          {"e": f"{type(e).__name__}: {e}"[:500], "i": record_id})
         await db.commit()
