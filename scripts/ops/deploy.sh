@@ -66,7 +66,7 @@ stamp_release "$NEW"
 # /usr/local/bin silently keeps running an older backup/watcher/drill than the repo holds - the
 # failure mode where a fix is committed, reviewed and deployed, and the scheduled job never sees it.
 echo "  installing ops scripts..."
-for script in gds-backup.sh gds-backup-watch.sh gds-restore-drill.sh gds-b2-upload.py; do
+for script in gds-backup.sh gds-backup-watch.sh gds-restore-drill.sh gds-b2-upload.py assess_compliance.py; do
   if [ -f "scripts/ops/$script" ]; then
     install -m 750 -o root -g root "scripts/ops/$script" "/usr/local/bin/$script" \
       && echo "    installed $script" || fail "could not install $script"

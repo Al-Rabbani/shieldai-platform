@@ -37,41 +37,115 @@ async def list_frameworks(
     user: CurrentUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
-    rows = (await db.execute(text(
-        "SELECT framework, "
-        "COUNT(*) AS controls, "
-        "COUNT(*) FILTER (WHERE lower(status) = 'pass') AS passing, "
-        "COUNT(*) FILTER (WHERE lower(status) = 'fail') AS failing, "
-        "COUNT(*) FILTER (WHERE lower(status) NOT IN ('pass', 'fail')) AS not_tested, "
-        "MAX(assessment_date) AS last_assessed "
-        "FROM compliance_assessments GROUP BY framework ORDER BY framework"
+    """Per-framework compliance position, with coverage stated alongside the score.
+
+    The score is deliberately NOT "percent of the framework compliant". It is the pass rate over
+    controls that were actually assessed, and coverage_pct sits next to it because a 100% score over
+    7 assessed controls out of 58 is not a compliant framework. Manual rows carry no evidence and are
+    counted separately rather than being allowed to lift the score.
+    """
+    fw_rows = (await db.execute(text(
+        "SELECT framework_key, name, version, official_control_count "
+        "FROM compliance_frameworks ORDER BY framework_key"
     ))).mappings().all()
 
+    counts = (await db.execute(text(
+        "SELECT framework, "
+        "COUNT(*) FILTER (WHERE verdict_source = 'automated') AS automated, "
+        "COUNT(*) FILTER (WHERE verdict_source = 'automated' AND lower(status) = 'pass') AS passing, "
+        "COUNT(*) FILTER (WHERE verdict_source = 'automated' AND lower(status) = 'fail') AS failing, "
+        "COUNT(*) FILTER (WHERE verdict_source = 'automated' AND lower(status) NOT IN ('pass','fail')) AS not_tested, "
+        "COUNT(*) FILTER (WHERE verdict_source = 'manual') AS manual, "
+        "MAX(assessed_at) AS last_assessed "
+        "FROM compliance_assessments GROUP BY framework"
+    ))).mappings().all()
+    by_fw = {r["framework"]: r for r in counts}
+
     frameworks = []
-    total_controls = total_passing = total_failing = 0
-    for r in rows:
-        passing, failing = int(r["passing"]), int(r["failing"])
-        total_controls += int(r["controls"])
-        total_passing += passing
-        total_failing += failing
+    tot_assessed = tot_pass = tot_fail = 0
+    for f in fw_rows:
+        r = by_fw.get(f["framework_key"])
+        passing = int(r["passing"]) if r else 0
+        failing = int(r["failing"]) if r else 0
+        not_tested = int(r["not_tested"]) if r else 0
+        assessed = passing + failing
+        official = int(f["official_control_count"] or 0)
+        tot_assessed += assessed
+        tot_pass += passing
+        tot_fail += failing
         frameworks.append({
-            "framework": r["framework"],
-            "controls": int(r["controls"]),
+            "framework": f["framework_key"],
+            "name": f["name"],
+            "version": f["version"],
+            "official_control_count": official,
+            "catalogued": (passing + failing + not_tested),
+            "assessed": assessed,
             "passing": passing,
             "failing": failing,
-            "not_tested": int(r["not_tested"]),
-            "score": score_of(passing, failing),
-            "last_assessed": r["last_assessed"].isoformat() if r["last_assessed"] else None,
+            "not_tested": not_tested,
+            "manual_unevidenced": int(r["manual"]) if r else 0,
+            "coverage_pct": round(100.0 * assessed / official, 1) if official else None,
+            "score_over_assessed": round(100.0 * passing / assessed, 1) if assessed else None,
+            "last_assessed": r["last_assessed"].isoformat() if r and r["last_assessed"] else None,
         })
 
     return {
-        "overall_score": score_of(total_passing, total_failing),
-        "total_controls": total_controls,
-        "passing": total_passing,
-        "failing": total_failing,
+        "score_over_assessed": round(100.0 * tot_pass / tot_assessed, 1) if tot_assessed else None,
+        "total_assessed": tot_assessed,
+        "passing": tot_pass,
+        "failing": tot_fail,
         "frameworks": frameworks,
+        "score_basis": "pass rate over controls that were actually assessed; not a percentage of the framework",
         "tenant_scoped": False,
         "note": TENANT_SCOPE_NOTE,
+    }
+
+
+@router.get("/controls")
+async def list_controls(
+    framework: str | None = None,
+    verdict: str | None = None,
+    limit: int = 200,
+    user: CurrentUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Control-level verdicts with the observed facts behind each one."""
+    clauses, params = [], {"limit": max(1, min(limit, 500))}
+    if framework:
+        clauses.append("c.framework_key = :fw")
+        params["fw"] = framework
+    if verdict:
+        clauses.append("a.status = :v")
+        params["v"] = verdict
+    where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
+
+    rows = (await db.execute(text(
+        "SELECT c.framework_key, c.control_ref, c.title, c.category, c.check_key, c.severity, "
+        "c.mapping_basis, a.status, a.collector, a.observed, a.evidence_sha, a.assessed_at "
+        "FROM compliance_controls c "
+        "LEFT JOIN compliance_assessments a "
+        "  ON a.framework = c.framework_key AND a.control_id = c.control_ref "
+        "  AND a.verdict_source = 'automated' "
+        f"{where} ORDER BY c.framework_key, c.control_ref LIMIT :limit"
+    ), params)).mappings().all()
+
+    return {
+        "controls": [{
+            "framework": r["framework_key"],
+            "control_ref": r["control_ref"],
+            "title": r["title"],
+            "category": r["category"],
+            "severity": r["severity"],
+            "check_key": r["check_key"],
+            "mapping_basis": r["mapping_basis"],
+            "verdict": r["status"],
+            "collector": r["collector"],
+            "observed": r["observed"],
+            "evidence_sha": r["evidence_sha"],
+            "assessed_at": r["assessed_at"].isoformat() if r["assessed_at"] else None,
+        } for r in rows],
+        "count": len(rows),
+        "note": "verdict is not_tested when no automated check exists or the check could not collect facts",
     }
 
 
