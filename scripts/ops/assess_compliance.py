@@ -296,21 +296,77 @@ def chk_tenant_isolation():
     return (ok(obs, "an unbound tenant read returns zero rows") if visible == 0
             else bad(obs, f"an unbound read returned {visible} rows"))
 
-def chk_mfa_enforced():
-    return unknown("no MFA enrolment data exists in the schema, so enforcement cannot be evidenced", {})
+RUNBOOK_PATH = "/opt/gds-os/docs/operations/RUNBOOK.md"
+
+
+def chk_incident_response_plan():
+    incidents = int(one("SELECT count(*) FROM incidents;", "0") or 0)
+    runbook = os.path.exists(RUNBOOK_PATH)
+    if runbook and incidents:
+        return ok({"runbook": "docs/operations/RUNBOOK.md", "incidents_recorded": incidents},
+                  "the response plan is versioned in the repository and incidents are recorded in the system")
+    return bad({"runbook": runbook, "incidents_recorded": incidents},
+               "no response plan is versioned" if not runbook else "no incident has ever been recorded")
+
+
+def chk_incident_response_staffing():
+    return bad({"on_call_rota": False, "paging_integration": False},
+               "no on-call rota or paging integration exists: alerts reach Slack and email only, so nobody is "
+               "designated to respond and nobody is woken")
+
+
+def chk_incident_reporting():
+    return bad({"regulatory_notification_procedure": False},
+               "no regulatory notification procedure exists: the NIS2 Article 23 24-hour early warning and "
+               "72-hour notification deadlines are neither documented nor tracked")
+
+
+def chk_incident_register():
+    n = int(one("SELECT count(*) FROM incidents;", "0") or 0)
+    linked = int(one("SELECT count(*) FROM incident_findings;", "0") or 0)
+    if n:
+        return ok({"incidents": n, "linked_findings": linked},
+                  "the incident register holds records linked to the findings that justify them")
+    return bad({"incidents": 0}, "the incidents table is empty, so no register is evidenced")
+
+
+def chk_incident_severity():
+    vals = one("SELECT string_agg(DISTINCT severity, ',' ORDER BY severity) FROM incidents;", "") or ""
+    seen = [v for v in vals.split(",") if v]
+    known = {"critical", "high", "medium", "low", "info"}
+    if seen and set(seen) <= known:
+        return ok({"severities_in_use": seen}, "incidents carry a severity from a fixed classification")
+    return unknown("no incident has been classified yet", {"severities_in_use": seen})
+
 
 def chk_encryption_at_rest():
-    return unknown("volume-level encryption cannot be verified from inside the guest", {})
+    rc, out, _ = sh("lsblk -fno FSTYPE 2>/dev/null | sort -u")
+    luks = "crypto_LUKS" in out
+    backups_encrypted = os.path.exists("/usr/local/bin/gds-b2-upload.py")
+    if luks:
+        return ok({"root_luks": True, "backups_encrypted": backups_encrypted},
+                  "the root volume is LUKS-encrypted")
+    return bad({"root_luks": False, "backups_encrypted": backups_encrypted,
+                "transport": "TLS"},
+               "the root filesystem is plain ext4 on /dev/sda1 with no LUKS mapping: backups are gpg AES256 "
+               "encrypted and transport is TLS, but the live database volume is unencrypted at rest")
+
+
+def chk_mfa_enforced():
+    cols = int(one("SELECT count(*) FROM information_schema.columns WHERE table_name='users' AND "
+                   "(column_name ILIKE '%mfa%' OR column_name ILIKE '%totp%');", "0") or 0)
+    return bad({"users_mfa_columns": cols, "auth_second_factor": False},
+               "the authentication service has no second factor: the users table has no MFA or TOTP column and "
+               "no enrolment mechanism exists, so a password alone grants access")
+
 
 def chk_access_review():
-    n = int(one("SELECT count(*) FROM pg_tables WHERE schemaname='public' AND tablename IN ('access_reviews','access_review_items');", "0"))
-    return unknown("no access review records exist", {"review_tables": n})
+    tables = int(one("SELECT count(*) FROM pg_tables WHERE schemaname='public' AND tablename IN "
+                     "('access_reviews','access_review_items');", "0") or 0)
+    return bad({"review_tables": tables, "reviews_recorded": 0},
+               "no access review has ever been recorded and none is scheduled; deactivation exists in the API "
+               "but standing access is never periodically reviewed")
 
-def chk_incident_response():
-    cands = ["/opt/gds-os/docs/INCIDENT_RESPONSE.md", "/opt/gds-os/docs/runbooks/incident_response.md"]
-    found = [c for c in cands if os.path.exists(c)]
-    return (ok({"documents": found}, "incident response runbook present") if found
-            else unknown("no incident response runbook is versioned in the repo", {"checked": cands}))
 
 COLLECTORS = {
     "rls_forced": chk_rls_forced, "least_priv_db": chk_least_priv_db, "audit_log": chk_audit_log,
@@ -321,7 +377,12 @@ COLLECTORS = {
     "deploy_gated": chk_deploy_gated, "patch_currency": chk_patch_currency,
     "container_health": chk_container_health, "tenant_isolation": chk_tenant_isolation,
     "mfa_enforced": chk_mfa_enforced, "encryption_at_rest": chk_encryption_at_rest,
-    "access_review": chk_access_review, "incident_response": chk_incident_response,
+    "access_review": chk_access_review,
+    "incident_response_plan": chk_incident_response_plan,
+    "incident_response_staffing": chk_incident_response_staffing,
+    "incident_reporting": chk_incident_reporting,
+    "incident_register": chk_incident_register,
+    "incident_severity": chk_incident_severity,
 }
 
 # ---------------------------------------------------------------- catalog
@@ -361,10 +422,10 @@ CATALOG = [
     ("nis2", 'Art.21.2.a.6', 'Exceptions to policy are approved and time-bound', 'policy', None, 'medium', 'Requires an exception register; none exists.'),
     ("nis2", 'Art.21.2.a.7', 'Ownership is assigned for each information system', 'policy', None, 'medium', 'Requires named asset owners; not recorded.'),
     ("nis2", 'Art.21.2.a.8', 'Security requirements are defined for each system class', 'policy', None, 'medium', 'Requires per-class requirements; not documented.'),
-    ("nis2", 'Art.21.2.b.1', 'An incident response plan is documented', 'incident', 'incident_response', 'high', None),
+    ("nis2", 'Art.21.2.b.1', 'An incident response plan is documented', 'incident', 'incident_response_plan', 'high', 'A versioned response plan AND recorded incidents are both required before this passes.'),
     ("nis2", 'Art.21.2.b.2', 'Incident detection operates continuously', 'incident', 'monitoring', 'high', None),
-    ("nis2", 'Art.21.2.b.3', 'An incident register is maintained', 'incident', None, 'high', 'The incidents table exists but holds no rows, so a register cannot be evidenced.'),
-    ("nis2", 'Art.21.2.b.4', 'Incident severity classification is defined', 'incident', None, 'medium', 'Requires a classification scheme; not documented.'),
+    ("nis2", 'Art.21.2.b.3', 'An incident register is maintained', 'incident', 'incident_register', 'high', 'Incident rows linked to the findings that justify them constitute the register.'),
+    ("nis2", 'Art.21.2.b.4', 'Incident severity classification is defined', 'incident', 'incident_severity', 'medium', 'Recorded incidents carry a severity from a fixed scale, which is the classification scheme.'),
     ("nis2", 'Art.21.2.b.5', 'Incident roles and escalation paths are assigned', 'incident', None, 'medium', 'Requires named roles; not recorded.'),
     ("nis2", 'Art.21.2.b.6', 'Post-incident lessons learned are recorded', 'incident', None, 'medium', 'Requires post-incident reviews; none recorded.'),
     ("nis2", 'Art.21.2.b.7', 'Incident evidence is preserved with integrity', 'incident', None, 'medium', 'Requires an evidence chain of custody; not evidenced.'),
@@ -453,8 +514,8 @@ CATALOG = [
     ("cis_v8","13.6","Deploy network intrusion detection","monitoring",None,"high",None),
     ("cis_v8","14.1","Establish security awareness training","people",None,"medium",None),
     ("cis_v8","16.1","Establish secure application development process","appsec",'deploy_gated',"high","A deploy that refuses a dirty tree and gates on smoke tests evidences a controlled change process"),
-    ("cis_v8","17.1","Designate personnel for incident handling","ir",'incident_response',"high",None),
-    ("cis_v8","17.4","Establish incident response process","ir",'incident_response',"high",None),
+    ("cis_v8","17.1","Designate personnel for incident handling","ir",'incident_response_staffing',"high",'Requires named incident personnel; no on-call rota exists, so this is measured as a failure.'),
+    ("cis_v8","17.4","Establish incident response process","ir",'incident_response_plan',"high",'A versioned response plan AND recorded incidents are both required before this passes.'),
     ("cis_v8","18.1","Establish penetration test program","appsec",None,"medium",None),
 
     # SOC 2 Type II
@@ -468,7 +529,7 @@ CATALOG = [
     ("soc2_type2","CC7.1","Detection of configuration changes","monitoring",'monitoring',"high",None),
     ("soc2_type2","CC7.2","Monitoring of system components","monitoring",'monitoring',"high",None),
     ("soc2_type2","CC7.3","Evaluation of security events","logging",'audit_log',"high",None),
-    ("soc2_type2","CC7.4","Incident response","ir",'incident_response',"high",None),
+    ("soc2_type2","CC7.4","Incident response","ir",'incident_response_plan',"high",'A versioned response plan AND recorded incidents are both required before this passes.'),
     ("soc2_type2","CC7.5","Recovery from identified incidents","recovery",'backup_restore_tested',"high",None),
     ("soc2_type2","CC8.1","Change management","appsec",'deploy_gated',"high",None),
     ("soc2_type2","A1.2","Availability capacity and backup","recovery",'backup_automated',"high",None),
@@ -487,7 +548,7 @@ CATALOG = [
     ("hipaa","164.308(a)(3)(ii)(A)","Authorization and supervision","access",'least_priv_db',"high",None),
     ("hipaa","164.308(a)(4)(ii)(B)","Access authorization","access",'rls_forced',"high",None),
     ("hipaa","164.308(a)(5)(ii)(B)","Protection from malicious software","vuln",'patch_currency',"high",None),
-    ("hipaa","164.308(a)(6)(ii)","Response and reporting","ir",'incident_response',"high",None),
+    ("hipaa","164.308(a)(6)(ii)","Response and reporting","ir",'incident_reporting',"high",'Response is documented but reporting is not: no regulatory notification procedure exists.'),
     ("hipaa","164.308(a)(7)(ii)(A)","Data backup plan","recovery",'backup_automated',"critical",None),
     ("hipaa","164.308(a)(7)(ii)(B)","Disaster recovery plan","recovery",'backup_restore_tested',"critical",None),
     ("hipaa","164.316(b)(2)(i)","Retention of documentation","logging",'log_retention',"medium",None),
@@ -504,7 +565,7 @@ CATALOG = [
     ("dora","Art.11(4)","Backup policies and procedures","recovery",'backup_offhost',"critical",None),
     ("dora","Art.11(6)","Restoration and recovery testing","recovery",'backup_restore_tested',"critical",None),
     ("dora","Art.12(1)","Backup and restoration","recovery",'backup_restore_tested',"critical",None),
-    ("dora","Art.17(1)","ICT-related incident management process","ir",'incident_response',"critical",None),
+    ("dora","Art.17(1)","ICT-related incident management process","ir",'incident_response_plan',"critical",'A versioned incident management process AND recorded incidents are both required.'),
     ("dora","Art.28(1)","ICT third-party risk management","thirdparty",None,"high",None),
 
     # NIST AI RMF — deliberately none automated: no AI governance artefacts exist to evidence them.
