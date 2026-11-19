@@ -131,9 +131,13 @@ tr:hover{background:var(--surface2)}
 <div id="page-overview">
 <div class="grid-4 mb" style="margin-bottom:24px">
 <div class="stat"><div class="stat-val" id="stat-health">--</div><div class="stat-lbl">Services</div></div>
-<div class="stat"><div class="stat-val" id="stat-routes">373</div><div class="stat-lbl">API Routes</div></div>
+<div class="stat"><div class="stat-val" id="stat-routes">--</div><div class="stat-lbl">API Routes</div></div>
 <div class="stat"><div class="stat-val" id="stat-findings">--</div><div class="stat-lbl">Findings</div></div>
 <div class="stat"><div class="stat-val" id="stat-incidents">--</div><div class="stat-lbl">Incidents</div></div>
+</div>
+<div class="card" style="margin-bottom:24px">
+<div class="section-title">Live Posture</div>
+<div id="posturePanel"><div class="spinner"></div></div>
 </div>
 <div class="grid-2">
 <div class="card">
@@ -328,7 +332,107 @@ async function apiGet(path) {
     } catch { return null; }
 }
 
+async function loadPosturePanel() {
+  // Everything here is read from the API. A value the API cannot supply is reported as unknown or
+  // unavailable - never defaulted to zero, and never rendered as if it were measured.
+  const panel = document.getElementById('posturePanel');
+  if (!panel) return;
+  panel.innerHTML = '<p role="status">Reading live posture from the API...</p>';
+
+  const [score, findings, agents, bridge, spec] = await Promise.all([
+    apiGet('/cloud/posture/score'),
+    apiGet('/findings'),
+    apiGet('/agents'),
+    apiGet('/bridge/health'),
+    apiGet('/openapi.json')
+  ]);
+
+  const routesEl = document.getElementById('stat-routes');
+  if (routesEl) {
+    const n = spec && spec.paths ? Object.keys(spec.paths).length : null;
+    routesEl.textContent = n === null ? 'Unavailable' : String(n);
+  }
+
+  const blocks = [];
+  const label = t => `<div class="muted" style="font-size:12px;text-transform:uppercase;letter-spacing:.08em">${t}</div>`;
+
+  if (score && typeof score.score === 'number') {
+    const pct = Math.max(0, Math.min(100, score.score));
+    const colour = pct >= 80 ? 'var(--success)' : (pct >= 60 ? '#d29922' : 'var(--danger)');
+    const failing = Array.isArray(score.failing_controls) ? score.failing_controls.length : null;
+    blocks.push(`<div style="margin-bottom:20px">${label('Cloud posture score')}
+      <div style="font-size:32px;font-weight:600;margin:6px 0">${pct.toFixed(1)}<span class="muted" style="font-size:15px"> /100 &middot; grade ${escapeHtml(String(score.grade || '--'))}</span></div>
+      <svg width="100%" height="12" role="img" aria-label="Cloud posture score ${pct.toFixed(1)} out of 100">
+        <rect x="0" y="0" width="100%" height="12" rx="6" fill="rgba(255,255,255,0.08)"></rect>
+        <rect x="0" y="0" width="${pct}%" height="12" rx="6" fill="${colour}"></rect>
+      </svg>
+      <div class="muted" style="font-size:12px;margin-top:6px">Penalty ${escapeHtml(String(score.penalty == null ? '--' : score.penalty))}${failing === null ? '' : ` &middot; ${failing} failing control${failing === 1 ? '' : 's'}`}</div>
+    </div>`);
+  } else if (score && score.score === null) {
+    blocks.push(`<div style="margin-bottom:20px">${label('Cloud posture score')}
+      <p role="status" class="muted">No completed cloud assessment yet, so no score exists. Run a cloud scan to produce one.</p></div>`);
+  } else {
+    blocks.push(`<div style="margin-bottom:20px">${label('Cloud posture score')}
+      <p role="alert" class="muted">Score unavailable - the API did not answer.</p></div>`);
+  }
+
+  if (Array.isArray(findings)) {
+    const order = ['critical', 'high', 'medium', 'low', 'info'];
+    const colours = { critical: 'var(--danger)', high: '#f0883e', medium: '#d29922', low: '#3fb950', info: '#8b949e' };
+    const counts = {};
+    findings.forEach(f => {
+      const k = String(f.severity || 'unknown').toLowerCase();
+      counts[k] = (counts[k] || 0) + 1;
+    });
+    const max = Math.max(1, ...order.map(k => counts[k] || 0));
+    const bars = order.map(k => {
+      const n = counts[k] || 0;
+      const w = (n / max) * 100;
+      return `<div style="display:flex;align-items:center;gap:10px;margin:5px 0">
+        <span class="muted" style="width:62px;font-size:12px">${k}</span>
+        <svg width="100%" height="12" role="img" aria-label="${k}: ${n} open findings" style="flex:1">
+          <rect x="0" y="0" width="100%" height="12" rx="6" fill="rgba(255,255,255,0.08)"></rect>
+          <rect x="0" y="0" width="${w}%" height="12" rx="6" fill="${colours[k]}"></rect>
+        </svg>
+        <span style="width:44px;text-align:right;font-size:12px">${n}</span>
+      </div>`;
+    }).join('');
+    blocks.push(`<div style="margin-bottom:20px">${label('Open findings by severity')}
+      <div style="margin-top:8px">${bars}</div>
+      <div class="muted" style="font-size:12px">${findings.length} open findings in this tenant</div></div>`);
+  } else {
+    blocks.push(`<div style="margin-bottom:20px">${label('Open findings by severity')}
+      <p role="alert" class="muted">Findings unavailable - the API did not answer.</p></div>`);
+  }
+
+  if (Array.isArray(agents)) {
+    const byStatus = {};
+    agents.forEach(a => {
+      const k = String(a.status || 'unknown').toUpperCase();
+      byStatus[k] = (byStatus[k] || 0) + 1;
+    });
+    const summary = Object.keys(byStatus).map(k => `${byStatus[k]} ${k.toLowerCase()}`).join(' &middot; ');
+    let verify;
+    if (bridge && typeof bridge.workers_verified === 'boolean') {
+      verify = bridge.workers_verified
+        ? 'Worker liveness verified by the bridge.'
+        : `Worker liveness <strong>not verified</strong> - the bridge reports &quot;${escapeHtml(String(bridge.verification_status || 'unverified'))}&quot; (registry loaded only, workers unconfirmed).`;
+    } else {
+      verify = 'Worker liveness unknown - backend status unavailable.';
+    }
+    blocks.push(`<div>${label('Agent fleet')}
+      <div style="margin:6px 0;font-size:15px">${agents.length} registered &middot; ${summary}</div>
+      <p class="muted" style="font-size:12px;margin:0">${verify}</p></div>`);
+  } else {
+    blocks.push(`<div>${label('Agent fleet')}
+      <p role="alert" class="muted">Agent registry unavailable - the API did not answer.</p></div>`);
+  }
+
+  panel.innerHTML = blocks.join('');
+}
+
 async function loadOverview() {
+    loadPosturePanel();
     const health = await apiGet('/health');
     if (health && health.services) {
         let html = '<table><tr><th>Service</th><th>Status</th><th>Latency</th></tr>';
