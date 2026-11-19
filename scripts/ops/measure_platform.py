@@ -95,11 +95,16 @@ def measure() -> dict:
     offhost = "unknown"
     if log.is_file():
         for line in reversed(log.read_text(errors="replace").splitlines()[-40:]):
-            if "OFFHOST_NOT_CONFIGURED" in line:
-                offhost = "not configured"
+            # The newest marker decides, not any marker: an older "not configured" line in the same log
+            # tail made this report "not configured" while B2 uploads were succeeding every night.
+            if "OFFHOST_B2 ok" in line:
+                offhost = "verified off-host (B2)"
                 break
             if "OFFHOST OK" in line or "offhost copy ok" in line.lower():
                 offhost = "copying"
+                break
+            if "OFFHOST_NOT_CONFIGURED" in line:
+                offhost = "not configured"
                 break
 
     return {
