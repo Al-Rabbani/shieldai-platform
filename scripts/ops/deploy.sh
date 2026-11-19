@@ -59,7 +59,18 @@ fi
 
 echo "  installing web assets..."
 if [ -f web/gds_app.html ]; then
-  install -m 644 web/gds_app.html /var/www/gds_app.html
+  echo "  building the client..."
+  if ! apps/api/venv/bin/python scripts/ops/build_client.py; then
+    fail "client build failed"
+  fi
+  # Install the built artifact, never the source, and prove the bytes served are the bytes recorded.
+  install -m 644 web/dist/gds_app.html /var/www/gds_app.html
+  SERVED_SHA=$(sha256sum /var/www/gds_app.html | cut -d' ' -f1)
+  MANIFEST_SHA=$(python3 -c "import json;print(json.load(open('web/dist/manifest.json'))['sha256'])")
+  if [ "$SERVED_SHA" != "$MANIFEST_SHA" ]; then
+    fail "served client does not match its build manifest"
+  fi
+  echo "    client installed and verified ($(echo $SERVED_SHA | cut -c1-16))"
 else
   echo "  WARNING: web/gds_app.html missing, leaving the served file untouched"
 fi
