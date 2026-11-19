@@ -399,6 +399,10 @@ from gds_api.cloud.onboarding_api import router as cloud_onboarding_router  # no
 app.include_router(cloud_onboarding_router)
 
 
+from gds_api.tenant_branding import router as tenant_branding_router  # noqa: E402
+
+app.include_router(tenant_branding_router)
+
 # --- OpenAPI security declarations (P4 / B21) ------------------------------------------------
 # The API had no securitySchemes at all: 0 of 324 operations declared how they are authenticated,
 # so generated clients and the docs could not tell a public endpoint from a protected one. These
