@@ -157,3 +157,22 @@ def test_the_locale_control_localises_formatting_and_says_so():
     assert 'aria-label="Formatting locale"' in HTML
     assert "function formatDateTime" in HTML and "function formatNumber" in HTML
     assert "Intl.DateTimeFormat" in HTML
+
+
+def test_the_data_layer_deduplicates_times_out_and_discards_stale_responses():
+    # Each of these guards exists because the failure it prevents is invisible: a duplicated request looks
+    # like slowness, a missing timeout looks like a hung panel, and a stale paint looks like the wrong data.
+    assert "async function apiResult" in HTML
+    assert "apiInFlight.has(path)" in HTML and "apiInFlight.set(path, task)" in HTML
+    assert "AbortController" in HTML and "REQUEST_TIMEOUT_MS" in HTML
+    assert "routeEpoch += 1" in HTML and "isSuperseded(epoch, routeEpoch)" in HTML
+    assert "function invalidate" in HTML
+    assert "if (!opts.refresh)" in HTML
+
+
+def test_a_failed_read_states_which_failure_it_was():
+    # A 403, an outage and a timeout are different facts. Collapsing them into one word is what makes an
+    # operator stop trusting the screen.
+    assert "unavailableLabel(result)" in HTML
+    assert "'Restricted'" in HTML and "'Unreachable'" in HTML and "'Timed out'" in HTML
+    assert "const result = await apiResult('/findings')" in HTML

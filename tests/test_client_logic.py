@@ -54,10 +54,14 @@ SOURCE = "\n".join([
     _fn("formatDateTime"),
     _fn("formatDate"),
     _fn("formatNumber"),
+    _fn("shouldRetry"),
+    _fn("isSuperseded"),
+    _fn("cacheFresh"),
+    _fn("unavailableLabel"),
 ])
 
 
-STUBS = "var localStorage={getItem:function(){return null},setItem:function(){}}; var navigator={language:'de-DE'};\n"
+STUBS = "var CACHE_TTL_MS = 15000;\nvar localStorage={getItem:function(){return null},setItem:function(){}}; var navigator={language:'de-DE'};\n"
 
 
 def run(expr):
@@ -166,3 +170,34 @@ def test_formatting_survives_an_engine_without_intl():
 
 def test_the_locale_falls_back_to_the_browser_then_to_a_default():
     assert run("uiLocale();") == "de-DE"
+
+
+def test_only_a_transient_failure_is_retried():
+    # A 4xx is the server's decision. Retrying it wastes the operator's time and hides the reason.
+    assert run("shouldRetry({ok:false, status:500});") is True
+    assert run("shouldRetry({ok:false, status:503});") is True
+    for decided in (401, 403, 404, 422):
+        assert run("shouldRetry({ok:false, status:%d});" % decided) is False, decided
+    assert run("shouldRetry({ok:true, status:200});") is False
+    assert run("shouldRetry(null);") is False
+
+
+def test_a_response_from_a_previous_route_is_recognised_as_stale():
+    assert run("isSuperseded(1, 2);") is True
+    assert run("isSuperseded(2, 2);") is False
+
+
+def test_the_cache_expires_rather_than_serving_forever():
+    assert run("cacheFresh({at:1000, data:1}, 1000);") is True
+    assert run("cacheFresh({at:1000, data:1}, 1000 + 15000);") is True
+    assert run("cacheFresh({at:1000, data:1}, 1000 + 15001);") is False
+    assert run("cacheFresh(undefined, 1000);") is False
+
+
+def test_each_failure_mode_gets_its_own_message():
+    # A permission boundary, an outage and a timeout are different facts and must not share one label.
+    assert run("unavailableLabel({ok:false, status:403});") == "Restricted"
+    assert run("unavailableLabel({ok:false, status:0, error:'network'});") == "Unreachable"
+    assert run("unavailableLabel({ok:false, status:0, error:'timeout'});") == "Timed out"
+    assert run("unavailableLabel({ok:false, status:500});") == "Unavailable"
+    assert run("unavailableLabel({ok:true, status:200});") == ""

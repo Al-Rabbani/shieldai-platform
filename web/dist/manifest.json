@@ -1,9 +1,9 @@
 {
-  "built_at": "2026-11-19T19:46:16.180537+00:00",
+  "built_at": "2026-11-19T19:48:16.710102+00:00",
   "source": "web/gds_app.html",
-  "bytes": 60807,
-  "sha256": "a2c40f21601e53f4518540b8095adf50148729d60ed2e073ca00b51b88d2c21c",
-  "source_sha256": "a2c40f21601e53f4518540b8095adf50148729d60ed2e073ca00b51b88d2c21c",
+  "bytes": 65702,
+  "sha256": "b9d0d26e6d55837b88842ba20fedb5f003c0f2755ee6afe575bdb6fae95a57e2",
+  "source_sha256": "b9d0d26e6d55837b88842ba20fedb5f003c0f2755ee6afe575bdb6fae95a57e2",
   "facts": {
     "inline_scripts": 1,
     "script_parse": "ok",

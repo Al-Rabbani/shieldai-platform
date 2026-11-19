@@ -754,6 +754,7 @@ async function withBusy(page, loader) {
 }
 
 function applyRoute() {
+  routeEpoch += 1;
   const page = routeFromHash(location.hash);
   showPage(page);
   setActiveNav(page);
@@ -780,21 +781,127 @@ function showPage(page) {
     if (page === 'agents') withBusy('agents', loadAgents);
 }
 
-async function apiGet(path) {
-    try {
-        const res = await fetch(API + path, {credentials: 'include'});
-    if (res.status === 401) {
-      currentUser = null;
-      sessionStorage.removeItem('gds_user');
-      if (location.hash) { sessionStorage.setItem('gds_return_to', location.hash); }
-      document.getElementById('dashView').classList.add('hidden');
-      document.getElementById('authView').classList.remove('hidden');
-      showErr('Your session has expired. Please sign in again.');
-      return null;
+/* ---- Data layer (C4) ----------------------------------------------------------------------------
+   apiGet returned null for every failure, so a view could not tell an empty list from a rejected request
+   from an unreachable API. Those are three different facts and an operator acts differently on each. It
+   also refetched the same endpoint on every visit and had no timeout, so a hung request left a panel
+   loading with no end.
+
+   This layer keeps apiGet's contract (parsed JSON or null) so every existing caller still works, and adds
+   the things a deeper layer needs:
+
+     * apiResult() returns a classified outcome, so a caller that cares can say WHY a panel is unavailable
+     * in-flight de-duplication, so two views asking for the same path share one request
+     * a short TTL cache with an explicit refresh bypass
+     * a timeout, and a route epoch so a response arriving after the reader has moved on is discarded
+       instead of painting over the newer view
+     * exactly one retry, and only where the failure could plausibly be transient (network or 5xx). A 401,
+       403 or 404 is a decision; retrying a decision only wastes the operator's time. */
+const CACHE_TTL_MS = 15000;
+const REQUEST_TIMEOUT_MS = 12000;
+const apiCache = new Map();
+const apiInFlight = new Map();
+let routeEpoch = 0;
+
+function shouldRetry(result) {
+  // Only a failure that could plausibly be transient is worth a second attempt. A 4xx is the server's
+  // decision and repeating it just delays the message the operator needs to see.
+  return !!result && !result.ok && result.status >= 500;
+}
+
+function isSuperseded(epoch, currentEpoch) {
+  return epoch !== currentEpoch;
+}
+
+function cacheFresh(hit, now) {
+  return !!hit && (now - hit.at) <= CACHE_TTL_MS;
+}
+
+function invalidate(path) {
+  if (path) { apiCache.delete(path); return; }
+  apiCache.clear();
+}
+
+function readCache(path) {
+  const hit = apiCache.get(path);
+  if (!hit) { return undefined; }
+  if (!cacheFresh(hit, Date.now())) { apiCache.delete(path); return undefined; }
+  return hit.data;
+}
+
+function handleUnauthorised() {
+  currentUser = null;
+  sessionStorage.removeItem('gds_user');
+  if (location.hash) { sessionStorage.setItem('gds_return_to', location.hash); }
+  document.getElementById('dashView').classList.add('hidden');
+  document.getElementById('authView').classList.remove('hidden');
+  showErr('Your session has expired. Please sign in again.');
+}
+
+async function fetchOnce(path, signal) {
+  const res = await fetch(API + path, { credentials: 'include', signal });
+  if (res.ok) {
+    let data = null;
+    try { data = await res.json(); } catch (_) { data = null; }
+    return { ok: true, status: res.status, data: data };
+  }
+  return { ok: false, status: res.status, data: null };
+}
+
+async function apiResult(path, opts) {
+  opts = opts || {};
+  const epoch = routeEpoch;
+  if (!opts.refresh) {
+    const cached = readCache(path);
+    if (cached !== undefined) { return { ok: true, status: 200, data: cached, cached: true }; }
+  }
+  if (apiInFlight.has(path)) { return apiInFlight.get(path); }
+
+  const task = (async () => {
+    const controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    let timer = null;
+    if (controller && typeof setTimeout === 'function') {
+      timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
     }
-        if (!res.ok) return null;
-        return await res.json();
-    } catch { return null; }
+    try {
+      let out = await fetchOnce(path, controller ? controller.signal : undefined);
+      if (shouldRetry(out)) {
+        out = await fetchOnce(path, controller ? controller.signal : undefined);
+      }
+      if (out.ok) { apiCache.set(path, { at: Date.now(), data: out.data }); }
+      if (out.status === 401) { handleUnauthorised(); }
+      return out;
+    } catch (err) {
+      const aborted = err && err.name === 'AbortError';
+      return { ok: false, status: 0, data: null, error: aborted ? 'timeout' : 'network' };
+    } finally {
+      if (timer) { clearTimeout(timer); }
+      apiInFlight.delete(path);
+    }
+  })();
+
+  apiInFlight.set(path, task);
+  const result = await task;
+  if (isSuperseded(epoch, routeEpoch) && !opts.allowStale) {
+    return { ok: false, status: 0, data: null, error: 'superseded' };
+  }
+  return result;
+}
+
+async function apiGet(path, opts) {
+  const result = await apiResult(path, opts);
+  return result.ok ? result.data : null;
+}
+
+/* What a failed read should say. A permission boundary, an outage and a timeout are not the same message
+   and must not be collapsed into one. */
+function unavailableLabel(result) {
+  if (!result || result.ok) { return ''; }
+  if (result.status === 403) { return 'Restricted'; }
+  if (result.error === 'timeout') { return 'Timed out'; }
+  if (result.error === 'superseded') { return 'Superseded'; }
+  if (result.error === 'network' || result.status === 0) { return 'Unreachable'; }
+  return 'Unavailable';
 }
 
 async function loadFleetVerification() {
@@ -985,10 +1092,18 @@ async function loadOverview() {
 }
 
 async function loadFindings() {
-    const findings = await apiGet('/findings');
+    const result = await apiResult('/findings');
+    const findings = result.ok ? result.data : null;
     if (findings === null) {
-        document.getElementById('findingsList').innerHTML = '<p role="alert">Unable to verify findings. Refresh or check your access.</p>';
-        document.getElementById('stat-findings').textContent = 'Unavailable';
+        // The reason is stated, because "unavailable" covers a permission boundary, an outage and a
+        // timeout, and an operator should not have to guess which one they are looking at.
+        const label = unavailableLabel(result);
+        const why = label === 'Restricted' ? 'Your account cannot read findings on this platform.'
+            : label === 'Unreachable' ? 'The API could not be reached, so nothing is known about this list.'
+            : label === 'Timed out' ? 'The API did not answer in time, so nothing is known about this list.'
+            : 'Findings could not be verified (HTTP ' + result.status + ').';
+        document.getElementById('findingsList').innerHTML = '<p role="alert">' + escapeHtml(why) + '</p>';
+        document.getElementById('stat-findings').textContent = label;
         return;
     }
     if (findings && findings.length > 0) {
