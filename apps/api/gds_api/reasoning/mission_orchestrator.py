@@ -325,6 +325,38 @@ def _get_shared_findings(mission_pid: str, max_findings: int = 10) -> str:
 # ═══════════════════════════════════════════════════════════
 # Core mission execution
 # ═══════════════════════════════════════════════════════════
+async def _governed_agent_result(agent_id: str, goal: str, context: Dict[str, Any]) -> Dict[str, Any]:
+    """Run one mission agent through the governed reasoning loop.
+
+    19 Nov 2026: every agent in a mission used the kernel runner, which has no tenant identity,
+    so governed tools answered GOVERNED_CAPABILITY_REQUIRED (measured on mission-9f1f78657ba1:
+    2 agents, 5 tool calls, all refused). This is the single place both the parallel and the
+    sequential branch execute an agent, so the fix cannot drift apart again.
+    """
+    from gds_api.reasoning.bridge import reasoning_bridge
+
+    governed = await reasoning_bridge.execute_task(
+        agent_id, goal, context,
+        tenant_id=context.get("tenant_id"), user_id=context.get("user_id"),
+    )
+    return {
+        "success": governed.success,
+        "agent_id": governed.agent_id,
+        "goal": governed.goal,
+        "summary": governed.summary,
+        "iterations": governed.iterations,
+        "duration_ms": governed.duration_ms,
+        "error": governed.error,
+        "pid": getattr(governed, "pid", None),
+        "kernel_managed": False,
+        "tool_calls": [
+            {"tool": tc.tool_name, "arguments": tc.arguments,
+             "result": tc.result, "duration_ms": tc.duration_ms}
+            for tc in governed.tool_calls
+        ],
+    }
+
+
 async def execute_mission(
     goal: str,
     context: Optional[Dict[str, Any]] = None,
@@ -372,7 +404,7 @@ async def execute_mission(
     steps = plan.get("steps", [])
     parallel = plan.get("parallel", False)
     
-    if parallel and len(steps) > 1 and AGENT_RUNNER_AVAILABLE:
+    if parallel and len(steps) > 1:
         # PARALLEL execution
         logger.info("Running %d agents in parallel" % len(steps))
         tasks = []
@@ -380,12 +412,8 @@ async def execute_mission(
             agent_context = dict(context)
             agent_context["mission_id"] = mission_id
             agent_context["mission_goal"] = goal
-            tasks.append(run_kernel_agent_runner(
-                agent_id=step.get("agent", ""),
-                goal=step.get("goal", goal),
-                context=agent_context,
-                model=model,
-                max_iterations=5
+            tasks.append(_governed_agent_result(
+                step.get("agent", ""), step.get("goal", goal), agent_context
             ))
         
         results = await asyncio.gather(*tasks, return_exceptions=True)
