@@ -415,6 +415,23 @@ async def list_cloud_posture_results(
     return [_evaluation_record_to_out(r) for r in records]
 
 
+# ---- Cloud Score ----------------------------------------------------------------
+
+
+@router.get("/score")
+async def get_cloud_score(
+    environment_id: uuid.UUID | None = None,
+    current_user: CurrentUser = Depends(require_permission("cloud:evaluations:read")),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """The cloud score, derived from real evaluations, with the inputs it was derived from."""
+    from gds_api.cloud.posture.score import compute_cloud_score
+
+    return await compute_cloud_score(
+        db, tenant_id=current_user.tenant_id, environment_id=environment_id
+    )
+
+
 # ---- Cloud Findings (Sections 21, 24, 28) ---------------------------------------
 
 
