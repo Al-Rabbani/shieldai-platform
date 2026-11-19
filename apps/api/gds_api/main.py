@@ -393,3 +393,7 @@ async def health_version():
 from gds_api.heartbeat_api import router as heartbeat_router  # noqa: E402
 
 app.include_router(heartbeat_router)
+
+from gds_api.cloud.onboarding_api import router as cloud_onboarding_router  # noqa: E402
+
+app.include_router(cloud_onboarding_router)
