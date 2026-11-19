@@ -353,8 +353,13 @@ async def bridge_mission(request: Request, authorization: str = Header(None)):
     try:
         body = await request.json()
         goal = body.get("goal", "")
-        context = body.get("context", {})
+        context = dict(body.get("context") or {})
         async_mode = body.get("async", False)
+        # 19 Nov 2026: the mission orchestrator's agents ran through the kernel runner with no
+        # tenant identity, so every governed tool answered GOVERNED_CAPABILITY_REQUIRED (measured
+        # on mission-9f1f78657ba1: 2 agents, 5 tool calls, all refused). The identity is injected
+        # once here and every agent in the plan now executes through the governed loop.
+        context["tenant_id"], context["user_id"] = await _bridge_identity()
         
         if not goal:
             raise HTTPException(status_code=400, detail="goal is required")

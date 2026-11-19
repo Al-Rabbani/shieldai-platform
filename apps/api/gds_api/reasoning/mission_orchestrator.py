@@ -415,10 +415,33 @@ async def execute_mission(
             if shared_findings:
                 agent_context["previous_agent_findings"] = shared_findings
             
-            result = await run_kernel_agent_runner(
-                agent_id=agent_id, goal=agent_goal, context=agent_context,
-                model=model, max_iterations=5
+            # 19 Nov 2026: this used the kernel runner, whose tool executor has no tenant
+            # identity, so every governed tool answered GOVERNED_CAPABILITY_REQUIRED and a
+            # multi-agent mission could reason but never act (measured on mission-9f1f78657ba1:
+            # 2 agents, 5 tool calls, all refused). The governed reasoning loop is used instead,
+            # with the tenant identity the orchestrator was given.
+            from gds_api.reasoning.bridge import reasoning_bridge
+
+            governed = await reasoning_bridge.execute_task(
+                agent_id, agent_goal, agent_context,
+                tenant_id=context.get("tenant_id"), user_id=context.get("user_id"),
             )
+            result = {
+                "success": governed.success,
+                "agent_id": governed.agent_id,
+                "goal": governed.goal,
+                "summary": governed.summary,
+                "iterations": governed.iterations,
+                "duration_ms": governed.duration_ms,
+                "error": governed.error,
+                "pid": getattr(governed, "pid", None),
+                "kernel_managed": False,
+                "tool_calls": [
+                    {"tool": tc.tool_name, "arguments": tc.arguments,
+                     "result": tc.result, "duration_ms": tc.duration_ms}
+                    for tc in governed.tool_calls
+                ],
+            }
             agent_results.append(result)
             
             # Store this agent's findings in shared context
