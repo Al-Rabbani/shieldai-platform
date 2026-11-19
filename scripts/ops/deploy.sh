@@ -10,6 +10,25 @@ cd "$REPO" || exit 2
 
 fail() { echo "DEPLOY FAILED: $*"; }
 
+run_tests() {
+  # A red suite must never reach production. Before this gate the only thing standing between a failing test and
+  # a live host was the HTTP smoke test, and smoke cannot see a broken unit, a wrong SQL cast or a schema mismatch
+  # that happens to return 200. Skip is explicit and announces itself, so a bypass is visible in the log.
+  if [ "${GDS_DEPLOY_SKIP_TESTS:-0}" = "1" ]; then
+    echo "  [tests] SKIPPED by GDS_DEPLOY_SKIP_TESTS=1 - this deploy is NOT test-gated"
+    return 0
+  fi
+  echo "  [tests] running suite"
+  if bash -c 'set -a; . /opt/.env 2>/dev/null; set +a; cd '"$REPO"' && PYTHONPATH='"$REPO"'/apps/api ./apps/api/venv/bin/python -m pytest tests -q' >/tmp/deploy-tests.log 2>&1; then
+    echo "  [tests] $(tail -1 /tmp/deploy-tests.log)"
+    return 0
+  fi
+  echo "  [tests] FAILED - deploy aborted, nothing was migrated or restarted"
+  tail -12 /tmp/deploy-tests.log
+  return 1
+}
+
+
 if [ -n "$(git status --porcelain)" ]; then
   fail "working tree is dirty - refusing to deploy over uncommitted changes"
   git status --porcelain | head -5
@@ -24,6 +43,8 @@ git fetch --all --prune >/dev/null 2>&1 || echo "  note: fetch failed, using loc
 if ! git checkout "$REF" >/dev/null 2>&1; then
   fail "cannot checkout $REF"; exit 4
 fi
+
+run_tests || { fail "test suite is red"; exit 1; }
 
 echo "  installing node-exporter listen config..."
 if [ -f config/prometheus/node-exporter.default ]; then

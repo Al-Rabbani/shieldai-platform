@@ -175,7 +175,11 @@ def test_a_failed_read_states_which_failure_it_was():
     # operator stop trusting the screen.
     assert "unavailableLabel(result)" in HTML
     assert "'Restricted'" in HTML and "'Unreachable'" in HTML and "'Timed out'" in HTML
-    assert "const result = await apiResult('/findings')" in HTML
+    assert "apiResult('/findings?status=open&limit=200')" in HTML
+    assert "apiResult('/findings/summary')" in HTML
+    assert 'unavailableLabel(listResult)' in HTML
+    # the page must state how many rows it is NOT showing, or a paged table reads as the whole estate
+    assert 'Showing ' in HTML and 'open findings' in HTML
 
 
 def test_the_page_can_be_skipped_into_and_has_labelled_landmarks():
