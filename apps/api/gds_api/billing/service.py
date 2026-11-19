@@ -288,10 +288,29 @@ async def _handle_payment_succeeded(db: AsyncSession, data: dict, tenant_id=None
     )
     sub = result.scalar_one_or_none()
 
+    resolved_tenant = tenant_id or (sub.tenant_id if sub else None)
+    resolved_user = sub.user_id if sub else user_id
+
+    if resolved_tenant is None:
+        # A payment we cannot attribute to any tenant of ours is not our revenue. Writing a row would
+        # fabricate income against nobody, and returning 500 would make Stripe retry an event that can
+        # never succeed until the endpoint is disabled. The raw event is already persisted by the
+        # caller, so this reports the situation instead of inventing a payer.
+        return {
+            "processed": False,
+            "recorded": False,
+            "event_type": "invoice.payment_succeeded",
+            "stripe_customer_id": stripe_customer_id,
+            "amount": amount_paid,
+            "currency": data.get("currency", "gbp"),
+            "reason": ("unattributed: no tenant or user matches this Stripe customer, so no payment "
+                       "row was written and no revenue is claimed"),
+        }
+
     payment = PaymentHistory(
         subscription_id=sub.id if sub else None,
-        user_id=sub.user_id if sub else user_id,
-        tenant_id=tenant_id or (sub.tenant_id if sub else None),
+        user_id=resolved_user,
+        tenant_id=resolved_tenant,
         stripe_invoice_id=data.get("id"),
         amount_paid=amount_paid,
         currency=data.get("currency", "gbp"),

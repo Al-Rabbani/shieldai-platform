@@ -1,0 +1,11 @@
+-- 028 — a payment belongs to a tenant; the user who triggered it may be unknown.
+--
+-- 19 Nov 2026. A real invoice.payment_succeeded event failed with a NOT NULL violation on
+-- billing_payments.user_id. That is the same design error B37 corrected at the tenant level: the
+-- product bills a tenant, and a subscription can exist with no single user attached (created by API,
+-- by a Stripe-side action, or by an operator). Requiring user_id made a legitimate payment impossible
+-- to record.
+--
+-- tenant_id stays required. This does not weaken attribution: it stops demanding a user that the
+-- event may genuinely not have.
+ALTER TABLE billing_payments ALTER COLUMN user_id DROP NOT NULL;
