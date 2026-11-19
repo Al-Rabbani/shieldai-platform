@@ -77,3 +77,19 @@ def test_internal_tenant_is_unmetered_and_states_it():
     assert d["allowed"] is True
     assert d["limit"] is None
     assert "not metered" in d["reason"]
+
+
+def test_an_unmeasurable_tenant_is_refused_not_assumed_empty():
+    # On a FORCE-RLS table an unbound session cannot see the tenant row, so it also cannot see that tenant's
+    # usage. Reading that as "starter tier, zero used" opened the gate exactly where it could not measure.
+    exc = quota.QuotaUnmeasurable("tokens")
+    assert exc.status_code == 503
+    assert exc.detail["error"] == "quota_unmeasurable"
+    assert "refusing rather than assuming zero" in exc.detail["reason"]
+
+
+def test_tier_or_none_distinguishes_missing_from_null():
+    import inspect
+    src = inspect.getsource(quota.tier_or_none)
+    assert "return None" in src, "a missing tenant row must be None, not the fallback tier"
+    assert "tier_for" in inspect.getsource(quota)

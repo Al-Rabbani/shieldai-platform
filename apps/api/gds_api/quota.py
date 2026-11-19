@@ -76,6 +76,21 @@ def evaluate(resource: str, used: int, limit: int, tier: str) -> dict[str, Any]:
     }
 
 
+class QuotaUnmeasurable(HTTPException):
+    """503, not 402: the plan is not the problem, the measurement is.
+
+    Refusing is deliberate. An unmeasurable tenant previously read as zero usage and passed every limit, so the
+    gate was open exactly where it could not see.
+    """
+
+    def __init__(self, resource: str) -> None:
+        super().__init__(status_code=503, detail={
+            "error": "quota_unmeasurable",
+            "resource": resource,
+            "reason": "tenant could not be resolved, so usage cannot be measured; refusing rather than assuming zero",
+        })
+
+
 class QuotaExceeded(HTTPException):
     """402, not 403: the caller is allowed to do this, just not without a bigger plan."""
 
@@ -83,9 +98,21 @@ class QuotaExceeded(HTTPException):
         super().__init__(status_code=402, detail={"error": "plan_limit_reached", **decision})
 
 
-async def tier_for(db: Any, tenant_id: uuid.UUID | str) -> str:
+async def tier_or_none(db: Any, tenant_id: uuid.UUID | str) -> str | None:
+    """The tenant's tier, or None when the tenant row is not visible to this session.
+
+    None is meaningful: on a FORCE-RLS table an unbound session cannot see the tenant row, which also means it
+    cannot see that tenant's usage. Treating that as "starter tier, zero used" let an unbound caller pass the
+    gate while being completely unmeasurable.
+    """
     row = (await db.execute(text("SELECT plan_tier FROM tenants WHERE id = :t"), {"t": str(tenant_id)})).first()
-    return ((row[0] if row else None) or FALLBACK_TIER).strip().lower()
+    if row is None:
+        return None
+    return ((row[0] or FALLBACK_TIER) if row[0] else FALLBACK_TIER).strip().lower()
+
+
+async def tier_for(db: Any, tenant_id: uuid.UUID | str) -> str:
+    return (await tier_or_none(db, tenant_id)) or FALLBACK_TIER
 
 
 async def usage(db: Any, tenant_id: uuid.UUID | str) -> dict[str, int]:
@@ -98,7 +125,9 @@ async def usage(db: Any, tenant_id: uuid.UUID | str) -> dict[str, int]:
 
 
 async def check(db: Any, tenant_id: uuid.UUID | str, resource: str) -> dict[str, Any]:
-    tier = await tier_for(db, tenant_id)
+    tier = await tier_or_none(db, tenant_id)
+    if tier is None:
+        raise QuotaUnmeasurable(resource)
     measured = await usage(db, tenant_id)
     if not is_metered(tier):
         return unmetered(resource, measured[resource], tier)
