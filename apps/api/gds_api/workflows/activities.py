@@ -870,6 +870,14 @@ async def synthesize_report(payload: dict[str, Any]) -> None:
     async with async_session_factory() as db:
         await _bind_if_given(db, tenant_id)
         mission = await db.get(Mission, mission_uuid)
+        if mission is None and not tenant_id:
+            # 19 Nov 2026: on a FORCE-RLS table an unbound by-PK read returns nothing, so this
+            # used to report "Mission not found" and blame the data for a missing tenant context.
+            raise ApplicationError(
+                "synthesize_report was called without tenant_id; missions is FORCE-RLS so the "
+                "mission cannot be read without one",
+                type="TenantNotBound", non_retryable=True,
+            )
         if mission is not None:
             await bind_tenant(db, mission.tenant_id)
         if mission is None:

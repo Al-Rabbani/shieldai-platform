@@ -128,6 +128,13 @@ async def _run_reasoning_loop_inner(
 
     await workflow.execute_activity(
         activities.synthesize_report,
-        {"mission_id": mission_id, "hit_iteration_limit": hit_iteration_limit},
+        # 19 Nov 2026 (P2): this was the one activity called without tenant_id, so once missions
+        # was FORCE-RLS its by-PK read returned nothing and every mission failed at the final step
+        # with "MissionNotFound" after all its tasks had completed successfully.
+        {
+            "mission_id": mission_id,
+            "tenant_id": tenant_id,
+            "hit_iteration_limit": hit_iteration_limit,
+        },
         start_to_close_timeout=_DEFAULT_TIMEOUT,
     )
