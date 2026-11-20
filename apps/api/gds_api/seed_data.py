@@ -17,7 +17,9 @@ ROLE_PERMISSIONS: dict[str, list[str]] = {
         "missions:read",
         "findings:read",
         # Accepting risk is an accountable decision, so it sits with platform_owner for the same reason
-        # cloud:posture:suppress does: management stays with the owner role.
+        # cloud:findings:suppress does: management stays with the owner role. (The string is cloud:findings:suppress,
+        # which is what cloud_posture_api.py:529 actually checks - an earlier version of this comment named a
+        # permission that no route uses, which made the suppression mechanism look missing when it was present.)
         "findings:accept_risk",
         "incidents:read",
         "knowledge:read",
