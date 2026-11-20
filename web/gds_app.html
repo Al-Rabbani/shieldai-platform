@@ -755,7 +755,10 @@ async function loadApprovals() {
   }
   const approvals = Array.isArray(result.data) ? result.data : [];
   if (!approvals.length) {
-    host.innerHTML = '<p>Nothing is waiting for a decision. Governed actions are proceeding on their own.</p>';
+    // "Nothing waiting" says exactly that and no more. The previous wording added that governed actions were
+    // "proceeding on their own", which the empty list does not establish: it may equally mean no governed action
+    // has been requested. An empty queue is not evidence of autonomous progress.
+    host.innerHTML = '<p>Nothing is waiting for a decision. Any governed action that needs one appears here.</p>';
     return;
   }
   const now = Date.now();
@@ -1272,7 +1275,9 @@ async function loadOverview() {
         <tr><td class="muted">User ID</td><td style="font-size:12px;font-family:monospace">${escapeHtml(currentUser?.user_id?.substring(0,8) || '--')}...</td></tr>
         </table>`;
 
-    const audit = await apiGet('/audit');
+    // Ask for the number of rows actually rendered. The route defaults to 50 and this table shows 10, which
+    // meant ten rows silently stood in for fifty without the page saying so.
+    const audit = await apiGet('/audit?limit=10');
     if (audit === null) {
         document.getElementById('auditList').innerHTML = '<p role="alert">Unable to verify audit events. Refresh or check your access.</p>';
         return;
@@ -1283,6 +1288,8 @@ async function loadOverview() {
             html += `<tr><td>${escapeHtml(e.action)}</td><td class="muted">${new Date(e.created_at).toLocaleString()}</td><td class="muted" style="max-width:300px;overflow:hidden;text-overflow:ellipsis">${escapeHtml(JSON.stringify(e.detail||{}).substring(0,60))}</td></tr>`;
         });
         html += '</table>';
+        html += '<p class="muted" style="font-size:12px">The 10 most recent audit events. This page does not page '
+             + 'through older history, so it is not the whole trail.</p>';
         document.getElementById('auditList').innerHTML = html;
     } else {
         document.getElementById('auditList').innerHTML = '<p class="muted">No audit events recorded yet.</p>';
