@@ -45,11 +45,22 @@ def test_no_duplicate_control_refs_within_a_framework(assessor):
     assert not dupes, f"duplicate control refs: {dupes}"
 
 
-def test_ai_rmf_claims_nothing_automated(assessor):
-    # There is no AI governance evidence in this platform. If someone later maps an AI RMF control to
-    # a check, that must be a deliberate act with a stated basis, not a drive-by edit.
-    mapped = [(c[1], c[4]) for c in assessor.CATALOG if c[0] == "nist_ai_rmf" and c[4]]
-    assert not mapped, f"AI RMF controls must not claim automated coverage yet: {mapped}"
+def test_ai_rmf_is_evidenced_only_by_ai_specific_collectors(assessor):
+    # The AI RMF was catalogued with no coverage at all. Four controls are now evidenced from what this
+    # platform's own agents did, and mapping any of them must stay a deliberate act: an AI-governance
+    # control may only be evidenced by a collector written to measure AI operations. Reusing a generic
+    # host check (tls_hsts, monitoring, patch_currency) would inflate a framework without evidencing it.
+    ai_collectors = {
+        "ai_tool_governance",
+        "ai_post_deployment_monitoring",
+        "ai_risk_response_decisions",
+        "ai_action_accountability",
+    }
+    mapped = [(c[1], c[4], c[6]) for c in assessor.CATALOG if c[0] == "nist_ai_rmf" and c[4]]
+    assert mapped, "no AI RMF control is evidenced at all; the framework reads 0% again"
+    for ref, check, basis in mapped:
+        assert check in ai_collectors, f"{ref} is evidenced by {check}, which is not an AI-operations collector"
+        assert basis and len(basis) > 30, f"{ref} is mapped to {check} with no stated basis"
 
 
 def test_collectors_only_return_real_verdicts(assessor):

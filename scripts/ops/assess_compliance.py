@@ -461,6 +461,78 @@ def chk_access_review():
                "the mechanism exists but no review has ever been completed, so standing access is unreviewed")
 
 
+# ---------------------------------------------------------------- AI governance (the platform's own AI operations)
+# NIST AI RMF was catalogued with no collector at all, so it read 0 of 72 with no way to tell "not applicable" from
+# "not checked". These four answer the questions the platform can actually answer about ITSELF: GDS OS runs AI agents
+# that call tools, and the evidence below is what those agents actually did. They deliberately say nothing about a
+# customer's AI estate, and the mapping_basis text on each control says so.
+def chk_ai_tool_governance():
+    """MEASURE-2.7: security of the AI system, measured as whether every tool call was risk-classified and decided."""
+    row = one("""SELECT count(*) || '|'
+                        || count(*) FILTER (WHERE decision IS NOT NULL) || '|'
+                        || count(*) FILTER (WHERE authoritative_risk_class IS NOT NULL) || '|'
+                        || count(*) FILTER (WHERE policy_version IS NOT NULL) || '|'
+                        || count(*) FILTER (WHERE execution_status IS NOT NULL)
+                 FROM capability_decisions WHERE decided_at > now() - interval '30 days';""", "0|0|0|0|0")
+    total, verdict, risk, policy, executed = (int(x) for x in row.split("|"))
+    obs = {"decisions_30d": total, "with_verdict": verdict, "with_risk_class": risk,
+           "with_policy_version": policy, "with_execution_status": executed}
+    if total == 0:
+        return bad(obs, "no AI tool-call decision in 30 days: the governed execution path is not in use")
+    gaps = [name for name, value in (("verdict", verdict), ("risk class", risk), ("policy version", policy))
+            if value != total]
+    if gaps:
+        return bad(obs, f"{total} decisions but not all carry a {'/'.join(gaps)}")
+    return ok(obs, f"all {total} AI tool-call decisions in 30 days carry a verdict, a risk class and a policy version")
+
+
+def chk_ai_post_deployment_monitoring():
+    """MANAGE-4.1: post-deployment monitoring, measured as completed missions and stored tool-call results."""
+    row = one("""SELECT (SELECT count(*) FROM missions
+                          WHERE status='completed' AND created_at > now() - interval '7 days') || '|'
+                        || (SELECT count(*) FROM mission_tasks
+                            WHERE created_at > now() - interval '7 days' AND result IS NOT NULL) || '|'
+                        || (SELECT coalesce(max(created_at)::text, 'none') FROM mission_tasks);""", "0|0|none")
+    missions, calls, latest = row.split("|")
+    obs = {"missions_completed_7d": int(missions), "tool_calls_with_result_7d": int(calls), "latest_tool_call": latest}
+    if int(missions) == 0 and int(calls) == 0:
+        return bad(obs, "no completed mission and no stored tool-call result in 7 days: nothing is being observed")
+    if int(calls) == 0:
+        return bad(obs, f"{missions} mission(s) completed in 7 days but no tool call stored a result, so the "
+                        "outcome of the AI's actions is not recorded")
+    return ok(obs, f"{missions} completed mission(s) and {calls} tool call(s) with stored results in 7 days")
+
+
+def chk_ai_risk_response_decisions():
+    """MANAGE-1.1: risk response decided, measured as decisions that are actually differentiated."""
+    row = one("""SELECT count(*) || '|'
+                        || count(*) FILTER (WHERE upper(decision) = 'ALLOW') || '|'
+                        || count(*) FILTER (WHERE upper(decision) = 'REQUIRE_APPROVAL') || '|'
+                        || count(*) FILTER (WHERE upper(decision) = 'DENY')
+                 FROM capability_decisions WHERE decided_at > now() - interval '30 days';""", "0|0|0|0")
+    total, allow, approval, deny = (int(x) for x in row.split("|"))
+    obs = {"decisions_30d": total, "allow": allow, "require_approval": approval, "deny": deny}
+    if total == 0:
+        return bad(obs, "no risk response recorded in 30 days")
+    if allow == total:
+        return bad(obs, f"all {total} decisions were ALLOW: a risk response that never withholds anything is "
+                        "not being exercised")
+    return ok(obs, f"{total} decisions in 30 days: {allow} allow, {approval} require approval, {deny} deny")
+
+
+def chk_ai_action_accountability():
+    """GOVERN-4.1: accountability, measured as an attributable audit trail for AI-initiated actions."""
+    row = one("""SELECT count(*) || '|' || coalesce(max(created_at)::text, 'none')
+                 FROM audit_events
+                 WHERE created_at > now() - interval '30 days' AND action LIKE 'mission%';""", "0|none")
+    events, latest = row.split("|")
+    obs = {"mission_audit_events_30d": int(events), "latest": latest}
+    if int(events) == 0:
+        return bad(obs, "no audit event for an AI-initiated action in 30 days: AI actions are not attributable")
+    return ok(obs, f"{events} audit event(s) for AI-initiated actions in 30 days, latest {latest}")
+
+
+
 COLLECTORS = {
     "rls_forced": chk_rls_forced, "least_priv_db": chk_least_priv_db, "audit_log": chk_audit_log,
     "log_retention": chk_log_retention, "backup_offhost": chk_backup_offhost,
@@ -476,6 +548,10 @@ COLLECTORS = {
     "incident_reporting": chk_incident_reporting,
     "incident_register": chk_incident_register,
     "incident_severity": chk_incident_severity,
+    "ai_tool_governance": chk_ai_tool_governance,
+    "ai_post_deployment_monitoring": chk_ai_post_deployment_monitoring,
+    "ai_risk_response_decisions": chk_ai_risk_response_decisions,
+    "ai_action_accountability": chk_ai_action_accountability,
 }
 
 # ---------------------------------------------------------------- catalog
@@ -661,26 +737,53 @@ CATALOG = [
     ("dora","Art.17(1)","ICT-related incident management process","ir",'incident_response_plan',"critical",'A versioned incident management process AND recorded incidents are both required.'),
     ("dora","Art.28(1)","ICT third-party risk management","thirdparty",None,"high",None),
 
-    # NIST AI RMF — deliberately none automated: no AI governance artefacts exist to evidence them.
-    ("nist_ai_rmf","GOVERN-1.1","Legal and regulatory requirements understood","govern",None,"high",None),
-    ("nist_ai_rmf","GOVERN-1.2","Risk management integrated into processes","govern",None,"high",None),
-    ("nist_ai_rmf","GOVERN-2.1","Roles and responsibilities documented","govern",None,"high",None),
-    ("nist_ai_rmf","GOVERN-3.1","Workforce diversity and AI competency","govern",None,"medium",None),
-    ("nist_ai_rmf","GOVERN-4.1","Risk culture and accountability","govern",None,"medium",None),
-    ("nist_ai_rmf","GOVERN-5.1","Engagement with stakeholders","govern",None,"medium",None),
-    ("nist_ai_rmf","GOVERN-6.1","Third-party AI risk policies","govern",None,"high",None),
-    ("nist_ai_rmf","MAP-1.1","Context and intended purpose established","map",None,"high",None),
-    ("nist_ai_rmf","MAP-2.1","Interdisciplinary roles defined","map",None,"medium",None),
-    ("nist_ai_rmf","MAP-3.1","AI system benefits and costs assessed","map",None,"medium",None),
-    ("nist_ai_rmf","MEASURE-1.1","Approaches and metrics selected","measure",None,"high",None),
-    ("nist_ai_rmf","MEASURE-2.7","Security and resilience of AI systems","measure",None,"critical",None),
-    ("nist_ai_rmf","MEASURE-2.10","Privacy risk assessed","measure",None,"high",None),
-    ("nist_ai_rmf","MEASURE-3.1","Risk tracking over time","measure",None,"medium",None),
-    ("nist_ai_rmf","MEASURE-4.1","Measurement results evaluated","measure",None,"medium",None),
-    ("nist_ai_rmf","MANAGE-1.1","Risk response decided","manage",None,"high",None),
-    ("nist_ai_rmf","MANAGE-2.1","Resources allocated to risk treatment","manage",None,"medium",None),
-    ("nist_ai_rmf","MANAGE-3.1","Third-party risks monitored","manage",None,"high",None),
-    ("nist_ai_rmf","MANAGE-4.1","Post-deployment monitoring","manage",None,"high",None),
+    # NIST AI RMF — four controls are evidenced from the platform's own AI operations; the rest are organisational
+    # artefacts GDS OS does not hold, and each says so rather than leaving a blank. Every basis below is about this
+    # platform's own agents and tool calls. None of it says anything about a customer's AI estate.
+    ("nist_ai_rmf","GOVERN-1.1","Legal and regulatory requirements understood","govern",None,"high",
+     "Not evidenced: needs a register of legal obligations applying to the AI system. The platform holds none."),
+    ("nist_ai_rmf","GOVERN-1.2","Risk management integrated into processes","govern",None,"high",
+     "Not evidenced: needs a documented AI risk management process. The per-action risk tiering that does exist is "
+     "measured under MANAGE-1.1 instead of being claimed twice."),
+    ("nist_ai_rmf","GOVERN-2.1","Roles and responsibilities documented","govern",None,"high",
+     "Not evidenced: needs a named accountable owner for the AI system. No such assignment is recorded."),
+    ("nist_ai_rmf","GOVERN-3.1","Workforce diversity and AI competency","govern",None,"medium",
+     "Not evidenced: an organisational workforce question, not measurable from platform data."),
+    ("nist_ai_rmf","GOVERN-4.1","Risk culture and accountability","govern",'ai_action_accountability',"medium",
+     "Every AI-initiated action writes an attributable audit event, counted over 30 days. Evidences accountability "
+     "for this platform's own agents, not an organisational risk culture."),
+    ("nist_ai_rmf","GOVERN-5.1","Engagement with stakeholders","govern",None,"medium",
+     "Not evidenced: needs a record of stakeholder engagement. None exists."),
+    ("nist_ai_rmf","GOVERN-6.1","Third-party AI risk policies","govern",None,"high",
+     "Not evidenced: needs supplier AI risk terms. No model or agent supplier assessment is recorded."),
+    ("nist_ai_rmf","MAP-1.1","Context and intended purpose established","map",None,"high",
+     "Not evidenced: needs a documented intended-purpose statement per AI system."),
+    ("nist_ai_rmf","MAP-2.1","Interdisciplinary roles defined","map",None,"medium",
+     "Not evidenced: needs documented cross-disciplinary roles for AI development."),
+    ("nist_ai_rmf","MAP-3.1","AI system benefits and costs assessed","map",None,"medium",
+     "Not evidenced: needs a recorded benefit and cost assessment for the AI system."),
+    ("nist_ai_rmf","MEASURE-1.1","Approaches and metrics selected","measure",None,"high",
+     "Not evidenced: the metrics used for AI health are defined in code, but no selected-approach record exists."),
+    ("nist_ai_rmf","MEASURE-2.7","Security and resilience of AI systems","measure",'ai_tool_governance',"critical",
+     "Every AI tool call passes through a recorded capability decision carrying a risk class and a policy version, "
+     "counted over 30 days. Evidences the governed execution path for this platform's own agents."),
+    ("nist_ai_rmf","MEASURE-2.10","Privacy risk assessed","measure",None,"high",
+     "Not evidenced: needs a privacy risk assessment specific to the AI system's data handling."),
+    ("nist_ai_rmf","MEASURE-3.1","Risk tracking over time","measure",None,"medium",
+     "Not evidenced: needs AI risk tracked over time. Security risk scores are tracked, AI risk is not."),
+    ("nist_ai_rmf","MEASURE-4.1","Measurement results evaluated","measure",None,"medium",
+     "Not evidenced: needs a recorded evaluation of the measurements, not only the measurements."),
+    ("nist_ai_rmf","MANAGE-1.1","Risk response decided","manage",'ai_risk_response_decisions',"high",
+     "Every capability request from this platform's own agents resolves to allow, require approval or deny, with a "
+     "denial code, counted over 30 days. The collector fails if nothing was ever withheld, so a blanket allow "
+     "cannot pass."),
+    ("nist_ai_rmf","MANAGE-2.1","Resources allocated to risk treatment","manage",None,"medium",
+     "Not evidenced: needs a resourcing record for AI risk treatment."),
+    ("nist_ai_rmf","MANAGE-3.1","Third-party risks monitored","manage",None,"high",
+     "Not evidenced: needs ongoing monitoring of AI suppliers. None is configured."),
+    ("nist_ai_rmf","MANAGE-4.1","Post-deployment monitoring","manage",'ai_post_deployment_monitoring',"high",
+     "Completed missions and stored tool-call results from this platform's own agents are counted over 7 days, so "
+     "the collector measures observed outcomes rather than a running process."),
 ]
 
 # Every mapping must state why its check is accepted as evidence for that control. Where a control
