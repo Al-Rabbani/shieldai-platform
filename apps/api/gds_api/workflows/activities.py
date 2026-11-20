@@ -536,7 +536,9 @@ async def evaluate_task(task_id: str, tenant_id: str | None = None) -> dict[str,
             # RULE: a commit destroys the session-scoped tenant bind (NullPool discards the connection), and
             # evaluate_capability_request commits internally while writing its decision. Without re-binding here the
             # flush below runs unbound against FORCE-RLS mission_tasks, matches 0 rows and raises StaleDataError -
-            # which is why evaluate_task failed for every mission and no mission_results row was ever written.
+            # Impact measured, not assumed: the tool still executed and the narrative report was still persisted on
+            # missions.report, but the task's decision state and any approval_id from a REQUIRE_APPROVAL verdict were
+            # lost, so an approval-gated task would ask for approval that no record pointed to.
             await bind_tenant(db, mission.tenant_id)
             await db.commit()
             if task_decision == "require_approval":

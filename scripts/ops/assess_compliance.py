@@ -310,15 +310,51 @@ def chk_incident_response_plan():
 
 
 def chk_incident_response_staffing():
-    return bad({"on_call_rota": False, "paging_integration": False},
-               "no on-call rota or paging integration exists: alerts reach Slack and email only, so nobody is "
-               "designated to respond and nobody is woken")
+    # Measured, not asserted. A pager now exists (5/15/60-minute acknowledgement ladder, level 3 UNANSWERED), but a
+    # pager with nobody named on a rota still wakes nobody, so the rota half is the honest reason this fails.
+    pager = int(one("SELECT count(*) FROM information_schema.tables WHERE table_name='notifications';", "0") or 0)
+    ackable = int(one("SELECT count(*) FROM notifications WHERE requires_ack;", "0") or 0) if pager else 0
+    ladder = os.path.exists("/usr/local/bin/gds-page.py")
+    cron = 0
+    for f in ("/etc/cron.d/gds-paging", "/var/spool/cron/crontabs/root"):
+        try:
+            if os.path.exists(f) and "gds-page" in open(f).read():
+                cron = 1
+                break
+        except Exception:
+            pass
+    rota = int(one("SELECT count(*) FROM information_schema.tables WHERE table_name IN ('on_call_rota','oncall_rotas');", "0") or 0)
+    observed = {"paging_ladder": ladder, "paging_scheduled": bool(cron), "ackable_notifications": ackable,
+                "on_call_rota": bool(rota)}
+    if ladder and cron and rota:
+        return ok(observed, "a paging ladder runs on a schedule and an on-call rota names who answers")
+    return bad(observed,
+               "the acknowledgement ladder and its 5-minute schedule exist, but no on-call rota names who answers "
+               "outside business hours, so a page can still land on nobody in particular")
 
 
 def chk_incident_reporting():
-    return bad({"regulatory_notification_procedure": False},
-               "no regulatory notification procedure exists: the NIS2 Article 23 24-hour early warning and "
-               "72-hour notification deadlines are neither documented nor tracked")
+    # The clock exists (migration 035, gds_api/regulatory.py): deadlines are computed from detection and stored, so
+    # overdue is a query. It passes only once a real incident has been assessed, because an unexercised procedure
+    # is a plan, not evidence.
+    has_table = int(one("SELECT count(*) FROM information_schema.tables WHERE table_name='regulatory_notifications';", "0") or 0)
+    module = os.path.exists("/opt/gds-os/apps/api/gds_api/regulatory.py")
+    total = late = 0
+    if has_table:
+        total = int(one("SELECT count(*) FROM regulatory_notifications;", "0") or 0)
+        late = int(one("""SELECT count(*) FROM regulatory_notifications WHERE
+            (early_warning_sent_at IS NULL AND now() > early_warning_due_at)
+            OR (notification_sent_at IS NULL AND now() > notification_due_at)
+            OR (final_report_sent_at IS NULL AND now() > final_report_due_at);""", "0") or 0)
+    observed = {"procedure_module": module, "deadline_table": bool(has_table), "tracked": total, "overdue": late}
+    if module and has_table and total > 0 and late == 0:
+        return ok(observed, "%d incident(s) tracked against Article 23 deadlines, none overdue" % total)
+    if module and has_table:
+        return bad(observed,
+                   "the Article 23 clock exists and computes the 24-hour, 72-hour and 30-day deadlines from "
+                   "detection, but no incident has been assessed for reportability yet, so it is built and "
+                   "unexercised rather than evidenced")
+    return bad(observed, "no regulatory notification procedure exists")
 
 
 def chk_incident_register():

@@ -74,6 +74,14 @@ if [ -f config/prometheus/gds.yml ]; then
   # Scheduled jobs were hand-typed on the host, so a rebuild silently lost paging and webhook delivery.
   # The log directory must exist and be postgres-writable: /var/log itself is not, which is why both jobs ran
   # for days with no output anywhere and nobody could prove they had ever executed.
+  if [ -f config/cron/root.crontab ]; then
+    # The root crontab carries patching, backups, scans, reapers and the paging watchers. It used to exist only on
+    # the host, so a rebuild lost every job and a hand edit was invisible to review.
+    if ! crontab -l 2>/dev/null | cmp -s - config/cron/root.crontab; then
+      echo "  installing root crontab from config/cron/root.crontab"
+      crontab config/cron/root.crontab
+    fi
+  fi
   install -d -o postgres -g postgres -m 0755 /var/log/gds
   for f in config/cron/*; do
     [ -f "$f" ] || continue

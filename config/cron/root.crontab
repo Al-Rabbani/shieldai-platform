@@ -1,0 +1,22 @@
+# GDS OS root crontab - THE source of truth. deploy.sh installs this file, so a job added by hand on the host is
+# lost at the next deploy: edit here instead. Every entry either loads /opt/.env itself (cron starts without the
+# service environment) or runs as postgres, because 70 FORCE-RLS tables return zero rows unbound.
+
+
+*/5 * * * * /opt/gds-os/apps/api/venv/bin/python3.11 /opt/gds-os/apps/api/check_alerts.py >> /var/log/gds-alerts.log 2>&1
+
+*/30 * * * * flock -n /opt/gds-os/.mission_scheduler.lock /opt/gds-os/apps/api/venv/bin/python3.11 /opt/gds-os/apps/api/run_autonomous_missions.py >> /var/log/gds-autonomous.log 2>&1
+0 */6 * * * cd /opt/gds-os/apps/api && set -a && . /opt/.env && set +a && PYTHONPATH=/opt/gds-os/apps/api ./venv/bin/python run_deterministic_scan.py >> /var/log/gds-deterministic-scan.log 2>&1
+30 2 * * * /usr/local/bin/gds-backup.sh >> /var/log/gds-backup.log 2>&1
+15 3 * * * /usr/local/bin/gds-wal-prune.sh
+45 4 * * 0 /usr/local/bin/gds-restore-drill.sh >> /var/log/gds-restore-drill.log 2>&1
+*/5 * * * * /usr/local/bin/gds-service-watch.sh
+*/30 * * * * /usr/local/bin/gds-backup-watch.sh >> /var/log/gds-backup-watch.log 2>&1
+0 */12 * * * cd /opt/gds-os/apps/api && set -a && . /opt/.env && set +a && PYTHONPATH=/opt/gds-os/apps/api ./venv/bin/python enrich_findings.py >> /var/log/gds-enrich.log 2>&1
+20 */12 * * * cd /opt/gds-os/apps/api && set -a && . /opt/.env && set +a && PYTHONPATH=/opt/gds-os/apps/api ./venv/bin/python enrich_findings.py --cvss-backfill --limit 400 >> /var/log/gds-enrich.log 2>&1
+45 3 * * * cd /opt/gds-os/apps/api && set -a && . /opt/.env && set +a && PYTHONPATH=/opt/gds-os/apps/api ./venv/bin/python /opt/gds-os/scripts/ops/qdrant_prune.py --apply >> /var/log/gds-qdrant-prune.log 2>&1
+15 4 * * * cd /opt/gds-os/apps/api && set -a && . /opt/.env && set +a && PYTHONPATH=/opt/gds-os/apps/api ./venv/bin/python reconcile_findings.py --apply >> /var/log/gds-reconcile.log 2>&1
+50 * * * * cd /opt/gds-os/apps/api && PYTHONPATH=. /opt/gds-os/apps/api/venv/bin/python3.11 reap_stale_missions.py >> /var/log/gds-reaper.log 2>&1
+*/5 * * * * /opt/gds-os/scripts/ops/gds-container-watch.sh >/dev/null 2>&1
+15 3 * * * cd /opt/gds-os && set -a && . /opt/.env 2>/dev/null && set +a && ./apps/api/venv/bin/python scripts/ops/assess_compliance.py >> /var/log/gds-compliance.log 2>&1
+0 5 * * 5 /usr/local/bin/gds-os-update.sh apply >> /var/log/gds-os-update.log 2>&1

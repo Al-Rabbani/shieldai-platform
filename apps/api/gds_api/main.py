@@ -42,6 +42,7 @@ from gds_api import (
     workflow_runs,
 )
 from gds_api.access_reviews import router as access_reviews_router
+from gds_api.regulatory import router as regulatory_router
 from gds_api.pentest import routes as pentest_routes
 from gds_api.pentest import ai_routes as pentest_ai_routes
 from gds_api.siem import routes as siem_routes
@@ -182,6 +183,7 @@ app.include_router(compliance_api.router)
 app.include_router(mssp_api.router)
 app.include_router(auth.router)
 app.include_router(access_reviews_router)
+app.include_router(regulatory_router)
 app.include_router(audit.router)
 app.include_router(policy.router)
 app.include_router(approvals.router)
