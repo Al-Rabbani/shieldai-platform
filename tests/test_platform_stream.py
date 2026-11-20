@@ -22,6 +22,14 @@ def _require_live():
 
 
 def _token():
+    """An authenticated session for the live stream tests.
+
+    These two variables are the owner's identity, which is deployment configuration, not a constant. Without
+    them this raised KeyError and the test reported a failure - a missing setting dressed up as a broken feed.
+    A skip with the reason is the honest outcome: the stream was not tested.
+    """
+    if not os.environ.get("GDS_OWNER_USER_ID") or not os.environ.get("GDS_TENANT_ID"):
+        pytest.skip("GDS_OWNER_USER_ID/GDS_TENANT_ID are not set; the authenticated stream was not tested")
     from gds_api.security import create_access_token
 
     return create_access_token(

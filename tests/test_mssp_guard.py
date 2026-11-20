@@ -3,8 +3,11 @@
 These tests pin the refusal, not just the success: an endpoint that quietly scoped itself to the
 caller's own tenant would look identical to an empty customer list, so it must 403 instead.
 """
+import os
 import uuid
 from types import SimpleNamespace
+
+import pytest
 
 from gds_api import mssp_api
 
@@ -14,6 +17,8 @@ def fake_user(tenant_id, permissions):
 
 
 def test_provider_admin_needs_both_provider_tenant_and_star_permission():
+    if not os.environ.get("GDS_TENANT_ID"):
+        pytest.skip("GDS_TENANT_ID is not set; the provider tenant is configuration, so the guard is untestable here")
     provider = mssp_api.provider_tenant_id()
     assert mssp_api.is_provider_admin(fake_user(provider, ["*"])) is True
     # Right permission, wrong tenant: a platform_owner of a customer tenant is not the provider.

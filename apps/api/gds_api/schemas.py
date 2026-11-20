@@ -2,7 +2,7 @@
 
 from typing import Any
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 
 from pydantic import BaseModel, EmailStr
@@ -1404,3 +1404,16 @@ class CloudRegistryCoverageOut(BaseModel):
     policies_by_provider: dict[str, int]
     total_benchmarks: int
     benchmark_mapped_control_counts: dict[str, int]
+
+
+class RiskAcceptanceRequest(BaseModel):
+    """A risk acceptance must carry a reason, real controls and an expiry - see findings_risk_acceptance."""
+
+    reason: str
+    compensating_controls: str
+    expires_at: datetime
+    review_date: date | None = None
+
+
+class RiskAcceptanceRevokeRequest(BaseModel):
+    revoke_reason: str
