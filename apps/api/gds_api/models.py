@@ -58,6 +58,12 @@ class User(Base):
     password_hash: Mapped[str] = mapped_column(String(200))
     is_active: Mapped[bool] = mapped_column(default=True)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    # Migration 033. The columns existed in Postgres before they existed here, so login raised AttributeError
+    # on the ORM object and returned 500 - a mismatch no offline test could see because the tests never touch
+    # a real database. tests/test_orm_column_parity.py now fails if the model and the table disagree.
+    mfa_secret: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    mfa_enabled: Mapped[bool] = mapped_column(default=False, server_default="false")
+    mfa_enrolled_at: Mapped[datetime | None] = mapped_column(nullable=True)
 
 
 class UserSession(Base):
