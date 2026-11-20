@@ -136,3 +136,13 @@ def test_review_date_is_optional_but_typed_as_a_date():
     )
     assert model.review_date is None
     assert isinstance(date.today(), date)
+
+
+def test_finding_ids_are_bound_as_integers_not_strings():
+    """asyncpg is strict: '380' for an integer parameter is a 500, which is how this first shipped.
+
+    Postgres will not silently cast text to integer on a bound parameter, so every binding of a finding id has to
+    stay an int. This test exists because the first live call failed with exactly that error.
+    """
+    assert "str(finding_id)" not in SERVICE
+    assert 'str(acceptance["finding_id"])' not in SERVICE

@@ -167,7 +167,7 @@ async def accept_risk(
             ),
             {
                 "tid": str(tenant_id),
-                "fid": str(finding_id),
+                "fid": finding_id,
                 "uid": str(user_id),
                 "email": user_email,
                 "reason": reason,
@@ -228,7 +228,7 @@ async def revoke_acceptance(
             "UPDATE security_findings SET status = 'open' "
             "WHERE id = :fid AND tenant_id = :tid AND status = 'accepted_risk'"
         ),
-        {"fid": str(acceptance["finding_id"]), "tid": str(tenant_id)},
+        {"fid": acceptance["finding_id"], "tid": str(tenant_id)},
     )
     return dict(row)
 
@@ -247,7 +247,7 @@ async def list_acceptances(
     params: dict = {"tid": str(tenant_id)}
     if finding_id is not None:
         where.append("finding_id = :fid")
-        params["fid"] = str(finding_id)
+        params["fid"] = finding_id
     if not include_history:
         where.append("revoked_at IS NULL AND expired_at IS NULL")
     rows = (
