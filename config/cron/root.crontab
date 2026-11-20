@@ -20,3 +20,4 @@
 */5 * * * * /opt/gds-os/scripts/ops/gds-container-watch.sh >/dev/null 2>&1
 15 3 * * * cd /opt/gds-os && set -a && . /opt/.env 2>/dev/null && set +a && ./apps/api/venv/bin/python scripts/ops/assess_compliance.py >> /var/log/gds-compliance.log 2>&1
 0 5 * * 5 /usr/local/bin/gds-os-update.sh apply >> /var/log/gds-os-update.log 2>&1
+30 4 * * 0 cd /opt/gds-os && set -a && . /opt/.env 2>/dev/null && set +a && ./apps/api/venv/bin/python scripts/ops/gds-container-cve-watch.py >> /var/log/gds-container-cve.log 2>&1
