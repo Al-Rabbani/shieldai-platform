@@ -59,3 +59,11 @@ def test_the_expiry_job_reads_its_tenant_from_the_environment():
 def test_the_expiry_job_is_scheduled():
     assert "expire_stale_approvals.py" in CRON
     assert "15 * * * *" in CRON
+
+
+def test_the_cron_entry_loads_the_environment_it_needs():
+    """Cron runs with a minimal environment. The first version of this entry did not source /opt/.env, so it
+    would have exited 2 with "no tenant configured" every hour and looked perfectly scheduled."""
+    line = next(l for l in CRON.splitlines() if "expire_stale_approvals.py" in l)
+    assert ". /opt/.env" in line
+    assert "set -a" in line

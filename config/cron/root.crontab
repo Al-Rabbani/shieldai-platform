@@ -23,4 +23,4 @@
 30 4 * * 0 cd /opt/gds-os && set -a && . /opt/.env 2>/dev/null && set +a && ./apps/api/venv/bin/python scripts/ops/gds-container-cve-watch.py >> /var/log/gds-container-cve.log 2>&1
 # Approvals expire on their own. Nothing expired them, so a request from a path that no longer exists kept
 # looking like a decision the platform was waiting for. Expiring is neither approving nor rejecting.
-15 * * * * cd /opt/gds-os/apps/api && PYTHONPATH=. /opt/gds-os/apps/api/venv/bin/python3.11 /opt/gds-os/scripts/ops/expire_stale_approvals.py >> /var/log/gds-approval-expiry.log 2>&1
+15 * * * * cd /opt/gds-os && set -a && . /opt/.env 2>/dev/null && set +a && PYTHONPATH=apps/api ./apps/api/venv/bin/python3.11 scripts/ops/expire_stale_approvals.py >> /var/log/gds-approval-expiry.log 2>&1
