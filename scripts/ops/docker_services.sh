@@ -13,6 +13,11 @@
 set -euo pipefail
 source /opt/docker-services.env
 
+# Images are pinned by digest, not by tag. A tag is a moving target: rebuilding this host used to pull whatever
+# ":latest" pointed at that day, which is how qdrant drifted four months behind and how an upgrade could arrive
+# unreviewed. qdrant was moved to v1.20.2 on 20 Nov 2026 to clear six critical CVEs (rescan of the running image:
+# 0 critical, 20 knowledge points preserved). minio and temporal stay on these digests because no patched image is
+# obtainable: minio/minio returns pull access denied, and temporalio/auto-setup has published nothing newer.
 NET=bridge
 
 run_nats() {
@@ -20,7 +25,7 @@ run_nats() {
   docker run -d --name nats --restart unless-stopped \
     -p 127.0.0.1:4222:4222 -p 127.0.0.1:8222:8222 \
     -v /opt/nats/nats-server.conf:/nats-server.conf:ro \
-    nats:latest --config /nats-server.conf >/dev/null
+    nats@sha256:ecf677bae6a0ae7900bd3217be041c6614d5dcd2cae780000f9cd69462b36541 --config /nats-server.conf >/dev/null
 }
 
 run_qdrant() {
@@ -31,7 +36,7 @@ run_qdrant() {
     -e RUN_MODE=production -e TZ=Etc/UTC \
     --health-cmd 'bash -c "timeout 2 bash -c \"cat < /dev/null > /dev/tcp/127.0.0.1/6333\""' \
     --health-interval 30s --health-timeout 5s --health-retries 3 --health-start-period 20s \
-    qdrant/qdrant >/dev/null
+    qdrant/qdrant@sha256:d277592721d2e3b73f9b797b53cf05e6a5bb2134f6d13fdbda4ca51782afbcac >/dev/null
 }
 
 run_temporal() {
@@ -43,7 +48,7 @@ run_temporal() {
     -e POSTGRES_DB=temporal -e SKIP_DB_CREATE=true \
     --health-cmd 'nc -z -w 2 $(hostname -i | cut -d" " -f1) 7233' \
     --health-interval 30s --health-timeout 5s --health-retries 3 --health-start-period 40s \
-    temporalio/auto-setup:latest autosetup >/dev/null
+    temporalio/auto-setup@sha256:9be7b8d98f60d00f4f2ff74731c071a17848d8182bbc8429e314a24c94ea105b autosetup >/dev/null
 }
 
 run_minio() {
@@ -54,7 +59,7 @@ run_minio() {
     -e MINIO_ROOT_USER="$MINIO_ROOT_USER" -e MINIO_ROOT_PASSWORD="$MINIO_ROOT_PASSWORD" \
     --health-cmd 'curl -f -s http://127.0.0.1:9000/minio/health/live' \
     --health-interval 30s --health-timeout 5s --health-retries 3 --health-start-period 20s \
-    minio/minio:latest server /data >/dev/null
+    minio/minio@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e server /data >/dev/null
 }
 
 case "${1:-all}" in
