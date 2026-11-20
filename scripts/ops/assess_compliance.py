@@ -353,11 +353,30 @@ def chk_encryption_at_rest():
 
 
 def chk_mfa_enforced():
+    """Measured, not asserted.
+
+    This collector previously returned a hardcoded auth_second_factor: False alongside the column count. The
+    column count was real; the verdict was a constant. Now that migration 033 exists it measures the mechanism
+    and the enrolment, and reports which of the two is missing.
+    """
     cols = int(one("SELECT count(*) FROM information_schema.columns WHERE table_name='users' AND "
                    "(column_name ILIKE '%mfa%' OR column_name ILIKE '%totp%');", "0") or 0)
-    return bad({"users_mfa_columns": cols, "auth_second_factor": False},
-               "the authentication service has no second factor: the users table has no MFA or TOTP column and "
-               "no enrolment mechanism exists, so a password alone grants access")
+    active = int(one("SELECT count(*) FROM users WHERE is_active;", "0") or 0)
+    enrolled = int(one("SELECT count(*) FROM users WHERE mfa_enabled;", "0") or 0)
+    observed = {
+        "users_mfa_columns": cols,
+        "users_active": active,
+        "users_enrolled": enrolled,
+        "enrolment_mechanism": cols >= 2,
+        "routes": ["/auth/mfa/enrol", "/auth/mfa/confirm", "/auth/mfa/disable"],
+    }
+    if cols >= 2 and active > 0 and enrolled >= active:
+        return ok(observed, f"every active user ({enrolled} of {active}) has a second factor and login demands it")
+    if cols >= 2:
+        return bad(observed,
+                   f"the mechanism exists and login enforces it, but only {enrolled} of {active} active users have "
+                   "enrolled, so the remaining accounts are still password-only")
+    return bad(observed, "no second factor: the users table has no MFA or TOTP column")
 
 
 def chk_access_review():
@@ -611,7 +630,7 @@ CHECK_BASIS = {
     "patch_currency": "The pending package update count evidences whether patching is actually applied rather than planned",
     "container_health": "Every running container reporting healthy or covered by a host watchdog evidences availability monitoring",
     "tenant_isolation": "An unbound tenant read returning zero rows evidences tenant separation enforced by the database",
-    "mfa_enforced": "No MFA enrolment data exists in this platform, so enforcement cannot be evidenced",
+    "mfa_enforced": "users.mfa_enabled is counted against active users; enrolment is opt-in so partial coverage is reported as a failure with the counts",
     "encryption_at_rest": "Volume-level encryption cannot be verified from inside the guest, so it is not claimed",
     "access_review": "No access review records exist, so periodic review cannot be evidenced",
     "incident_response": "No incident response runbook is versioned in the repository, so the process cannot be evidenced",
