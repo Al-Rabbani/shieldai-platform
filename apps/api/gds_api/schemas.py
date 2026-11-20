@@ -17,6 +17,18 @@ class RegisterRequest(BaseModel):
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
+    # Only required when the account has a second factor enrolled. Absent for every account that has not
+    # opted in, so enabling MFA cannot lock out anyone who has not enrolled.
+    mfa_code: str | None = None
+
+
+class MfaCodeRequest(BaseModel):
+    code: str
+
+
+class MfaDisableRequest(BaseModel):
+    password: str
+    code: str | None = None
 
 
 class TenantOut(BaseModel):

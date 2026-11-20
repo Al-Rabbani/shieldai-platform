@@ -10,7 +10,8 @@ from gds_api.config import settings
 from gds_api.db import get_db
 from gds_api.models import Role, Tenant, User, UserSession
 from gds_api.rate_limit import ip_rate_limit
-from gds_api.schemas import LoginRequest, MeResponse, RegisterRequest, RoleOut, TenantOut
+from gds_api.schemas import LoginRequest, MeResponse, RegisterRequest, RoleOut, TenantOut, MfaCodeRequest, MfaDisableRequest
+from gds_api import mfa
 from gds_api.security import (
     hash_password,
     REFRESH_COOKIE_NAME,
@@ -155,6 +156,35 @@ async def login(
         # exists and tells the caller the stored hash is malformed.
         password_ok = False
 
+    # Second factor, checked only after the password verifies so a wrong password never reveals that an account
+    # has MFA. An account with MFA enabled but no readable secret is a broken row: refuse, never fall open.
+    if row is not None and row[0].is_active and password_ok and row[0].mfa_enabled:
+        await db.execute(
+            text("SELECT set_config('gds.tenant_id', :tid, false)"), {"tid": str(row[0].tenant_id)}
+        )
+        if not row[0].mfa_secret:
+            raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR,
+                                "MFA is enabled for this account but no secret is stored")
+        try:
+            mfa_secret = mfa.decrypt_secret(row[0].mfa_secret)
+        except ValueError:
+            raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR,
+                                "MFA is enabled for this account but its secret cannot be read")
+        supplied = (body.mfa_code or "").strip()
+        if not supplied:
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, "mfa_required")
+        if not mfa.verify(mfa_secret, supplied):
+            burned = await db.execute(
+                text("UPDATE mfa_recovery_codes SET used_at = now() "
+                     "WHERE user_id = :u AND code_hash = :h AND used_at IS NULL RETURNING id"),
+                {"u": str(row[0].id), "h": mfa.hash_recovery_code(supplied)},
+            )
+            if burned.first() is None:
+                await record_audit_event(db, tenant_id=row[0].tenant_id, user_id=row[0].id,
+                                         action="auth.login.mfa_failure", detail={})
+                await db.commit()
+                raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid second factor")
+
     if row is None or not row[0].is_active or not password_ok:
         # R2.1: audit_events is FORCE-RLS protected, so the failure event can only be written
         # with a tenant bound. When the address is unknown there is no tenant to attribute it
@@ -287,3 +317,113 @@ async def me(
             permissions=current_user.permissions,
         ),
     )
+
+@router.post("/mfa/enrol")
+async def mfa_enrol(
+    current_user=Depends(get_current_user), db: AsyncSession = Depends(get_db)
+) -> dict:
+    """Start enrolment. The secret and the recovery codes are returned once and never again.
+
+    Enrolment is two-step on purpose: nothing is enforced until /mfa/confirm proves the authenticator app is
+    producing codes, so a mistyped or unscanned secret cannot lock the owner out of their own account.
+    """
+    secret = mfa.new_secret()
+    codes, hashes = mfa.new_recovery_codes()
+    uid, tid = current_user.user_id, current_user.tenant_id
+    await db.execute(text("SELECT set_config('gds.tenant_id', :t, false)"), {"t": str(tid)})
+    row = (await db.execute(
+        text("UPDATE users SET mfa_secret = :s, mfa_enabled = false, mfa_enrolled_at = NULL "
+             "WHERE id = :u RETURNING email"),
+        {"s": mfa.encrypt_secret(secret), "u": str(uid)},
+    )).first()
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Account not found")
+    await db.execute(text("DELETE FROM mfa_recovery_codes WHERE user_id = :u"), {"u": str(uid)})
+    for digest in hashes:
+        await db.execute(
+            text("INSERT INTO mfa_recovery_codes (tenant_id, user_id, code_hash) VALUES (:t, :u, :h)"),
+            {"t": str(tid), "u": str(uid), "h": digest},
+        )
+    await record_audit_event(db, tenant_id=tid, user_id=uid, action="auth.mfa.enrol_started", detail={})
+    await db.commit()
+    return {
+        "secret": secret,
+        "provisioning_uri": mfa.provisioning_uri(secret, row[0]),
+        "recovery_codes": codes,
+        "note": "Scan the URI, then POST /auth/mfa/confirm with a current code. The secret and recovery codes are shown once.",
+    }
+
+
+@router.post("/mfa/confirm")
+async def mfa_confirm(
+    body: MfaCodeRequest, current_user=Depends(get_current_user), db: AsyncSession = Depends(get_db)
+) -> dict:
+    uid, tid = current_user.user_id, current_user.tenant_id
+    await db.execute(text("SELECT set_config('gds.tenant_id', :t, false)"), {"t": str(tid)})
+    row = (await db.execute(
+        text("SELECT mfa_secret, mfa_enabled FROM users WHERE id = :u"), {"u": str(uid)}
+    )).first()
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Account not found")
+    if not row[0]:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "No enrolment in progress; call /auth/mfa/enrol first")
+    try:
+        secret = mfa.decrypt_secret(row[0])
+    except ValueError:
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Stored MFA secret cannot be read")
+    if not mfa.verify(secret, body.code):
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid second factor")
+    await db.execute(
+        text("UPDATE users SET mfa_enabled = true, mfa_enrolled_at = now() WHERE id = :u"), {"u": str(uid)}
+    )
+    remaining = (await db.execute(
+        text("SELECT count(*) FROM mfa_recovery_codes WHERE user_id = :u AND used_at IS NULL"), {"u": str(uid)}
+    )).scalar()
+    await record_audit_event(db, tenant_id=tid, user_id=uid, action="auth.mfa.enrolled", detail={})
+    await db.commit()
+    return {"mfa_enabled": True, "recovery_codes_remaining": int(remaining or 0)}
+
+
+@router.post("/mfa/disable")
+async def mfa_disable(
+    body: MfaDisableRequest, current_user=Depends(get_current_user), db: AsyncSession = Depends(get_db)
+) -> dict:
+    """Turning the second factor off needs the password AND a working factor.
+
+    Otherwise a stolen session cookie would be enough to remove the very control that protects against a stolen
+    password.
+    """
+    uid, tid = current_user.user_id, current_user.tenant_id
+    await db.execute(text("SELECT set_config('gds.tenant_id', :t, false)"), {"t": str(tid)})
+    row = (await db.execute(
+        text("SELECT password_hash, mfa_secret, mfa_enabled FROM users WHERE id = :u"), {"u": str(uid)}
+    )).first()
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Account not found")
+    if not verify_password(body.password, row[0]):
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid password")
+    if row[2]:
+        supplied = (body.code or "").strip()
+        secret_ok = False
+        if supplied and row[1]:
+            try:
+                secret_ok = mfa.verify(mfa.decrypt_secret(row[1]), supplied)
+            except ValueError:
+                secret_ok = False
+        if not secret_ok and supplied:
+            burned = await db.execute(
+                text("UPDATE mfa_recovery_codes SET used_at = now() "
+                     "WHERE user_id = :u AND code_hash = :h AND used_at IS NULL RETURNING id"),
+                {"u": str(uid), "h": mfa.hash_recovery_code(supplied)},
+            )
+            secret_ok = burned.first() is not None
+        if not secret_ok:
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, "A current second factor code is required")
+    await db.execute(
+        text("UPDATE users SET mfa_secret = NULL, mfa_enabled = false, mfa_enrolled_at = NULL WHERE id = :u"),
+        {"u": str(uid)},
+    )
+    await db.execute(text("DELETE FROM mfa_recovery_codes WHERE user_id = :u"), {"u": str(uid)})
+    await record_audit_event(db, tenant_id=tid, user_id=uid, action="auth.mfa.disabled", detail={})
+    await db.commit()
+    return {"mfa_enabled": False}
