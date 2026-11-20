@@ -151,6 +151,15 @@ if [ -r /opt/.env ]; then
   echo "    wrote /opt/gds-pager.env ($(wc -l < /opt/gds-pager.env) delivery variables)"
 fi
 
+# Two of these scripts run from cron as postgres (config/cron/gds-paging and gds-webhooks), and the loop
+# above installs root:root 0750. That is correct for every root-run script and fatal for these two: postgres
+# cannot execute a root:root 0750 file, so the pager and the webhook dispatcher stop running entirely. Caught
+# on the host immediately after they were added to the loop - the pager failed with Permission denied.
+install -m 750 -o root -g postgres "scripts/ops/gds-page.py" "/usr/local/bin/gds-page.py" \
+  && echo "    installed gds-page.py (group postgres, runs as postgres)" || fail "could not install gds-page.py"
+install -m 750 -o root -g postgres "scripts/ops/gds-webhook-dispatch.py" "/usr/local/bin/gds-webhook-dispatch.py" \
+  && echo "    installed gds-webhook-dispatch.py (group postgres, runs as postgres)" || fail "could not install gds-webhook-dispatch.py"
+
 echo "  restarting services..."
 supervisorctl restart gds-os gds-worker gds-kernel >/dev/null 2>&1
 

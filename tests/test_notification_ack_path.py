@@ -60,3 +60,21 @@ def test_deploy_installs_every_script_its_cron_files_call():
                 continue
             script = line.split("/usr/local/bin/")[1].split()[0]
             assert script in DEPLOY, f"{script} is called by cron but deploy never installs it"
+
+
+def test_scripts_cron_runs_as_postgres_are_executable_by_postgres():
+    """The install loop uses root:root 0750. A script cron starts as postgres must be group postgres, or the
+    job dies with Permission denied and the schedule reports nothing."""
+    postgres_jobs = []
+    for cron in (ROOT / "config" / "cron").glob("*"):
+        for line in cron.read_text().splitlines():
+            if line.startswith("#") or "/usr/local/bin/" not in line:
+                continue
+            if not line.split()[5:7] or line.split()[5] != "postgres":
+                continue
+            postgres_jobs.append(line.split("/usr/local/bin/")[1].split()[0])
+    assert postgres_jobs, "expected at least one cron job to run as postgres"
+    for script in postgres_jobs:
+        assert f'install -m 750 -o root -g postgres "scripts/ops/{script}"' in DEPLOY, (
+            f"{script} runs as postgres but is not installed group postgres"
+        )
