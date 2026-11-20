@@ -34,7 +34,8 @@ def grade_for(score: float) -> str:
 
 
 async def compute_cloud_score(
-    db: AsyncSession, *, tenant_id: uuid.UUID, environment_id: uuid.UUID | None = None
+    db: AsyncSession, *, tenant_id: uuid.UUID, environment_id: uuid.UUID | None = None,
+    provider: str | None = None
 ) -> dict[str, Any]:
     """Score the tenant's (or one environment's) most recent completed evaluation."""
     run_query = select(CloudPostureEvaluationRun).where(
@@ -43,11 +44,21 @@ async def compute_cloud_score(
     )
     if environment_id is not None:
         run_query = run_query.where(CloudPostureEvaluationRun.environment_id == environment_id)
+    if provider:
+        run_query = run_query.where(CloudPostureEvaluationRun.provider == provider)
     run = (
         await db.execute(run_query.order_by(CloudPostureEvaluationRun.created_at.desc()).limit(1))
     ).scalars().first()
 
     if run is None:
+        if provider:
+            return {
+                "status": "no_run",
+                "provider": provider,
+                "score": None,
+                "grade": None,
+                "detail": "no completed evaluation exists for this provider; another provider run is never substituted",
+            }
         return {
             "status": "unavailable",
             "score": None,

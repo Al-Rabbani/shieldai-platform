@@ -421,6 +421,7 @@ async def list_cloud_posture_results(
 @router.get("/posture/score")
 async def get_cloud_score(
     environment_id: uuid.UUID | None = None,
+    provider: str | None = None,
     current_user: CurrentUser = Depends(require_permission("cloud:evaluations:read")),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
@@ -428,7 +429,7 @@ async def get_cloud_score(
     from gds_api.cloud.posture.score import compute_cloud_score
 
     return await compute_cloud_score(
-        db, tenant_id=current_user.tenant_id, environment_id=environment_id
+        db, tenant_id=current_user.tenant_id, environment_id=environment_id, provider=provider
     )
 
 
