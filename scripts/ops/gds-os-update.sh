@@ -58,7 +58,8 @@ else
     log "WARN compliance re-assessment failed"
 fi
 
-crontab -l 2>/dev/null | grep -v 'gds-os-update.sh apply' | crontab - 2>/dev/null
+# REMOVED: this used to delete the schedule that invoked it, so the window fired once and
+# never again. The weekly entry now lives in config/cron/root.crontab and is installed by deploy.
     notify "Update window" "no pending packages, nothing changed"
     exit 0
 fi
@@ -82,7 +83,8 @@ log "post-update health=$code"
 printf '{"finished_at":"%s","pending_before":%s,"pending_after":%s,"rc":%s,"health":"%s"}\n' \
     "$(date -Is)" "$before" "$after" "$rc" "$code" > "$STATE"
 
-crontab -l 2>/dev/null | grep -v 'gds-os-update.sh apply' | crontab - 2>/dev/null
+# REMOVED: this used to delete the schedule that invoked it, so the window fired once and
+# never again. The weekly entry now lives in config/cron/root.crontab and is installed by deploy.
 
 if [ "$code" = "200" ]; then
     notify "OS updates applied" "$before packages upgraded, $after remaining, API healthy"
