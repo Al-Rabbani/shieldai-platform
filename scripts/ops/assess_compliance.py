@@ -350,13 +350,21 @@ def chk_incident_reporting():
     total = late = 0
     if has_table:
         total = int(one("SELECT count(*) FROM regulatory_notifications;", "0") or 0)
-        late = int(one("""SELECT count(*) FROM regulatory_notifications WHERE
+        late = int(one("""SELECT count(*) FROM regulatory_notifications
+            WHERE status <> 'not_reportable' AND (
             (early_warning_sent_at IS NULL AND now() > early_warning_due_at)
             OR (notification_sent_at IS NULL AND now() > notification_due_at)
-            OR (final_report_sent_at IS NULL AND now() > final_report_due_at);""", "0") or 0)
-    observed = {"procedure_module": module, "deadline_table": bool(has_table), "tracked": total, "overdue": late}
+            OR (final_report_sent_at IS NULL AND now() > final_report_due_at));""", "0") or 0)
+    not_reportable = 0
+    if has_table and total:
+        not_reportable = int(one("SELECT count(*) FROM regulatory_notifications WHERE status='not_reportable';", "0") or 0)
+    reportable = total - not_reportable
+    observed = {"procedure_module": module, "deadline_table": bool(has_table), "assessed": total,
+                "reportable": reportable, "not_reportable": not_reportable, "overdue": late}
     if module and has_table and total > 0 and late == 0:
-        return ok(observed, "%d incident(s) tracked against Article 23 deadlines, none overdue" % total)
+        return ok(observed,
+                  "%d incident(s) assessed against Article 23: %d reportable, %d determined not reportable, "
+                  "none overdue" % (total, reportable, not_reportable))
     if module and has_table:
         return bad(observed,
                    "the Article 23 clock exists and computes the 24-hour, 72-hour and 30-day deadlines from "
