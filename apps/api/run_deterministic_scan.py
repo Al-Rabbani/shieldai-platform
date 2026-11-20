@@ -122,16 +122,11 @@ async def check_ports(db, tenant_id, host="127.0.0.1"):
     raised an approval nobody answered, so this control produced nothing while logging an attempt. The
     authorisation gate is unchanged: an active AuthorizedTarget is still required.
 
-    This used to call gds_api.tool_gateway.execute_tool, which routes to the legacy kernel executor
-    and refuses every governed tool with GOVERNED_CAPABILITY_REQUIRED - so port coverage could never
-    work, at any time, regardless of authorisation. The governed path is: propose a capability
-    request against a real mission, let the broker decide, and only then execute. If the target is
-    not authorised or the required human approval is absent, the decision is reported instead of a
-    generic tool failure, so the reason is visible rather than hidden.
+    The governed path is: open a real mission, propose a capability request, let the broker decide, and only
+    then execute. A refusal is recorded as the mission's ending with the broker's own reason, so it reads as a
+    decision rather than a generic tool failure.
     """
     import uuid as _uuid
-    from gds_api.capabilities.broker import evaluate_capability_request
-    from gds_api.capabilities.gateway import execute_capability_request
 
     tid = _uuid.UUID(str(tenant_id))
     owner = (os.environ.get("GDS_OWNER_USER_ID", "") or "").strip()
@@ -156,6 +151,40 @@ async def check_ports(db, tenant_id, host="127.0.0.1"):
     # "The requesting user could not be authorized".
     await db.execute(_text("SELECT set_config('gds.tenant_id', :t, true)"), {"t": str(tid)})
 
+    outcome = {"new": 0, "dupe": 0, "failed": 1, "detail": "did not run"}
+    try:
+        outcome = await _execute_port_inventory(db, tid, uid, mission_id, host)
+    finally:
+        # Close the mission this run opened, on every path including a crash. Leaving it running is exactly
+        # what put eleven port_scan rows in `running` between 19 and 20 Nov: the reaper is a net for processes
+        # that died without a chance to write anything, not a fix for a path that never closes its own mission.
+        await _close_mission(db, tid, mission_id, outcome)
+    return outcome
+
+
+async def _close_mission(db, tenant_id, mission_id, outcome):
+    """Record the real ending of this run. Re-binds first: an earlier commit returned the pooled connection."""
+    from sqlalchemy import text as _text
+
+    ok = int(outcome.get("failed", 1)) == 0
+    detail = {k: v for k, v in outcome.items() if k != "detail"}
+    if outcome.get("detail"):
+        detail["reason"] = outcome["detail"]
+    await db.execute(_text("SELECT set_config('gds.tenant_id', :t, true)"), {"t": str(tenant_id)})
+    await db.execute(_text(
+        "UPDATE missions SET status = :s, completed_at = NOW(), report = :r "
+        "WHERE id = :id AND tenant_id = :tid"),
+        {"s": "completed" if ok else "failed", "r": json.dumps({"port_inventory": detail}),
+         "id": str(mission_id), "tid": str(tenant_id)})
+    await db.commit()
+    log(f"port inventory mission {str(mission_id)[:8]}: closed {'completed' if ok else 'failed'}")
+
+
+async def _execute_port_inventory(db, tid, uid, mission_id, host):
+    """The governed run itself. Returns an outcome dict; never raises past the caller's finally."""
+    from gds_api.capabilities.broker import evaluate_capability_request
+    from gds_api.capabilities.gateway import execute_capability_request
+
     try:
         evaluation = await evaluate_capability_request(
             db, tenant_id=tid, user_id=uid, mission_id=mission_id,
@@ -173,7 +202,9 @@ async def check_ports(db, tenant_id, host="127.0.0.1"):
     if evaluation.decision != "ALLOW":
         log(f"port inventory {host}: capability {evaluation.decision} - {getattr(evaluation, 'safe_message', '') or 'no reason given'}"
             f" (approval_id={getattr(evaluation, 'approval_id', None)})")
-        return {"new": 0, "dupe": 0, "failed": 1, "decision": evaluation.decision}
+        return {"new": 0, "dupe": 0, "failed": 1, "decision": evaluation.decision,
+                "detail": f"capability {evaluation.decision}: "
+                          f"{getattr(evaluation, 'safe_message', '') or 'no reason given'}"}
 
     try:
         res = await execute_capability_request(

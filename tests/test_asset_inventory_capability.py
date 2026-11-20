@@ -83,6 +83,27 @@ def test_the_scheduled_scan_requests_the_read_only_capability_as_a_blue_agent():
     assert 'capability_key="network.port_scan"' not in SCAN
 
 
+def test_the_run_closes_its_own_mission_on_every_path():
+    """The leak that put eleven port_scan rows in `running`: the path never closed what it opened."""
+    assert "await _close_mission(db, tid, mission_id, outcome)" in SCAN
+    assert "finally:" in SCAN
+    # the close must come from the finally block, not only from the happy path
+    assert SCAN.index("outcome = await _execute_port_inventory") < SCAN.index(
+        "await _close_mission(db, tid, mission_id, outcome)")
+
+
+def test_closing_rebinds_the_tenant_after_the_earlier_commit():
+    """A commit returns the pooled connection, so the tenant context from before it is gone."""
+    close_fn = SCAN.split("async def _close_mission", 1)[1].split("async def _execute_port_inventory", 1)[0]
+    assert "set_config('gds.tenant_id'" in close_fn
+    assert close_fn.index("set_config('gds.tenant_id'") < close_fn.index("UPDATE missions")
+
+
+def test_a_refusal_is_recorded_as_the_missions_own_ending():
+    """A broker refusal must land in the mission report, not only in a log line."""
+    assert '"detail": f"capability {evaluation.decision}' in SCAN
+
+
 def test_the_agent_that_runs_it_can_actually_hold_it():
     from gds_api.agents.registry import AGENT_REGISTRY
 
