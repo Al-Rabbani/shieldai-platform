@@ -33,20 +33,23 @@ class CIEMFinding(Base):
     permissions_granted: Mapped[int] = mapped_column(Integer, default=0)
     permissions_used: Mapped[int] = mapped_column(Integer, default=0)
     unused_permissions: Mapped[int] = mapped_column(Integer, default=0)
-    last_used: Mapped[str | None] = mapped_column(DateTime, nullable=True)
+    last_used: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     days_inactive: Mapped[int] = mapped_column(Integer, default=0)
     blast_radius: Mapped[float] = mapped_column(Float, default=0.0)  # 0-100
     privilege_escalation_path: Mapped[str | None] = mapped_column(Text, nullable=True)
     remediation: Mapped[str | None] = mapped_column(Text, nullable=True)
     detected_at: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(timezone.utc)
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
-    resolved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class CIEMScanResult(Base):
     __tablename__ = "ciem_scan_results"
 
+    # Migration 004 forced RLS on this table and the column is NOT NULL, but the model never mapped it,
+    # so every insert failed before it reached the database's own constraint.
+    tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
     cloud_account_id: Mapped[str] = mapped_column(String(64), index=True)
     provider: Mapped[str] = mapped_column(String(20))
@@ -58,8 +61,8 @@ class CIEMScanResult(Base):
     low_count: Mapped[int] = mapped_column(Integer, default=0)
     risk_score: Mapped[float] = mapped_column(Float, default=0.0)  # 0-100
     started_at: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(timezone.utc)
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
-    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     status: Mapped[str] = mapped_column(String(20), default="running")
     summary: Mapped[str | None] = mapped_column(Text, nullable=True)

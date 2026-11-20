@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timezone
 from typing import Any
 
@@ -83,26 +84,102 @@ class CIEMRemediationRequest(BaseModel):
     used_permissions: list[str] = []
 
 
+async def _resolve_governed_session(
+    db: AsyncSession, tenant_id: Any, provider: str, cloud_account_id: str, region: str
+) -> tuple[Any | None, str | None]:
+    """Resolve the platform's own read-only connection profile for this account.
+
+    CIEM used to demand static keys in the request body, which nothing in this deployment supplies, so the
+    feature could never run. Every other cloud path here resolves a governed profile and assumes a role;
+    CIEM now does the same. Returns (session, None) on success or (None, reason) so the caller can record
+    the failure instead of reporting an empty scan as a success.
+    """
+    from gds_api.cloud.adapters.aws import _build_session
+    from gds_api.models import CloudConnectionProfile, CloudEnvironment
+
+    environment = (
+        await db.execute(
+            select(CloudEnvironment).where(
+                CloudEnvironment.tenant_id == tenant_id,
+                CloudEnvironment.provider == provider,
+                CloudEnvironment.native_id == cloud_account_id,
+            )
+        )
+    ).scalars().first()
+    if environment is None:
+        return None, (
+            f"no registered {provider} environment with account {cloud_account_id} - register it via "
+            "POST /cloud/environments before analysing its identities"
+        )
+
+    profile = (
+        await db.execute(
+            select(CloudConnectionProfile)
+            .where(
+                CloudConnectionProfile.tenant_id == tenant_id,
+                CloudConnectionProfile.environment_id == environment.id,
+            )
+            .order_by(CloudConnectionProfile.created_at.desc())
+        )
+    ).scalars().first()
+    if profile is None:
+        return None, (
+            "no connection profile for this environment - create one via POST /cloud/connections "
+            "before analysing its identities"
+        )
+    if profile.provider != "aws":
+        return None, f"CIEM credential resolution is implemented for aws, not {profile.provider!r}"
+
+    try:
+        # boto3 performs the STS call synchronously; keep it off the event loop.
+        session = await asyncio.to_thread(_build_session, profile)
+    except Exception as exc:  # noqa: BLE001 - the reason is the result here
+        return None, f"could not assume the read-only role: {type(exc).__name__}: {exc}"
+    return session, None
+
+
 @router.post("/scans", response_model=CIEMScanResultOut)
 async def trigger_ciem_scan(
     req: CIEMScanRequest,
     db: AsyncSession = Depends(get_db),
     user: CurrentUser = Depends(require_permission("cloud:write")),
 ):
-    """Trigger a new CIEM scan for the specified cloud account."""
+    """Trigger a CIEM scan for one cloud account, using the platform's governed credentials.
+
+    Three defects made this route unusable and unprovable: the scan row could not be inserted (no
+    tenant_id in the model, and naive timestamp columns against tz-aware defaults), credentials had to be
+    posted as static keys, and a failed analysis was recorded as a completed scan with zero identities.
+    """
+    tenant_id = user.tenant_id
     scan = CIEMScanResult(
+        tenant_id=tenant_id,
         cloud_account_id=req.cloud_account_id,
         provider=req.provider,
         status="running",
     )
     db.add(scan)
     await db.flush()
+    scan_id = scan.id
+
+    boto_session = None
+    if req.provider == "aws" and not (req.access_key_id and req.secret_access_key):
+        boto_session, reason = await _resolve_governed_session(
+            db, tenant_id, req.provider, req.cloud_account_id, req.region
+        )
+        if boto_session is None:
+            scan.status = "failed"
+            scan.completed_at = datetime.now(timezone.utc)
+            scan.summary = reason
+            await db.flush()
+            await db.commit()
+            raise HTTPException(status_code=502, detail=reason)
 
     if req.provider == "aws":
         result = await analyze_aws_iam(
             access_key_id=req.access_key_id,
             secret_access_key=req.secret_access_key,
             region=req.region,
+            boto_session=boto_session,
         )
     elif req.provider == "azure":
         result = await analyze_azure_rbac(
@@ -115,33 +192,89 @@ async def trigger_ciem_scan(
     else:
         raise HTTPException(status_code=400, detail=f"Unknown provider: {req.provider}")
 
+    error = result.get("error")
     findings_data = result.get("findings", [])
+    if error:
+        # A refused or broken analysis is not a completed scan with nothing in it. Record the real reason
+        # on the scan row and fail the request, so the console cannot show an empty panel as "clean".
+        scan.status = "failed"
+        scan.identities_analyzed = result.get("identities_analyzed", 0)
+        scan.completed_at = datetime.now(timezone.utc)
+        scan.summary = f"{error}"[:1000]
+        await db.flush()
+        await db.commit()
+        raise HTTPException(status_code=502, detail=f"CIEM analysis failed: {error}")
+
     critical = sum(1 for f in findings_data if f.get("severity") == "critical")
     high = sum(1 for f in findings_data if f.get("severity") == "high")
     medium = sum(1 for f in findings_data if f.get("severity") == "medium")
     low = sum(1 for f in findings_data if f.get("severity") == "low")
     risk_score = min(100.0, (critical * 25) + (high * 15) + (medium * 5) + (low * 1))
 
+    existing = {
+        (finding.identity_arn, finding.finding_type): finding
+        for finding in (
+            await db.execute(
+                select(CIEMFinding).where(
+                    CIEMFinding.tenant_id == tenant_id,
+                    CIEMFinding.cloud_account_id == req.cloud_account_id,
+                    CIEMFinding.provider == req.provider,
+                )
+            )
+        ).scalars().all()
+    }
+
+    created = 0
+    updated = 0
+    seen: set[tuple[str, str]] = set()
     for f in findings_data:
-        finding = CIEMFinding(
-            cloud_account_id=req.cloud_account_id,
-            provider=req.provider,
-            identity_type=f.get("identity_type", "unknown"),
-            identity_name=f.get("identity_name", "unknown"),
-            identity_arn=f.get("identity_arn", ""),
-            finding_type=f.get("finding_type", "unknown"),
-            title=f.get("title", "Unknown finding"),
-            severity=f.get("severity", "low"),
-            status="open",
-            permissions_granted=f.get("permissions_granted", 0),
-            permissions_used=f.get("permissions_used", 0),
-            unused_permissions=f.get("unused_permissions", 0),
-            days_inactive=f.get("days_inactive", 0),
-            blast_radius=f.get("blast_radius", 0.0),
-            privilege_escalation_path=f.get("privilege_escalation_path"),
-            remediation=f.get("remediation"),
-        )
-        db.add(finding)
+        identity_arn = f.get("identity_arn", "")
+        finding_type = f.get("finding_type", "unknown")
+        key = (identity_arn, finding_type)
+        seen.add(key)
+        values = {
+            "identity_type": f.get("identity_type", "unknown"),
+            "identity_name": f.get("identity_name", "unknown"),
+            "title": f.get("title", "Unknown finding"),
+            "severity": f.get("severity", "low"),
+            "permissions_granted": f.get("permissions_granted", 0),
+            "permissions_used": f.get("permissions_used", 0),
+            "unused_permissions": f.get("unused_permissions", 0),
+            "days_inactive": f.get("days_inactive", 0),
+            "blast_radius": f.get("blast_radius", 0.0),
+            "privilege_escalation_path": f.get("privilege_escalation_path"),
+            "remediation": f.get("remediation"),
+        }
+        current = existing.get(key)
+        if current is not None:
+            # A re-scan refreshes the same finding instead of duplicating it.
+            for field, value in values.items():
+                setattr(current, field, value)
+            current.status = "open"
+            current.resolved_at = None
+            current.detected_at = datetime.now(timezone.utc)
+            updated += 1
+        else:
+            db.add(CIEMFinding(
+                tenant_id=tenant_id,
+                cloud_account_id=req.cloud_account_id,
+                provider=req.provider,
+                identity_arn=identity_arn,
+                finding_type=finding_type,
+                status="open",
+                **values,
+            ))
+            created += 1
+
+    # Absence detection: an identity that was flagged last time and is not flagged now is resolved, with
+    # the time it was actually observed last kept on the row.
+    resolved = 0
+    now = datetime.now(timezone.utc)
+    for key, current in existing.items():
+        if key not in seen and current.status == "open":
+            current.status = "resolved"
+            current.resolved_at = now
+            resolved += 1
 
     scan.identities_analyzed = result.get("identities_analyzed", 0)
     scan.findings_count = len(findings_data)
@@ -152,10 +285,15 @@ async def trigger_ciem_scan(
     scan.risk_score = risk_score
     scan.status = "completed"
     scan.completed_at = datetime.now(timezone.utc)
-    scan.summary = result.get("error") or f"Analyzed {scan.identities_analyzed} identities, found {len(findings_data)} findings"
+    scan.summary = (
+        f"Analyzed {scan.identities_analyzed} identities against the live provider API: "
+        f"{created} new, {updated} still present, {resolved} resolved."
+    )
 
     await db.flush()
-    return scan
+    await db.commit()
+    refreshed = await db.get(CIEMScanResult, scan_id)
+    return refreshed or scan
 
 
 @router.get("/scans", response_model=list[CIEMScanResultOut])

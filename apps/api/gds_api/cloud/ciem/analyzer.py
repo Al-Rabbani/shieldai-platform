@@ -109,9 +109,17 @@ async def analyze_aws_iam(
     access_key_id: str | None,
     secret_access_key: str | None,
     region: str = "us-east-1",
+    *,
+    boto_session: Any | None = None,
 ) -> dict[str, Any]:
-    """Analyze AWS IAM using boto3 — real API calls."""
-    if not access_key_id or not secret_access_key:
+    """Analyze AWS IAM using boto3 — real API calls.
+
+    `boto_session` is the governed path: the caller resolves the platform's own read-only connection
+    profile (assume-role, external id, temporary credentials) and hands the session in. Static keys are
+    still accepted for a one-off, but nothing in this deployment supplies them over HTTP, so requiring
+    them is what kept CIEM permanently empty.
+    """
+    if boto_session is None and (not access_key_id or not secret_access_key):
         return {
             "provider": "aws",
             "error": "AWS credentials not provided",
@@ -133,12 +141,15 @@ async def analyze_aws_iam(
     identities_analyzed = 0
 
     try:
-        iam = boto3.client(
-            "iam",
-            aws_access_key_id=access_key_id,
-            aws_secret_access_key=secret_access_key,
-            region_name=region,
-        )
+        if boto_session is not None:
+            iam = boto_session.client("iam", region_name=region)
+        else:
+            iam = boto3.client(
+                "iam",
+                aws_access_key_id=access_key_id,
+                aws_secret_access_key=secret_access_key,
+                region_name=region,
+            )
 
         # List all users
         paginator = iam.get_paginator("list_users")
