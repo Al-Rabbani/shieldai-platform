@@ -40,6 +40,60 @@ def _set_if_present(job: CloudDiscoveryJob, **values: object) -> None:
             setattr(job, key, value)
 
 
+async def _load_environment(
+    db: AsyncSession, tenant_id: uuid.UUID, environment_id: uuid.UUID
+):
+    """The environment row the job belongs to, or None. Loaded once per run."""
+    from gds_api.models import CloudEnvironment
+
+    return (
+        await db.execute(
+            select(CloudEnvironment).where(
+                CloudEnvironment.id == environment_id,
+                CloudEnvironment.tenant_id == tenant_id,
+            )
+        )
+    ).scalars().first()
+
+
+def _mark_environment(
+    environment,
+    *,
+    status: str | None = None,
+    failure: str | None = None,
+    clear_failure: bool = False,
+    asset_count: int | None = None,
+    region_count: int | None = None,
+    succeeded_at: datetime | None = None,
+    attempted_at: datetime | None = None,
+) -> None:
+    """Keep the environment's own discovery state true.
+
+    The model documents this column set - discovery_status, last_attempted_discovery_at,
+    last_successful_discovery_at, last_failure_detail, asset_count, region_count - as "refreshed after every
+    completed/partially_completed discovery job". Nothing refreshed them. Measured 20 Nov 2026: five discovery
+    jobs had completed for the Azure environment and four had for AWS, and both rows still read
+    never_run with asset_count 0, so the console's Cloud page showed "Assets 0" beside an account holding 144.
+    The only writer in the codebase was the startup reconciler setting "failed".
+    """
+    if environment is None:
+        return
+    if status is not None:
+        environment.discovery_status = status
+    if attempted_at is not None:
+        environment.last_attempted_discovery_at = attempted_at
+    if succeeded_at is not None:
+        environment.last_successful_discovery_at = succeeded_at
+    if clear_failure:
+        environment.last_failure_detail = None
+    elif failure is not None:
+        environment.last_failure_detail = failure[:1000]
+    if asset_count is not None:
+        environment.asset_count = asset_count
+    if region_count is not None:
+        environment.region_count = region_count
+
+
 async def run_discovery(
     db: AsyncSession, *, tenant_id: uuid.UUID, job_id: uuid.UUID
 ) -> dict[str, object]:
@@ -54,6 +108,12 @@ async def run_discovery(
         raise DiscoveryRunError(f"discovery job {job_id} not found for this tenant")
 
     _set_if_present(job, status="running", started_at=datetime.now(timezone.utc))
+    environment = await _load_environment(db, tenant_id, job.environment_id)
+    _mark_environment(
+        environment,
+        status="running",
+        attempted_at=datetime.now(timezone.utc),
+    )
 
     profile = (
         await db.execute(
@@ -72,6 +132,7 @@ async def run_discovery(
         )
         _set_if_present(job, status="failed", completed_at=datetime.now(timezone.utc),
                         errors=[reason])
+        _mark_environment(environment, status="failed", failure=reason)
         return {"success": False, "status": "failed", "reason": reason}
 
     adapter = get_adapter(profile.provider)
@@ -79,6 +140,7 @@ async def run_discovery(
         reason = f"no adapter registered for provider {profile.provider!r}"
         _set_if_present(job, status="failed", completed_at=datetime.now(timezone.utc),
                         errors=[reason])
+        _mark_environment(environment, status="failed", failure=reason)
         return {"success": False, "status": "failed", "reason": reason}
 
     scope = str(job.environment.native_id if getattr(job, "environment", None) else "")
@@ -121,6 +183,7 @@ async def run_discovery(
         reason = f"{type(exc).__name__}: {exc}"[:500]
         _set_if_present(job, status="failed", completed_at=datetime.now(timezone.utc),
                         errors=[reason], assets_discovered=discovered)
+        _mark_environment(environment, status="failed", failure=reason)
         return {"success": False, "status": "failed", "reason": reason, "assets": discovered}
 
     # What the adapter contained, made visible. A category that failed and a category that found
@@ -222,6 +285,18 @@ async def run_discovery(
             )
         )
     ).scalars().all()
+
+    # The run finished, so the environment's own counts and freshness are now facts rather than defaults.
+    # asset_count is the environment total, not this run's yield: the page answers "how much is in this account",
+    # and a run that found nothing new would otherwise report zero against a populated environment.
+    _mark_environment(
+        environment,
+        status="partially_completed" if errors else "completed",
+        clear_failure=True,
+        asset_count=len(stored),
+        region_count=len(region_info.get("regions") or []) if isinstance(region_info, dict) else None,
+        succeeded_at=datetime.now(timezone.utc) if not errors else None,
+    )
     return {
         "success": True, "status": "completed", "assets_discovered": discovered,
         "created": created, "updated": updated,

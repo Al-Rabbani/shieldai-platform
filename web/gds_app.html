@@ -1401,9 +1401,24 @@ async function loadCloud() {
         return;
     }
     if (envs && envs.length > 0) {
-        let html = '<table><tr><th>Provider</th><th>Name</th><th>Status</th><th>Assets</th></tr>';
+        // An asset count with no discovery state beside it is a number without a date: 144 could be a minute old or
+        // a year old. The environment row carries discovery_status and last_successful_discovery_at, so the page
+        // shows when the count was last true, and says so plainly when it never has been.
+        const discoveryBadge = st => {
+            if (st === 'completed') return 'badge-green';
+            if (st === 'partially_completed') return 'badge-yellow';
+            if (st === 'failed') return 'badge-red';
+            if (st === 'running') return 'badge-blue';
+            return 'badge-yellow';
+        };
+        let html = '<table><tr><th>Provider</th><th>Name</th><th>Status</th><th>Assets</th><th>Discovery</th></tr>';
         envs.slice(0,15).forEach(e => {
-            html += `<tr><td><span class="badge badge-blue">${escapeHtml(e.provider)}</span></td><td>${escapeHtml(e.name)}</td><td><span class="badge ${e.status==='active'?'badge-green':'badge-yellow'}">${escapeHtml(e.status)}</span></td><td class="muted">${escapeHtml(e.asset_count||0)}</td></tr>`;
+            const st = e.discovery_status || 'never_run';
+            const when = e.last_successful_discovery_at ? new Date(e.last_successful_discovery_at).toLocaleString()
+                : st === 'never_run' ? 'never run' : 'no successful run recorded';
+            const failure = st === 'failed' && e.last_failure_detail
+                ? ` <span class="muted" title="${escapeHtml(e.last_failure_detail)}">(see detail)</span>` : '';
+            html += `<tr><td><span class="badge badge-blue">${escapeHtml(e.provider)}</span></td><td>${escapeHtml(e.name)}</td><td><span class="badge ${e.status==='active'?'badge-green':'badge-yellow'}">${escapeHtml(e.status)}</span></td><td class="muted">${typeof e.asset_count === 'number' ? e.asset_count : '--'}</td><td><span class="badge ${discoveryBadge(st)}">${escapeHtml(st)}</span> <span class="muted">${escapeHtml(when)}</span>${failure}</td></tr>`;
         });
         html += '</table>';
         document.getElementById('cloudList').innerHTML = html;
