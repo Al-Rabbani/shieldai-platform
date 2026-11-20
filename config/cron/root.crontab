@@ -10,6 +10,7 @@
 30 2 * * * /usr/local/bin/gds-backup.sh >> /var/log/gds-backup.log 2>&1
 15 3 * * * /usr/local/bin/gds-wal-prune.sh
 45 4 * * 0 /usr/local/bin/gds-restore-drill.sh >> /var/log/gds-restore-drill.log 2>&1
+15 5 * * 0 /usr/local/bin/gds-pitr-rehearsal.sh >> /var/log/gds-pitr.log 2>&1
 */5 * * * * /usr/local/bin/gds-service-watch.sh
 */30 * * * * /usr/local/bin/gds-backup-watch.sh >> /var/log/gds-backup-watch.log 2>&1
 0 */12 * * * cd /opt/gds-os/apps/api && set -a && . /opt/.env && set +a && PYTHONPATH=/opt/gds-os/apps/api ./venv/bin/python enrich_findings.py >> /var/log/gds-enrich.log 2>&1

@@ -7,6 +7,7 @@ repo so the platform can be rebuilt rather than depending on hand-typed server s
 |---|---|---|
 | `gds-backup.sh` | `30 2 * * *` | Nightly `pg_dump -Fc` to `/var/backups/gds/daily`, verifies the dump by listing its objects with `pg_restore -l`, keeps 14 days. A dump that cannot be listed is treated as a failure. |
 | `gds-wal-prune.sh` | `15 3 * * *` | Prunes WAL archive segments older than 7 days. PITR window is therefore 7 days. |
+| `gds-pitr-rehearsal.sh` | `15 5 * * 0` | Restores a base backup, replays WAL to a captured LSN and proves the later write is absent. Weekly, so the 7-day window above is measured rather than assumed. Pages on failure. |
 | `gds-service-watch.sh` | `*/5 * * * *` | Functional probes for qdrant, minio, nats, temporal, api, worker. Two consecutive failures trigger a restart. |
 | `gds-temporal-probe.py` | via watch | Real gRPC `get_system_info` round-trip. A TCP probe previously reported Temporal healthy while it was wedged. |
 
