@@ -105,12 +105,18 @@ async def collect_verification() -> dict:
                       "WHERE m.status = 'completed' AND t.status = 'completed' "
                       "AND m.completed_at > now() - CAST(:d AS integer) * interval '1 day'"),
                 {"d": WINDOW_DAYS})).first()
+            # pg_attribute, not information_schema.columns. information_schema only shows columns the connected
+            # role holds a privilege on, so the same question answered through it is filtered by grants: measured
+            # 20 Nov 2026 as gds_runtime it saw 11 of the 73 tenant tables and as gds it saw 71. The verdict
+            # ("0 unforced") was therefore true of a subset, and a tenant table without FORCE RLS would have been
+            # invisible to the check that exists to catch exactly that.
             isolation = (await session.execute(
                 _text("SELECT count(*) FILTER (WHERE NOT c.relforcerowsecurity), count(*) "
                       "FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace "
                       "WHERE n.nspname = 'public' AND c.relkind = 'r' "
-                      "AND EXISTS (SELECT 1 FROM information_schema.columns col "
-                      "            WHERE col.table_name = c.relname AND col.column_name = 'tenant_id')"))).first()
+                      "AND EXISTS (SELECT 1 FROM pg_attribute a "
+                      "            WHERE a.attrelid = c.oid AND a.attname = 'tenant_id' "
+                      "            AND NOT a.attisdropped)"))).first()
     except Exception as exc:  # evidence unavailable is not evidence of failure
         reasons["database"] = f"evidence could not be read: {type(exc).__name__}"
         missions = tasks = isolation = reasoning = None

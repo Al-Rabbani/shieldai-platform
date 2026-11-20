@@ -440,8 +440,11 @@ async def architecture_review() -> dict[str, Any]:
     rows = await _fetch(
         "SELECT c.relname AS table_name, c.relrowsecurity AS rls_enabled, "
         "c.relforcerowsecurity AS rls_forced, "
-        "EXISTS (SELECT 1 FROM information_schema.columns col WHERE col.table_schema = 'public' "
-        "AND col.table_name = c.relname AND col.column_name = 'tenant_id') AS has_tenant_id "
+        # pg_attribute rather than information_schema.columns: the latter is filtered by the connected role's
+        # grants, so a tenant table the reporting role cannot see would not be counted - and a tenant table with no
+        # RLS is precisely the row this report exists to list.
+        "EXISTS (SELECT 1 FROM pg_attribute a WHERE a.attrelid = c.oid AND a.attname = 'tenant_id' "
+        "AND NOT a.attisdropped) AS has_tenant_id "
         "FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace "
         "WHERE n.nspname = 'public' AND c.relkind = 'r' ORDER BY c.relname",
         {},
@@ -454,7 +457,7 @@ async def architecture_review() -> dict[str, Any]:
     return {
         "success": True,
         "tool": "review_platform_architecture",
-        "source": "pg_class + information_schema (live)",
+        "source": "pg_class + pg_attribute (live)",
         "tables_total": len(rows),
         "tables_with_tenant_id": len(tenant_tables),
         "rls_forced": len(forced),
