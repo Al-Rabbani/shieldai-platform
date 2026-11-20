@@ -143,6 +143,7 @@ tr:hover{background:var(--surface2)}
 <a href="#/compliance" data-route="compliance" id="nav-compliance">Compliance</a>
 <a href="#/mssp" data-route="mssp" id="nav-mssp">MSSP</a>
 <a href="#/agents" data-route="agents" id="nav-agents">Agents</a>
+<a href="#/approvals" data-route="approvals" id="nav-approvals">Approvals</a>
 <a href="#/branding" data-route="branding" id="nav-branding">Branding</a>
 <a href="https://api.globaldigitalsecurity.io/docs" target="_blank">API Docs</a>
 <a href="#" onclick="logout();return false" id="nav-user" style="color:var(--primary);font-weight:600"></a>
@@ -213,6 +214,19 @@ tr:hover{background:var(--surface2)}
 </div>
 </div>
 
+
+<!-- Approvals Page -->
+<div id="page-approvals" class="hidden">
+<h2>Approvals</h2>
+<p class="muted">A governed action above the read-only risk classes waits here for a person. Deciding one is
+recorded against your account. An approval that is never decided expires on its own and the action does not
+run, so this page never shows a request that can no longer be honoured as if it were still live.</p>
+<div id="approvalsNotice" role="status" class="muted"></div>
+<div class="card">
+<div class="section-title">Awaiting a decision</div>
+<div id="approvalsList"><div class="spinner"></div></div>
+</div>
+</div>
 
 <!-- Branding Page -->
 <div id="page-branding" class="hidden">
@@ -709,6 +723,78 @@ async function loadCompliance() {
     : '<p class="muted">No control is currently failing.</p>';
 }
 
+async function loadApprovals() {
+  // An approval is the one place a person is genuinely required, so the page has to be honest about three
+  // different states: nothing waiting, something waiting, and this account not being allowed to see or decide.
+  const host = document.getElementById('approvalsList');
+  const notice = document.getElementById('approvalsNotice');
+  notice.textContent = '';
+  const result = await apiResult('/approvals?status_filter=pending', { refresh: true });
+  if (!result.ok) {
+    if (result.status === 403) {
+      host.innerHTML = '<p role="alert">This account cannot read approvals, so nothing can be shown here.</p>';
+      return;
+    }
+    const why = unavailableLabel(result);
+    host.innerHTML = '<p role="alert">Pending approvals could not be verified (' + escapeHtml(why) + ').</p>';
+    return;
+  }
+  const approvals = Array.isArray(result.data) ? result.data : [];
+  if (!approvals.length) {
+    host.innerHTML = '<p>Nothing is waiting for a decision. Governed actions are proceeding on their own.</p>';
+    return;
+  }
+  const now = Date.now();
+  let html = '<table><tr><th>Risk</th><th>Requested action</th><th>Waiting</th><th>Decision</th></tr>';
+  approvals.forEach(a => {
+    const ageHours = a.created_at ? (now - new Date(a.created_at).getTime()) / 3600000 : null;
+    const waited = ageHours === null ? 'unknown'
+      : ageHours >= 1 ? ageHours.toFixed(1) + 'h' : Math.max(0, Math.round(ageHours * 60)) + 'm';
+    const riskClass = String(a.risk_class || 'unknown');
+    const sevClass = riskClass === 'critical' ? 'sev-c' : riskClass === 'high' ? 'sev-h' : riskClass === 'medium' ? 'sev-m' : 'sev-l';
+    const id = String(a.id);
+    html += '<tr>'
+      + `<td class="${sevClass}" style="font-weight:600;text-transform:uppercase">${escapeHtml(riskClass)}</td>`
+      + `<td>${escapeHtml(String(a.action_description || ''))}</td>`
+      + `<td>${escapeHtml(waited)}</td>`
+      + `<td><button class="btn btn-primary" data-approval="${escapeHtml(id)}" data-decision="approved">Approve</button> `
+      + `<button class="btn" data-approval="${escapeHtml(id)}" data-decision="rejected">Reject</button></td>`
+      + '</tr>';
+  });
+  html += '</table>';
+  host.innerHTML = html;
+
+  host.querySelectorAll('button[data-approval]').forEach(button => {
+    button.addEventListener('click', async () => {
+      const id = button.getAttribute('data-approval');
+      const decision = button.getAttribute('data-decision');
+      host.querySelectorAll('button[data-approval]').forEach(b => { b.disabled = true; });
+      notice.textContent = decision === 'approved' ? 'Recording the approval…' : 'Recording the rejection…';
+      const sent = await apiSend('POST', '/approvals/' + encodeURIComponent(id) + '/decide', { decision: decision });
+      if (sent.ok) {
+        notice.textContent = decision === 'approved'
+          ? 'Approved. The action it authorises may now run.'
+          : 'Rejected. The action will not run.';
+        await loadApprovals();
+        return;
+      }
+      host.querySelectorAll('button[data-approval]').forEach(b => { b.disabled = false; });
+      if (sent.status === 409) {
+        // Someone decided it first, or it expired. Reloading shows the truth instead of arguing.
+        notice.textContent = 'That approval was already decided or has expired. Refreshing the list.';
+        await loadApprovals();
+      } else if (sent.status === 403) {
+        notice.textContent = 'This account can see approvals but is not allowed to decide them.';
+      } else if (sent.status === 404) {
+        notice.textContent = 'That approval no longer exists. Refreshing the list.';
+        await loadApprovals();
+      } else {
+        notice.textContent = 'The decision was not recorded (HTTP ' + sent.status + '). Nothing changed.';
+      }
+    });
+  });
+}
+
 async function loadMssp() {
   // /mssp/customers is cross-tenant and provider-only, so a 403 is an expected answer, not a fault.
   // It is reported as a permission boundary rather than as an empty customer list, because an empty
@@ -763,7 +849,7 @@ async function loadMssp() {
    bookmarked or reached with the back button, and a refresh always dropped the reader on Overview.
    The route now lives in the hash, so #/findings is a real location that survives reload and
    history navigation. routeFromHash is deliberately pure so it can be tested outside a browser. */
-const ROUTES = { overview:'Overview', findings:'Findings', incidents:'Incidents', cloud:'Cloud', compliance:'Compliance', mssp:'MSSP', agents:'Agents', branding:'Branding' };
+const ROUTES = { overview:'Overview', findings:'Findings', incidents:'Incidents', cloud:'Cloud', compliance:'Compliance', approvals:'Approvals', mssp:'MSSP', agents:'Agents', branding:'Branding' };
 
 function routeFromHash(hash) {
   const raw = String(hash == null ? '' : hash).replace(/^#\/?/, '').split('?')[0];
@@ -816,7 +902,7 @@ function applyRoute() {
 window.addEventListener('hashchange', applyRoute);
 
 function showPage(page) {
-    ['overview','findings','incidents','cloud','compliance','mssp','agents','branding'].forEach(p => {
+    ['overview','findings','incidents','cloud','compliance','approvals','mssp','agents','branding'].forEach(p => {
         document.getElementById('page-'+p).classList.toggle('hidden', p !== page);
         const nav = document.getElementById('nav-'+p);
         if (nav) nav.classList.toggle('active', p === page);
@@ -826,6 +912,7 @@ function showPage(page) {
     if (page === 'incidents') withBusy('incidents', loadIncidents);
     if (page === 'cloud') withBusy('cloud', loadCloud);
     if (page === 'compliance') withBusy('compliance', loadCompliance);
+    if (page === 'approvals') withBusy('approvals', loadApprovals);
     if (page === 'mssp') withBusy('mssp', loadMssp);
     if (page === 'agents') withBusy('agents', loadAgents);
 }
