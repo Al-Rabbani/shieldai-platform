@@ -44,9 +44,19 @@ async def list_frameworks(
     7 assessed controls out of 58 is not a compliant framework. Manual rows carry no evidence and are
     counted separately rather than being allowed to lift the score.
     """
+    # UNION of both sources. Listing only compliance_frameworks silently dropped four frameworks whose verdicts
+    # exist but whose catalogue row does not: measured 20 Nov 2026, compliance_assessments held 18 manual rows for
+    # iso27001, nist_csf, pci_dss and soc2, and none of those keys appeared anywhere on the compliance surface. A
+    # verdict that is not shown is indistinguishable from a verdict that was never taken.
     fw_rows = (await db.execute(text(
-        "SELECT framework_key, name, version, official_control_count, jurisdiction "
-        "FROM compliance_frameworks ORDER BY framework_key"
+        "SELECT f.framework_key, f.name, f.version, f.official_control_count, f.jurisdiction, true AS catalogued "
+        "FROM compliance_frameworks f "
+        "UNION ALL "
+        "SELECT DISTINCT a.framework AS framework_key, a.framework AS name, NULL::varchar AS version, "
+        "       NULL::integer AS official_control_count, NULL::varchar AS jurisdiction, false AS catalogued "
+        "FROM compliance_assessments a "
+        "WHERE a.framework NOT IN (SELECT framework_key FROM compliance_frameworks) "
+        "ORDER BY framework_key"
     ))).mappings().all()
 
     counts = (await db.execute(text(
@@ -62,7 +72,7 @@ async def list_frameworks(
     by_fw = {r["framework"]: r for r in counts}
 
     frameworks = []
-    tot_assessed = tot_pass = tot_fail = 0
+    tot_assessed = tot_pass = tot_fail = tot_manual = 0
     for f in fw_rows:
         r = by_fw.get(f["framework_key"])
         passing = int(r["passing"]) if r else 0
@@ -70,22 +80,28 @@ async def list_frameworks(
         not_tested = int(r["not_tested"]) if r else 0
         assessed = passing + failing
         official = int(f["official_control_count"] or 0)
+        manual = int(r["manual"]) if r else 0
         tot_assessed += assessed
         tot_pass += passing
         tot_fail += failing
+        tot_manual += manual
         frameworks.append({
             "framework": f["framework_key"],
             "name": f["name"],
             "version": f["version"],
-            "official_control_count": official,
+            "official_control_count": official or None,
             # Which legal order this framework binds in. Stated, never inferred by the browser.
             "jurisdiction": f["jurisdiction"],
-            "catalogued": (passing + failing + not_tested),
+            # True only when the framework has a catalogue row, so its size is known. An uncatalogued framework can
+            # report verdicts but never a coverage percentage - dividing by an unknown total is how a fabricated
+            # 0% or 100% gets into a board pack.
+            "catalogued": bool(f["catalogued"]),
+            "control_rows": (passing + failing + not_tested),
             "assessed": assessed,
             "passing": passing,
             "failing": failing,
             "not_tested": not_tested,
-            "manual_unevidenced": int(r["manual"]) if r else 0,
+            "manual_unevidenced": manual,
             "coverage_pct": round(100.0 * assessed / official, 1) if official else None,
             "score_over_assessed": round(100.0 * passing / assessed, 1) if assessed else None,
             "last_assessed": r["last_assessed"].isoformat() if r and r["last_assessed"] else None,
@@ -97,7 +113,12 @@ async def list_frameworks(
         "passing": tot_pass,
         "failing": tot_fail,
         "frameworks": frameworks,
+        # Manual verdicts carry no evidence. They are excluded from the score on purpose and reported here so the
+        # exclusion is visible rather than silent.
+        "manual_unevidenced": tot_manual,
         "score_basis": "pass rate over controls that were actually assessed; not a percentage of the framework",
+        "coverage_basis": "coverage is assessed controls divided by the framework's official control count, which is "
+                          "known only for catalogued frameworks",
         "tenant_scoped": False,
         "note": TENANT_SCOPE_NOTE,
     }

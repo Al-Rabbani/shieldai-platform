@@ -700,14 +700,28 @@ async function loadCompliance() {
 
   document.getElementById('compBasis').innerHTML =
     (data.score_basis ? '<p class="muted">' + escapeHtml(data.score_basis) + '</p>' : '') +
+    (data.coverage_basis ? '<p class="muted">' + escapeHtml(data.coverage_basis) + '</p>' : '') +
+    (data.manual_unevidenced ? '<p class="muted">' + data.manual_unevidenced + ' manual verdicts carry no evidence. They are excluded from the score and from coverage, and are listed per framework above.</p>' : '') +
     (data.note ? '<p class="muted">' + escapeHtml(data.note) + '</p>' : '');
 
-  let html = '<table><tr><th>Framework</th><th>Jurisdiction</th><th>Assessed</th><th>Coverage</th><th>Pass</th><th>Fail</th><th>Score</th><th>Last assessed</th></tr>';
+  // Two different denominators used to sit in the same row without being named: "28 / 35" was assessed against the
+  // number of control rows that exist, while the coverage percentage beside it divided by the framework's official
+  // size (153 for CIS v8). 80% and 18.3% described the same framework. Each number now states its basis, an
+  // uncatalogued framework reports no coverage rather than a division by an unknown total, and unevidenced manual
+  // verdicts are shown instead of being dropped.
+  const fwName = f => escapeHtml(f.name || f.framework) + (f.catalogued ? '' : ' <span class="muted" style="font-size:11px">(no catalogue row: key ' + escapeHtml(f.framework) + ')</span>');
+  let html = '<table><tr><th>Framework</th><th>Jurisdiction</th><th>Assessed of official size</th><th>Coverage</th><th>Pass</th><th>Fail</th><th>Score over assessed</th><th>Unevidenced</th><th>Last assessed</th></tr>';
   (data.frameworks || []).forEach(f => {
-    html += '<tr><td>' + escapeHtml(f.name) + '</td><td><span class="badge badge-blue">' + escapeHtml(f.jurisdiction || 'Unspecified') +
-      '</span></td><td>' + f.assessed + ' / ' + f.catalogued + '</td><td>' +
+    const size = f.catalogued && f.official_control_count ? f.official_control_count : null;
+    const assessedCell = size !== null
+      ? f.assessed + ' of ' + size + (f.control_rows && f.control_rows !== size ? ' <span class="muted" style="font-size:11px">(' + f.control_rows + ' control rows recorded)</span>' : '')
+      : f.assessed + ' <span class="muted" style="font-size:11px">(official size unknown)</span>';
+    html += '<tr><td>' + fwName(f) + '</td><td><span class="badge badge-blue">' + escapeHtml(f.jurisdiction || 'Unspecified') +
+      '</span></td><td>' + assessedCell + '</td><td>' +
       pct(f.coverage_pct) + '</td><td>' + f.passing + '</td><td class="' + (f.failing ? 'sev-h' : '') + '">' +
       f.failing + '</td><td>' + pct(f.score_over_assessed) + '</td><td class="muted">' +
+      (f.manual_unevidenced ? f.manual_unevidenced + ' <span style="font-size:11px">manual, no evidence</span>' : '-') +
+      '</td><td class="muted">' +
       (f.last_assessed ? formatDateTime(f.last_assessed) : 'never') + '</td></tr>';
   });
   document.getElementById('compFrameworks').innerHTML = html + '</table>';
