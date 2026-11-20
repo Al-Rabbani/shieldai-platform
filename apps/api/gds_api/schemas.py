@@ -5,7 +5,7 @@ import uuid
 from datetime import date, datetime
 from decimal import Decimal
 
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 
 
 class RegisterRequest(BaseModel):
@@ -339,6 +339,20 @@ class IncidentOut(BaseModel):
     created_at: datetime
     resolved_at: datetime | None
     finding_count: int
+    # A bare count cannot tell a reader whether the incident still has live work behind it. Two incidents were
+    # displayed as open critical with finding_count 0 while every finding they link to was either resolved or
+    # accepted as risk, so the surface reported a situation that no longer existed.
+    open_findings: int = 0
+    accepted_risk_findings: int = 0
+    resolved_findings: int = 0
+    # The latest expiry among the linked acceptances, so "accepted" always carries a date.
+    accepted_until: datetime | None = None
+
+
+class IncidentResolveRequest(BaseModel):
+    # Closing an incident is an accountable act. The reason is required and is recorded on the incident and in
+    # the audit trail; it is never inferred from the fact that someone pressed a button.
+    reason: str = Field(min_length=20, max_length=2000)
 
 
 class KnowledgeDocumentOut(BaseModel):

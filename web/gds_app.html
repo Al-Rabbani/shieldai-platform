@@ -1380,10 +1380,31 @@ async function loadIncidents() {
         return;
     }
     if (incidents && incidents.length > 0) {
-        let html = '<table><tr><th>Severity</th><th>Title</th><th>Status</th><th>Created</th></tr>';
+        // An incident badge on its own cannot say whether live work remains behind it. The API now returns the
+        // composition of the linked findings (open / accepted as risk / resolved), so an incident whose findings
+        // were all resolved or formally accepted reads as exactly that instead of a bare "open" critical.
+        const composition = i => {
+            const bits = [];
+            if (typeof i.open_findings === 'number') bits.push(i.open_findings + ' open');
+            if (i.accepted_risk_findings) {
+                const until = i.accepted_until ? ' until ' + new Date(i.accepted_until).toLocaleDateString() : '';
+                bits.push(i.accepted_risk_findings + ' accepted as risk' + until);
+            }
+            if (i.resolved_findings) bits.push(i.resolved_findings + ' resolved');
+            if (!bits.length) return '<span class="muted">no linked findings recorded</span>';
+            return escapeHtml(bits.join(' \u00b7 '));
+        };
+        let html = '<table><tr><th>Severity</th><th>Title</th><th>Status</th><th>Findings behind it</th><th>Created</th><th></th></tr>';
         incidents.slice(0,25).forEach(i => {
             const sevClass = i.severity === 'critical' ? 'sev-c' : i.severity === 'high' ? 'sev-h' : 'sev-m';
-            html += `<tr><td class="${sevClass}" style="font-weight:600;text-transform:uppercase">${escapeHtml(i.severity)}</td><td>${escapeHtml(i.title)}</td><td><span class="badge ${i.status==='open'?'badge-red':'badge-green'}">${escapeHtml(i.status)}</span></td><td class="muted">${new Date(i.created_at).toLocaleDateString()}</td></tr>`;
+            const live = i.status !== 'resolved' && i.open_findings > 0;
+            const stale = i.status !== 'resolved' && typeof i.open_findings === 'number' && i.open_findings === 0;
+            const action = i.status === 'resolved' ? '<span class="muted">closed</span>'
+                : `<button type="button" class="btn" onclick="closeIncident('${i.id}')">Close incident</button>`;
+            html += `<tr><td class="${sevClass}" style="font-weight:600;text-transform:uppercase">${escapeHtml(i.severity)}</td><td>${escapeHtml(i.title)}` +
+                (stale ? '<div class="muted" style="font-size:12px">No finding behind this incident is still open.</div>' : '') +
+                `</td><td><span class="badge ${i.status==='resolved'?'badge-green':(live?'badge-red':'badge-yellow')}">${escapeHtml(i.status)}</span></td>` +
+                `<td class="muted" style="font-size:12px">${composition(i)}</td><td class="muted">${new Date(i.created_at).toLocaleDateString()}</td><td>${action}</td></tr>`;
         });
         html += '</table>';
         document.getElementById('incidentsList').innerHTML = html;
@@ -1392,6 +1413,22 @@ async function loadIncidents() {
         document.getElementById('incidentsList').innerHTML = '<p class="muted">No active incidents. All clear.</p>';
         document.getElementById('stat-incidents').textContent = '0';
     }
+}
+
+// Closing an incident is an accountable act: the reason is required by the API (20 characters minimum), recorded
+// on the incident and written to the audit trail. The findings keep their own status in their own register.
+async function closeIncident(id) {
+    const reason = window.prompt('Why is this incident being closed? The reason is recorded against it and in the audit trail. Findings keep their own status.');
+    if (reason === null) return;
+    if (reason.trim().length < 20) {
+        window.alert('A reason of at least 20 characters is required, so the closure can be understood later.');
+        return;
+    }
+    const result = await apiSend('POST', '/incidents/' + encodeURIComponent(id) + '/resolve', { reason: reason.trim() });
+    if (result.ok) { loadIncidents(); return; }
+    if (result.status === 409) { window.alert('This incident is already closed.'); loadIncidents(); return; }
+    if (result.status === 403) { window.alert('Your role cannot close incidents.'); return; }
+    window.alert('The incident could not be closed. Nothing was changed.');
 }
 
 async function loadCloud() {

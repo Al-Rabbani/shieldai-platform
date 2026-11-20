@@ -416,12 +416,24 @@ class Incident(Base):
 
 
 class IncidentFinding(Base):
-    """Join table: which Findings were escalated into a given Incident."""
+    """Join table: which Findings were escalated into a given Incident.
+
+    Two finding tables exist in this platform and this join reaches both: `findings` (uuid ids, the governed
+    register) through finding_id, and `security_findings` (integer ids, the scanner register) through
+    security_finding_id. Only finding_id used to be mapped, so the ORM could not see the scanner links that every
+    real row uses: GET /incidents reported finding_count 0 for two incidents holding 20 linked findings, because it
+    counted a column that is NULL on every row. Measured 20 Nov 2026.
+    """
 
     __tablename__ = "incident_findings"
 
     incident_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("incidents.id"), primary_key=True)
-    finding_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("findings.id"), primary_key=True)
+    finding_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("findings.id"), primary_key=True, default=None
+    )
+    security_finding_id: Mapped[int | None] = mapped_column(
+        ForeignKey("security_findings.id"), default=None
+    )
 
 
 class AuthorizedTarget(Base):

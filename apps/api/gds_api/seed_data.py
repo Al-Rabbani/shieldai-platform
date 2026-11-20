@@ -22,6 +22,10 @@ ROLE_PERMISSIONS: dict[str, list[str]] = {
         # permission that no route uses, which made the suppression mechanism look missing when it was present.)
         "findings:accept_risk",
         "incidents:read",
+        # An incident could never be closed before this permission existed: GET was the only route on the
+        # resource, so "open" was permanent. Closing is an accountable act with a recorded reason, so it sits
+        # with the owner role alongside accepting risk.
+        "incidents:write",
         "knowledge:read",
         "knowledge:write",
         "workflows:read",
@@ -86,6 +90,7 @@ ROLE_PERMISSIONS: dict[str, list[str]] = {
         "missions:read",
         "findings:read",
         "incidents:read",
+        "incidents:write",
         "knowledge:read",
         "knowledge:write",
         "workflows:read",
