@@ -380,11 +380,33 @@ def chk_mfa_enforced():
 
 
 def chk_access_review():
+    """Measures the review record, not the existence of a table.
+
+    This collector previously hardcoded reviews_recorded: 0 and failed forever. Migration 034 added the tables
+    and a real generation path, so now the question is answerable: has a review been completed recently, and how
+    much of it is still undecided.
+    """
     tables = int(one("SELECT count(*) FROM pg_tables WHERE schemaname='public' AND tablename IN "
                      "('access_reviews','access_review_items');", "0") or 0)
-    return bad({"review_tables": tables, "reviews_recorded": 0},
-               "no access review has ever been recorded and none is scheduled; deactivation exists in the API "
-               "but standing access is never periodically reviewed")
+    active = int(one("SELECT count(*) FROM users WHERE is_active;", "0") or 0)
+    if tables < 2:
+        return bad({"review_tables": tables, "active_users": active},
+                   "no access review mechanism exists: standing access is never periodically reviewed")
+    completed = int(one("SELECT count(*) FROM access_reviews WHERE status='completed' "
+                        "AND completed_at > now() - interval '90 days';", "0") or 0)
+    open_reviews = int(one("SELECT count(*) FROM access_reviews WHERE status='open';", "0") or 0)
+    pending = int(one("SELECT count(*) FROM access_review_items WHERE decision='pending';", "0") or 0)
+    last = one("SELECT coalesce(max(completed_at)::text, '') FROM access_reviews WHERE status='completed';", "") or None
+    observed = {"review_tables": tables, "active_users": active, "completed_reviews_90d": completed,
+                "open_reviews": open_reviews, "pending_items": pending, "last_completed": last}
+    if completed > 0:
+        return ok(observed, f"{completed} access review(s) completed within 90 days; most recent {last}")
+    if open_reviews > 0:
+        return bad(observed,
+                   f"a review is open with {pending} of {active} account(s) still undecided, so standing access "
+                   "has not yet been re-justified")
+    return bad(observed,
+               "the mechanism exists but no review has ever been completed, so standing access is unreviewed")
 
 
 COLLECTORS = {
