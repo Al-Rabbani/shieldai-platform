@@ -164,3 +164,47 @@ Stated because a runbook that implies more coverage than exists is worse than no
   continuous WAL archive that gives minute-level recovery lives on the same host and is lost with it. A
   contractual RTO cannot be stated: there is no standby, so the unmeasured part of recovery is provisioning a
   host, not restoring the data.
+
+## 5. Controls that measure instead of asserting (added 20 Nov 2026)
+
+Each of these was previously a hardcoded `False` in `scripts/ops/assess_compliance.py`. A control that asserts a
+constant cannot notice when the situation changes, in either direction.
+
+### Second factor (mfa_enforced)
+Mechanism: migration 033 adds `users.mfa_secret` (Fernet-encrypted), `mfa_enabled`, `mfa_enrolled_at` and
+`mfa_recovery_codes` (FORCE-RLS, sha256-hashed, single use). `apps/api/gds_api/mfa.py` is TOTP per RFC 6238 with no
+extra dependency. Routes: `POST /auth/mfa/enrol`, `/confirm`, `/disable`. Once enabled, login returns
+`401 mfa_required` without a code, and a recovery code is burned on first use.
+The control reports columns, routes and the enrolled count. It passes only when every active user is enrolled.
+
+### Access reviews (access_review)
+Migration 034. `POST /access/reviews` snapshots active users with role and last session; `POST
+/access/reviews/{id}/decide` records retain or revoke, and **revoke genuinely sets `is_active = false` and revokes
+that user's sessions**. Self-revocation returns 409, because with one administrator the tenant would lose the
+ability to finish its own review. A review is not self-decided by the platform: the reviewer decides.
+
+### NIS2 Article 23 (incident_reporting)
+Migration 035 adds `regulatory_notifications`, and `gds_api/regulatory.py` computes the 24-hour early warning,
+72-hour notification and 30-day final report deadlines **from detection and stores them**, so "are we late on a
+regulator?" is `GET /regulatory-notifications/overdue`. It never sends anything: notifying an authority is a legal
+act, so `POST /regulatory-notifications/{id}/submit` records that a person sent it and when. The control passes
+only once a real incident has been assessed, because an unexercised procedure is a plan, not evidence.
+
+### Patch window (patch_currency)
+`config/cron/root.crontab` is the source of truth for all 16 scheduled jobs and `deploy.sh` installs it, so a
+rebuild no longer loses backups, scans, reapers or the paging watchers. The window runs weekly on Friday at 05:00
+(`0 5 * * 5`). Two defects were fixed to make that true: the schedule was a one-shot date (`0 5 20 11 *`, which had
+already fired and would never recur), and `gds-os-update.sh` deleted its own crontab entry after running, which
+would have erased a recurring schedule on its first run. Security updates are handled independently by
+`unattended-upgrades`; the pending packages this control reports are non-security ones.
+
+## 6. Findings that are recorded as accepted risk rather than fixed
+
+- **MinIO (7 critical CVEs).** The image is unobtainable: `minio/minio` returns pull access denied on Docker Hub,
+  quay.io, ghcr.io and bitnami. It cannot be removed because the evidence vault stores objects in its `gds-evidence`
+  bucket. All four containers are bound to 127.0.0.1 and UFW denies 9000/9001, so the CVEs are not network-reachable.
+- **Temporal (7 critical CVEs).** No better image exists: `1.23.1.1` scans at 23 criticals against 22 on the running
+  digest, so the newer tag is worse. Temporal stays because `mission_workflow` and `conversation_workflow` use it.
+- **Volume encryption at rest.** The root filesystem is plain ext4 with no LUKS mapping. Backups are gpg AES256 and
+  transport is TLS, but the live database volume is unencrypted. This needs a rebuild or a maintenance window and is
+  an owner decision, not a code change.
