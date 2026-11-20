@@ -1227,7 +1227,7 @@ async function loadOverview() {
         for (const [name, svc] of Object.entries(health.services)) {
             const ok = svc.status === 'healthy';
             if (ok) healthy++;
-            html += `<tr><td>${escapeHtml(name)}</td><td><span class="badge ${ok?'badge-green':'badge-red'}"><span class="dot ${ok?'dot-green':'dot-red'}"></span>${escapeHtml(svc.status)}</span></td><td class="muted">${(svc.latency_ms||0).toFixed(1)}ms</td></tr>`;
+            html += `<tr><td>${escapeHtml(name)}</td><td><span class="badge ${ok?'badge-green':'badge-red'}"><span class="dot ${ok?'dot-green':'dot-red'}"></span>${escapeHtml(svc.status)}</span></td><td class="muted">${typeof svc.latency_ms === 'number' ? svc.latency_ms.toFixed(1) + 'ms' : '--'}</td></tr>`;
         }
         html += '</table>';
         document.getElementById('healthList').innerHTML = html;
@@ -1236,9 +1236,22 @@ async function loadOverview() {
         document.getElementById('healthList').innerHTML = '<p class="muted">Cannot reach health endpoint</p>';
     }
 
+    // /health reports the package version ("0.1.0"), which is the same on every deploy and therefore cannot tell an
+    // operator which build they are looking at. /health/version reports the deployed commit, its time, whether the
+    // tree was clean and how many migrations are applied, so that is what this panel shows.
+    const build = await apiGet('/health/version');
+    const shortSha = build && build.sha ? String(build.sha).slice(0, 12) : null;
+    const buildCell = shortSha
+        ? escapeHtml(shortSha) + (build.branch && build.branch !== 'HEAD' ? ' <span class="muted">(' + escapeHtml(build.branch) + ')</span>' : '')
+        : '<span class="muted">unknown</span>';
+    const deployedCell = build && build.deployed_at ? escapeHtml(new Date(build.deployed_at).toLocaleString()) : '--';
+    const schemaCell = build && build.schema_version ? escapeHtml(build.schema_version) : '--';
     document.getElementById('platformInfo').innerHTML = `
         <table>
-        <tr><td class="muted">Version</td><td>${escapeHtml(health?.version || '--')}</td></tr>
+        <tr><td class="muted">Build</td><td style="font-family:monospace">${buildCell}</td></tr>
+        <tr><td class="muted">Deployed</td><td>${deployedCell}</td></tr>
+        <tr><td class="muted">Schema</td><td>${schemaCell}${build && build.tree_clean === false ? ' <span class="sev-h">(deployed from a dirty tree)</span>' : ''}</td></tr>
+        <tr><td class="muted">API package</td><td>${escapeHtml(health?.version || '--')}</td></tr>
         <tr><td class="muted">Tenant</td><td>${escapeHtml(currentUser?.tenant?.name || '--')}</td></tr>
         <tr><td class="muted">Role</td><td><span class="badge badge-blue">${escapeHtml(currentUser?.role?.name || '--')}</span></td></tr>
         <tr><td class="muted">Permissions</td><td>${currentUser?.role?.permissions?.length || 0} granted</td></tr>
