@@ -21,6 +21,7 @@ matching this codebase's established convention.
 from __future__ import annotations
 
 import asyncio
+import os
 from collections.abc import AsyncIterator, Iterable, Iterator
 from typing import TYPE_CHECKING, Any
 
@@ -145,6 +146,21 @@ async def _stream_paged(paged: Iterable[Any]) -> AsyncIterator[Any]:
         yield item
 
 
+async def _resolve_subscriptions(sub_client):
+    """The subscriptions this profile can actually read.
+
+    Azure's subscription LIST endpoint requires tenant-level read. A Reader granted at subscription scope does
+    not have it, so listing returns an empty list even though the subscription itself is readable - measured, not
+    assumed: GET /subscriptions was 200 with zero items while GET /subscriptions/<id> was 200 "GDS" with the same
+    credential. Enumerating first therefore turns a correctly-scoped credential into a silent empty result, so a
+    declared subscription is read directly and enumeration is only the fallback for a tenant-wide reader.
+    """
+    configured = (os.environ.get("AZURE_SUBSCRIPTION_ID") or "").strip()
+    if configured:
+        return [await asyncio.to_thread(sub_client.subscriptions.get, configured)]
+    return [sub async for sub in _stream_paged(sub_client.subscriptions.list())]
+
+
 class AzureProviderAdapter(ProviderAdapter):
     provider_id = "azure"
 
@@ -157,7 +173,7 @@ class AzureProviderAdapter(ProviderAdapter):
         try:
             credential = _build_credential(profile)
             sub_client = SubscriptionClient(credential)
-            subscriptions = [sub async for sub in _stream_paged(sub_client.subscriptions.list())]
+            subscriptions = await _resolve_subscriptions(sub_client)
         except Exception as exc:  # noqa: BLE001 - classified below, never re-raised raw
             error = _classify(exc)
             latency_ms = (time.perf_counter() - start) * 1000
@@ -192,12 +208,16 @@ class AzureProviderAdapter(ProviderAdapter):
         credential = _build_credential(profile)
         sub_client = SubscriptionClient(credential)
         try:
-            subscriptions = [sub async for sub in _stream_paged(sub_client.subscriptions.list())]
+            subscriptions = await _resolve_subscriptions(sub_client)
         except Exception as exc:  # noqa: BLE001
             error = _classify(exc)
             raise RuntimeError(error.sanitized_message) from exc
         if not subscriptions:
-            raise RuntimeError("Azure: no subscriptions visible to this connection profile.")
+            raise RuntimeError(
+                "Azure: no subscriptions visible to this connection profile. A subscription-scoped "
+                "Reader cannot list subscriptions; set AZURE_SUBSCRIPTION_ID to the subscription it is "
+                "authorised to read."
+            )
         first = subscriptions[0]
         return ScopeIdentity(
             native_id=str(first.subscription_id),
@@ -212,7 +232,7 @@ class AzureProviderAdapter(ProviderAdapter):
         sub_client = SubscriptionClient(credential)
         refs: list[ChildEnvironmentRef] = []
         try:
-            async for sub in _stream_paged(sub_client.subscriptions.list()):
+            for sub in await _resolve_subscriptions(sub_client):
                 refs.append(
                     ChildEnvironmentRef(
                         native_id=str(sub.subscription_id),
@@ -230,7 +250,7 @@ class AzureProviderAdapter(ProviderAdapter):
         credential = _build_credential(profile)
         sub_client = SubscriptionClient(credential)
         try:
-            subscriptions = [sub async for sub in _stream_paged(sub_client.subscriptions.list())]
+            subscriptions = await _resolve_subscriptions(sub_client)
             if not subscriptions:
                 return []
             locations = [
