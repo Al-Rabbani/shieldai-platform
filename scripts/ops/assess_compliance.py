@@ -323,11 +323,19 @@ def chk_incident_response_staffing():
                 break
         except Exception:
             pass
-    rota = int(one("SELECT count(*) FROM information_schema.tables WHERE table_name IN ('on_call_rota','oncall_rotas');", "0") or 0)
+    rota = int(one("SELECT count(*) FROM information_schema.tables WHERE table_name='on_call_shifts';", "0") or 0)
+    # A rota that exists but has no shift covering this moment still pages nobody, so measure coverage, not the
+    # presence of a table. Empty string means the query returned nothing, which is a real answer: nobody on call.
+    covering = (one("SELECT person_name FROM on_call_shifts "
+                    "WHERE starts_at <= now() AND ends_at > now() ORDER BY starts_at DESC LIMIT 1;", "") or "").strip()
     observed = {"paging_ladder": ladder, "paging_scheduled": bool(cron), "ackable_notifications": ackable,
-                "on_call_rota": bool(rota)}
+                "on_call_rota": bool(rota), "on_call_now": covering or None}
+    if ladder and cron and covering:
+        return ok(observed, f"a paging ladder runs on a schedule and {covering} is on call now")
     if ladder and cron and rota:
-        return ok(observed, "a paging ladder runs on a schedule and an on-call rota names who answers")
+        return bad(observed,
+                   "the acknowledgement ladder runs and the rota table exists, but no shift covers the current "
+                   "time, so a page right now would still land on nobody in particular")
     return bad(observed,
                "the acknowledgement ladder and its 5-minute schedule exist, but no on-call rota names who answers "
                "outside business hours, so a page can still land on nobody in particular")
