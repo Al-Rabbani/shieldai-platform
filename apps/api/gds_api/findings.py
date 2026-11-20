@@ -4,10 +4,25 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from gds_api.audit import record_audit_event
 from gds_api.db import get_db
+from gds_api.findings_risk_acceptance import (
+    AcceptanceConflict,
+    AcceptanceNotFound,
+    InvalidAcceptance,
+    accept_risk,
+    list_acceptances,
+    revoke_acceptance,
+)
 from gds_api.memory import get_finding_correlation
 from gds_api.models import Finding
-from gds_api.schemas import FindingCorrelationOut, FindingOut, SecurityFindingOut
+from gds_api.schemas import (
+    FindingCorrelationOut,
+    FindingOut,
+    RiskAcceptanceRequest,
+    RiskAcceptanceRevokeRequest,
+    SecurityFindingOut,
+)
 from gds_api.security import CurrentUser, require_permission
 
 router = APIRouter(prefix="/findings", tags=["findings"])
@@ -67,7 +82,10 @@ async def findings_summary(
                count(*) FILTER (WHERE status = 'open' AND severity = 'high') AS high,
                count(*) FILTER (WHERE status = 'open' AND severity = 'medium') AS medium,
                count(*) FILTER (WHERE status = 'open' AND severity = 'low') AS low,
-               count(*) FILTER (WHERE status = 'open' AND kev_listed) AS kev
+               count(*) FILTER (WHERE status = 'open' AND kev_listed) AS kev,
+               count(*) FILTER (WHERE status = 'accepted_risk') AS accepted,
+               count(*) FILTER (WHERE status = 'accepted_risk' AND severity = 'critical') AS accepted_critical,
+               count(*) FILTER (WHERE status = 'accepted_risk' AND severity = 'high') AS accepted_high
         FROM security_findings WHERE tenant_id = :tid
     """), {"tid": str(current_user.tenant_id)})).mappings().first()
     return dict(row)
@@ -102,6 +120,103 @@ async def list_security_findings(
         )
     ).mappings().all()
     return [dict(r) for r in rows]
+
+
+@router.get("/risk-acceptances", response_model=list[dict])
+async def list_finding_risk_acceptances(
+    include_history: bool = False,
+    current_user: CurrentUser = Depends(require_permission("findings:read")),
+    db: AsyncSession = Depends(get_db),
+) -> list[dict]:
+    """Live accepted-risk decisions, with the option to include withdrawn and expired history.
+
+    Reading reconciles expiry first, so an acceptance that has run out reopens its finding instead of
+    suppressing it indefinitely just because nobody looked.
+    """
+    acceptances = await list_acceptances(
+        db, tenant_id=current_user.tenant_id, include_history=include_history
+    )
+    await db.commit()
+    return acceptances
+
+
+@router.post("/risk-acceptances/{acceptance_id}/revoke", response_model=dict)
+async def revoke_finding_risk_acceptance(
+    acceptance_id: uuid.UUID,
+    body: RiskAcceptanceRevokeRequest,
+    current_user: CurrentUser = Depends(require_permission("findings:accept_risk")),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Withdraw an acceptance. The finding reopens and the row keeps the reason it was withdrawn."""
+    try:
+        record = await revoke_acceptance(
+            db,
+            tenant_id=current_user.tenant_id,
+            user_id=current_user.user_id,
+            acceptance_id=acceptance_id,
+            revoke_reason=body.revoke_reason,
+        )
+    except InvalidAcceptance as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
+    except AcceptanceNotFound as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc
+    except AcceptanceConflict as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+    await record_audit_event(
+        db,
+        tenant_id=current_user.tenant_id,
+        user_id=current_user.user_id,
+        action="findings.risk_acceptance_revoked",
+        detail={"acceptance_id": str(acceptance_id), "finding_id": record["finding_id"]},
+    )
+    await db.commit()
+    return record
+
+
+@router.post("/{finding_id}/risk-acceptance", response_model=dict, status_code=status.HTTP_201_CREATED)
+async def accept_finding_risk(
+    finding_id: int,
+    body: RiskAcceptanceRequest,
+    current_user: CurrentUser = Depends(require_permission("findings:accept_risk")),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Accept the risk of a finding that cannot be fixed, with a named acceptor, reason, controls and expiry.
+
+    This is not "resolve". The finding keeps its severity and stays in the set; findings_summary reports the
+    accepted count separately so acceptance can never be mistaken for a fix.
+    """
+    try:
+        record = await accept_risk(
+            db,
+            tenant_id=current_user.tenant_id,
+            user_id=current_user.user_id,
+            user_email=current_user.email,
+            finding_id=finding_id,
+            reason=body.reason,
+            compensating_controls=body.compensating_controls,
+            expires_at=body.expires_at,
+            review_date=body.review_date,
+        )
+    except InvalidAcceptance as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
+    except AcceptanceNotFound as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc
+    except AcceptanceConflict as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+    await record_audit_event(
+        db,
+        tenant_id=current_user.tenant_id,
+        user_id=current_user.user_id,
+        action="findings.risk_accepted",
+        detail={
+            "finding_id": finding_id,
+            "acceptance_id": str(record["id"]),
+            "severity_at_acceptance": record["severity_at_acceptance"],
+            "expires_at": record["expires_at"].isoformat(),
+        },
+    )
+    await db.commit()
+    return record
 
 
 @router.get("/{finding_id}/correlation", response_model=FindingCorrelationOut)

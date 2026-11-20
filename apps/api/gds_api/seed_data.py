@@ -16,6 +16,9 @@ ROLE_PERMISSIONS: dict[str, list[str]] = {
         "missions:create",
         "missions:read",
         "findings:read",
+        # Accepting risk is an accountable decision, so it sits with platform_owner for the same reason
+        # cloud:posture:suppress does: management stays with the owner role.
+        "findings:accept_risk",
         "incidents:read",
         "knowledge:read",
         "knowledge:write",
