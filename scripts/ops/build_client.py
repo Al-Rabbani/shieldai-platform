@@ -39,6 +39,41 @@ def _sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
+def _script_parses(script: str) -> tuple[bool, str]:
+    """Parse the inline script with a real JavaScript engine. Returns (ok, engine_or_error)."""
+    import shutil
+    import subprocess
+    import tempfile
+
+    node = shutil.which("node")
+    if node:
+        with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False, encoding="utf-8") as handle:
+            handle.write(script)
+            path = handle.name
+        try:
+            result = subprocess.run([node, "--check", path], capture_output=True, text=True)
+            if result.returncode == 0:
+                return True, "node"
+            detail = (result.stderr or "").strip().splitlines()
+            return False, f"node: {detail[0][:160] if detail else 'syntax error'}"
+        finally:
+            Path(path).unlink(missing_ok=True)
+
+    try:
+        sys.path.insert(0, str(ROOT / "apps" / "api"))
+        import dukpy  # noqa: PLC0415
+    except ImportError:
+        return False, "no JavaScript engine available (install node)"
+
+    # Parsed, not executed: the body is wrapped in a function so the engine compiles every statement
+    # without running any of it. Evaluating it directly needs window/document.
+    try:
+        dukpy.evaljs("var __parse_only = function(){\n" + script + "\n}; 1;")
+        return True, "dukpy"
+    except Exception as exc:  # noqa: BLE001 - any parse failure is fatal
+        return False, f"dukpy: {str(exc).splitlines()[0][:160]}"
+
+
 def validate(html: str) -> tuple[list[str], dict]:
     """Return (problems, facts). Problems are fatal; facts are recorded in the manifest."""
     problems: list[str] = []
@@ -56,22 +91,17 @@ def validate(html: str) -> tuple[list[str], dict]:
     script = scripts[0] if scripts else ""
 
     # 2. the script must parse
-    try:
-        sys.path.insert(0, str(ROOT / "apps" / "api"))
-        import dukpy  # noqa: PLC0415
-
-        # Parsed, not executed: the body is wrapped in a function so the engine compiles every statement
-        # without running any of it. Evaluating the script directly needs window/document and would fail on
-        # perfectly valid browser code.
-        try:
-            dukpy.evaljs("var __parse_only = function(){\n" + script + "\n}; 1;")
-            facts["script_parse"] = "ok"
-        except Exception as exc:  # noqa: BLE001 - any parse failure is fatal
-            facts["script_parse"] = "failed"
-            problems.append(f"script does not parse: {str(exc).splitlines()[0][:160]}")
-    except ImportError:
-        facts["script_parse"] = "skipped: engine not installed"
-        print("  WARNING: embedded JS engine not installed, parse check skipped")
+    #
+    # This check used to depend on dukpy, which is not installed here, so it printed a warning and skipped
+    # itself on every build - the build said it verified the script and verified nothing. dukpy is also ES5,
+    # so the optional chaining the client legitimately uses would have failed it anyway. Node parses the
+    # language the browser actually runs, and there is now no "skipped" outcome: if no engine can check the
+    # script, the build fails, because a syntax error in this one file blanks every view at once.
+    parsed, how = _script_parses(script)
+    facts["script_parse"] = "ok" if parsed else "failed"
+    facts["script_parse_engine"] = how
+    if not parsed:
+        problems.append(f"script does not parse ({how})")
 
     markup = html.split("<script", 1)[0]
 
