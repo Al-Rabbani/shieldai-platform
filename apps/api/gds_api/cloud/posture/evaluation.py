@@ -42,7 +42,7 @@ from gds_api.cloud.posture.registry import (
 from gds_api.cloud.posture.taxonomy import ApplicabilityState, EvaluationResult, EvaluationType
 from gds_api.cloud.posture.types import ApplicabilityResult, EvaluationContext, EvaluationOutcome
 from gds_api.events import publish_mission_event
-from gds_api.mission_reaper import fail_mission_durably
+from gds_api.mission_reaper import fail_mission_durably, fail_mission_on_cancellation
 from gds_api.logging_config import get_logger
 from gds_api.metrics import cloud_posture_evaluation_runs_total
 from gds_api.mission_taxonomy import (
@@ -481,6 +481,10 @@ async def start_evaluation(
         if isinstance(exc, CloudPostureEvaluationStartError):
             raise
         raise CloudPostureEvaluationStartError(str(exc)) from exc
+    except BaseException:
+        # A cancelled request is not an Exception; see mission_reaper.fail_mission_on_cancellation.
+        await fail_mission_on_cancellation(mission.id, tenant_id)
+        raise
 
     # The run is looked up BEFORE the mission is closed: a read that follows a commit needs the
     # tenant re-bound on this NullPool session, and this keeps the read before any commit.

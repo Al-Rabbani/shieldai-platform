@@ -28,7 +28,7 @@ from gds_api.capabilities.gateway import CapabilityExecutionDenied, execute_capa
 from gds_api.cloud.environments import CloudEnvironmentNotFound
 from gds_api.cloud.environments import get_environment as get_environment_service
 from gds_api.events import publish_mission_event
-from gds_api.mission_reaper import fail_mission_durably
+from gds_api.mission_reaper import fail_mission_durably, fail_mission_on_cancellation
 from gds_api.logging_config import get_logger
 from gds_api.metrics import cloud_discovery_jobs_total
 from gds_api.mission_taxonomy import (
@@ -160,6 +160,11 @@ async def start_discovery(
         if isinstance(exc, CloudDiscoveryStartError):
             raise
         raise CloudDiscoveryStartError(str(exc)) from exc
+    except BaseException:
+        # CancelledError is a BaseException, so the handler above never sees it. Without this, a client
+        # timeout on this minutes-long request left the mission running for ever - eight of them on 20 Nov.
+        await fail_mission_on_cancellation(mission_id, tenant_id)
+        raise
 
     # The capability call committed, so the tenant GUC is gone and this instance is expired. Re-bind first,
     # then reload: without the bind the UPDATE is filtered by RLS and matches 0 rows.

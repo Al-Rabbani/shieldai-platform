@@ -25,6 +25,7 @@ TWO MECHANISMS, because they answer different questions:
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -136,6 +137,42 @@ async def fail_mission_durably(
             "mission.failed_durably", extra={"mission_id": str(mission_id), "reason": reason[:200]}
         )
         return True
+
+
+async def fail_mission_on_cancellation(
+    mission_id: uuid.UUID,
+    tenant_id: uuid.UUID,
+    *,
+    reason: str = "request cancelled before the mission finished",
+    action: str = "mission.failed",
+) -> None:
+    """Close a mission when the request that opened it is cancelled.
+
+    asyncio.CancelledError is a BaseException, not an Exception, so `except Exception` never sees it. A
+    console-initiated cloud run is a synchronous request that takes minutes: when the client gives up or the
+    gateway times out, the coroutine is cancelled and the mission it opened stayed `running` for ever. Eight
+    such rows sat in the database between 10:29 and 11:16 on 20 Nov for exactly this reason.
+
+    The durable write is created as its own task and shielded, because awaiting anything directly inside a
+    cancellation handler raises again immediately. The closure therefore completes even though this request
+    is already gone.
+    """
+    task = asyncio.create_task(
+        fail_mission_durably(mission_id, tenant_id, reason, action=action)
+    )
+
+    def _swallow(done: asyncio.Task) -> None:
+        # The request is already cancelled and nobody is left to read this exception; the mission write
+        # itself is what matters, and fail_mission_durably already logs its own outcome.
+        if not done.cancelled():
+            done.exception()
+
+    task.add_done_callback(_swallow)
+    try:
+        await asyncio.shield(task)
+    except BaseException:
+        # Expected when this coroutine is the one being cancelled. The task above keeps running.
+        return
 
 
 def _configured_tenants(tenants: list[Any] | None) -> list[uuid.UUID]:
