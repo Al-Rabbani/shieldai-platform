@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -54,9 +54,7 @@ class CIEMFindingOut(BaseModel):
     privilege_escalation_path: str | None
     remediation: str | None
     detected_at: datetime
-
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class CIEMScanResultOut(BaseModel):
@@ -74,9 +72,7 @@ class CIEMScanResultOut(BaseModel):
     completed_at: datetime | None
     status: str
     summary: str | None
-
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class CIEMFindingUpdate(BaseModel):

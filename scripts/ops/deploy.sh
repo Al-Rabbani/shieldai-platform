@@ -78,7 +78,8 @@ if [ -f config/prometheus/gds.yml ]; then
   for f in config/cron/*; do
     [ -f "$f" ] || continue
     install -m 644 "$f" "/etc/cron.d/$(basename "$f")"
-    install -o postgres -g postgres -m 0644 /dev/null "/var/log/gds/$(basename "$f").log"
+    # only create when absent: install from /dev/null TRUNCATES, which wiped the cron evidence on every deploy
+    [ -f "/var/log/gds/$(basename "$f").log" ] || install -o postgres -g postgres -m 0644 /dev/null "/var/log/gds/$(basename "$f").log"
   done
   install -m 644 config/prometheus/gds.yml /etc/prometheus/gds.yml
   chown prometheus:prometheus /etc/prometheus/gds.yml
