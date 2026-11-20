@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -137,32 +138,56 @@ async def fail_mission_durably(
         return True
 
 
+def _configured_tenants(tenants: list[Any] | None) -> list[uuid.UUID]:
+    """The tenants to sweep: explicit, else GDS_TENANT_ID. Never discovered from a forced table.
+
+    Returning an empty list is a configuration failure, not a clean sweep, so the caller says so loudly
+    instead of printing "cancelled 0" and looking healthy.
+    """
+    candidates: list[Any] = list(tenants or [])
+    if not candidates:
+        env_tenant = os.environ.get("GDS_TENANT_ID", "").strip()
+        if env_tenant:
+            candidates.append(env_tenant)
+    resolved: list[uuid.UUID] = []
+    for candidate in candidates:
+        try:
+            resolved.append(_tenant_uuid(candidate))
+        except (ValueError, TypeError, AttributeError):
+            _logger.error("mission_reaper.bad_tenant", extra={"tenant": str(candidate)})
+    # Preserve order, drop duplicates.
+    return list(dict.fromkeys(resolved))
+
+
 async def reap_stale_missions(
     *,
     older_than_hours: int = DEFAULT_GRACE_HOURS,
     dry_run: bool = False,
     limit: int = 200,
+    tenants: list[Any] | None = None,
 ) -> list[dict[str, str]]:
     """Cancel non-terminal missions that provably never started, and say what was closed.
 
-    `missions` is not FORCE-RLS, so the tenant list is readable before any binding; every table the
-    reaper then touches (workflow_runs, audit_events) IS forced, so each tenant is bound first.
+    TENANTS MUST BE SUPPLIED. This used to discover them with an unbound
+    `SELECT DISTINCT tenant_id FROM missions WHERE status NOT IN (...)`. That worked only while `missions`
+    was unforced; once it became FORCE ROW LEVEL SECURITY, the same query returned zero rows with no error,
+    so the sweep reported "cancelled 0" every hour while missions piled up in `running` - 24 of them, the
+    oldest 37 hours old, found on 20 Nov. An unbound read on a forced table is not an empty result, it is a
+    missing binding, and the two look identical.
+
+    Tenants now come from the caller or GDS_TENANT_ID, the same way escalate_stale_findings.py resolves
+    them. Each tenant is bound before anything is read or written.
     """
     cutoff = reap_cutoff(older_than_hours)
     reaped: list[dict[str, str]] = []
 
-    async with async_session_factory() as session:
-        tenant_ids = (
-            (
-                await session.execute(
-                    select(Mission.tenant_id)
-                    .where(Mission.status.notin_(TERMINAL_STATUSES))
-                    .distinct()
-                )
-            )
-            .scalars()
-            .all()
+    tenant_ids = _configured_tenants(tenants)
+    if not tenant_ids:
+        _logger.error(
+            "mission_reaper.no_tenant",
+            extra={"detail": "no tenants supplied and GDS_TENANT_ID is empty; nothing was swept"},
         )
+        return []
 
     for tenant_id in tenant_ids:
         async with async_session_factory() as session:
@@ -191,7 +216,8 @@ async def reap_stale_missions(
                         "outcome": "cancelled",
                         "reason": (
                             "Reaped: still non-terminal with no task rows and no workflow run after "
-                            f"{older_than_hours}h, so it never started executing anything."
+                            f"{older_than_hours}h. Either it never started, or its work was never recorded; "
+                            "both leave nothing to resume."
                         ),
                         "recorded_by": "reap_stale_missions",
                     },

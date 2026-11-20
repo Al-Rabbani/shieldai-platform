@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import os
 import sys
 
 from gds_api.mission_reaper import DEFAULT_GRACE_HOURS, reap_stale_missions
@@ -25,6 +26,15 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument("--dry-run", action="store_true", help="report what would be cancelled")
     parser.add_argument("--limit", type=int, default=200, help="maximum missions per tenant")
+    parser.add_argument(
+        "--tenant",
+        action="append",
+        default=None,
+        help=(
+            "tenant id to sweep; repeatable. Defaults to GDS_TENANT_ID. Tenants are never discovered by "
+            "reading missions, because that table is FORCE RLS and an unbound read returns nothing."
+        ),
+    )
     return parser.parse_args(argv)
 
 
@@ -32,8 +42,13 @@ async def _run(args: argparse.Namespace) -> int:
     if args.older_than_hours < 1:
         print("--older-than-hours must be at least 1", file=sys.stderr)
         return 2
+    if not (args.tenant or os.environ.get("GDS_TENANT_ID", "").strip()):
+        # Loud, not silent. The old silent version reported a clean sweep for days while missions piled up.
+        print("no tenant to sweep: pass --tenant or set GDS_TENANT_ID", file=sys.stderr)
+        return 2
     reaped = await reap_stale_missions(
-        older_than_hours=args.older_than_hours, dry_run=args.dry_run, limit=args.limit
+        older_than_hours=args.older_than_hours, dry_run=args.dry_run, limit=args.limit,
+        tenants=args.tenant,
     )
     verb = "would cancel" if args.dry_run else "cancelled"
     print(f"{verb} {len(reaped)} mission(s)")
