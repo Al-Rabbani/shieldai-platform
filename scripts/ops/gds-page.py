@@ -60,9 +60,19 @@ def _load_env(*paths: str) -> None:
         return
 
 
+# Resend sits behind Cloudflare, which rejects requests whose User-Agent it does not recognise. urllib's
+# default "Python-urllib/3.x" is blocked with "403 error code: 1010", and the pager recorded that as
+# email=403 - indistinguishable from "domain not verified", which is why the email channel looked like a
+# domain problem for weeks. Measured 20 Nov 2026: the identical payload returns 200 with curl and 403 with
+# urllib, and the only difference is this header.
+USER_AGENT = "GDS-OS-Pager/1.0 (+https://app.globaldigitalsecurity.io)"
+
+
 def _post(url: str, payload: dict, headers: dict | None = None, timeout: int = 15) -> int:
     req = urllib.request.Request(url, data=json.dumps(payload).encode(),
-                                 headers={"Content-Type": "application/json", **(headers or {})})
+                                 headers={"Content-Type": "application/json",
+                                          "User-Agent": USER_AGENT,
+                                          **(headers or {})})
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             return resp.status

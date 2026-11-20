@@ -78,3 +78,14 @@ def test_scripts_cron_runs_as_postgres_are_executable_by_postgres():
         assert f'install -m 750 -o root -g postgres "scripts/ops/{script}"' in DEPLOY, (
             f"{script} runs as postgres but is not installed group postgres"
         )
+
+
+def test_pager_identifies_itself_to_the_provider():
+    """Resend is behind Cloudflare, which answers urllib's default User-Agent with 403 error 1010.
+
+    Measured 20 November 2026: the identical payload returned 200 through curl and 403 through urllib, and
+    the only difference was the header. The pager records a bare status code, so 1010 was written down as
+    "email=403" and read for weeks as an unverified domain. It was a header.
+    """
+    assert 'USER_AGENT = "GDS-OS-Pager/' in PAGER
+    assert '"User-Agent": USER_AGENT' in PAGER, "every pager POST must carry the User-Agent"
