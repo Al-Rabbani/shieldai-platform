@@ -14,6 +14,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from gds_api.tenant_binding import bind_tenant
 from gds_api.cloud.assets import (
     compute_freshness_state,
     get_asset,
@@ -364,6 +365,10 @@ async def start_cloud_discovery(
         )
     except CloudDiscoveryStartError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, exc.reason) from exc
+    # start_discovery commits internally, which discards this session connection and its tenant bind
+    # under NullPool. Re-bind before committing or refreshing, or the refresh reads a FORCE-RLS table
+    # unbound and finds nothing.
+    await bind_tenant(db, current_user.tenant_id)
     await db.commit()
     await db.refresh(job)
     return _discovery_job_to_out(job)

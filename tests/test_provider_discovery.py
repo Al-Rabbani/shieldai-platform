@@ -22,12 +22,29 @@ def _ask(**payload):
     return asyncio.run(discover_cloud_environment({"tenant_id": TENANT, **payload}))
 
 
-def test_azure_without_an_environment_says_not_connected():
-    out = _ask(provider="azure")
+def test_kubernetes_without_an_environment_says_not_connected():
+    """A provider with no registered environment must say so, not blame the caller."""
+    out = _ask(provider="kubernetes")
     assert out["code"] == "PROVIDER_NOT_CONNECTED", out
-    assert out["provider"] == "azure"
-    assert "service_principal" in out["supported_authentication_mechanisms"]
+    assert out["provider"] == "kubernetes"
+    assert out["supported_authentication_mechanisms"]
     assert out["required_to_connect"]
+
+
+def test_azure_declares_service_principal_authentication():
+    """Azure's mechanisms are a registry fact, so assert them without depending on what is connected."""
+    from gds_api.cloud.providers import get_provider
+
+    definition = get_provider("azure")
+    assert definition is not None
+    assert "service_principal" in definition.supported_authentication_mechanisms
+
+
+def test_a_connected_provider_is_not_reported_as_unconnected():
+    """The GDS Azure subscription is registered, so discovery must proceed rather than claim it is not
+    connected. This pins the regression that a real environment cannot be reported as absent."""
+    out = _ask(provider="azure")
+    assert out.get("code") != "PROVIDER_NOT_CONNECTED", out
 
 
 def test_gcp_without_an_environment_says_not_connected():
@@ -37,7 +54,8 @@ def test_gcp_without_an_environment_says_not_connected():
 
 
 def test_all_four_providers_are_registered_and_named_back():
-    out = _ask(provider="azure")
+    # Asked with a provider that has no environment, because that is the response that lists the registry.
+    out = _ask(provider="kubernetes")
     assert set(out["registered_providers"]) >= {"aws", "azure", "gcp", "kubernetes"}
 
 

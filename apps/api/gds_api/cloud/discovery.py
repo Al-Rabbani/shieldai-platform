@@ -37,6 +37,7 @@ from gds_api.mission_taxonomy import (
     validate_mission_type_eligibility,
 )
 from gds_api.models import CloudDiscoveryJob, CloudEnvironment, Mission
+from gds_api.tenant_binding import bind_tenant
 
 _logger = get_logger("gds_api.cloud.discovery")
 
@@ -102,15 +103,21 @@ async def start_discovery(
     )
     db.add(mission)
     await db.flush()
+    # Snapshot before any commit boundary: execute_capability_request commits internally, and under
+    # NullPool that discards the connection, the tenant bind and every expired ORM attribute with it.
+    mission_id = mission.id
 
     try:
         eval_result = await evaluate_capability_request(
             db,
             tenant_id=tenant_id,
             user_id=user_id,
-            mission_id=mission.id,
-            requesting_agent_id=None,
-            supervising_agent_id=None,
+            mission_id=mission_id,
+            # cloud.discover_environment is granted only to the security_architecture agent, so a
+            # console-initiated run must be attributed to it. The human initiator is still recorded as
+            # user_id, so the audit trail names both the person and the agent that holds the grant.
+            requesting_agent_id="security_architecture",
+            supervising_agent_id="security_architecture",
             capability_key="cloud.discover_environment",
             requested_tool_id="discover_cloud_environment",
             target_type=None,
@@ -123,8 +130,9 @@ async def start_discovery(
             },
         )
         if eval_result.decision != "ALLOW":
-            mission.status = "failed"
-            await db.flush()
+            # Deliberately no mission write here. Writing mission.status on this session holds an uncommitted
+            # row lock, and the failure handler below writes the same row from its own session - which would
+            # deadlock instead of reporting the denial. The except path records the failure once.
             raise CloudDiscoveryStartError(
                 eval_result.safe_message or f"Capability request was {eval_result.decision}"
             )
@@ -144,11 +152,23 @@ async def start_discovery(
         # A failed start must not leave a running mission behind. The route commits only after this
         # returns and get_db never commits, so raising here rolls this session back - the durable
         # write below is the only record of the failure that survives.
-        await fail_mission_durably(mission.id, tenant_id, f"{type(exc).__name__}: {exc}")
+        # Roll back BEFORE that write: this session may still hold an uncommitted lock on the mission
+        # row, and fail_mission_durably updates the same row from a different connection. Holding the
+        # lock across that call deadlocks both sessions rather than reporting the failure.
+        await db.rollback()
+        await fail_mission_durably(mission_id, tenant_id, f"{type(exc).__name__}: {exc}")
         if isinstance(exc, CloudDiscoveryStartError):
             raise
         raise CloudDiscoveryStartError(str(exc)) from exc
 
+    # The capability call committed, so the tenant GUC is gone and this instance is expired. Re-bind first,
+    # then reload: without the bind the UPDATE is filtered by RLS and matches 0 rows.
+    await bind_tenant(db, tenant_id)
+    mission = await db.get(Mission, mission_id)
+    if mission is None:
+        raise CloudDiscoveryStartError(
+            f"mission {mission_id} was not found after the discovery capability ran"
+        )
     mission.status = "completed"
     mission.completed_at = datetime.now(UTC)
     await db.flush()
@@ -157,7 +177,7 @@ async def start_discovery(
         (
             await db.execute(
                 select(CloudDiscoveryJob)
-                .where(CloudDiscoveryJob.mission_id == mission.id)
+                .where(CloudDiscoveryJob.mission_id == mission_id)
                 .order_by(CloudDiscoveryJob.created_at.desc())
             )
         )
@@ -167,14 +187,21 @@ async def start_discovery(
     if job is None:
         # The capability ran but left no job behind: close the mission honestly rather than reporting
         # a start that produced nothing.
-        await fail_mission_durably(mission.id, tenant_id, "discovery produced no job record")
+        await fail_mission_durably(mission_id, tenant_id, "discovery produced no job record")
         raise CloudDiscoveryStartError(
             "Capability executed but no CloudDiscoveryJob record was created - this is a "
             "real, unexpected internal inconsistency, not a normal discovery failure."
         )
+    # Snapshot before committing: the commit expires every ORM attribute, and reading them afterwards
+    # needs a live bind anyway.
+    job_id = job.id
+    job_status = job.status
     # Committed after the read, never before: a commit here would leave the job lookup above running
     # on an unbound connection, where a forced table silently returns nothing.
     await db.commit()
+    # The commit dropped the connection and the tenant GUC. Re-bind before writing audit_events, which is
+    # FORCE-RLS: an unbound insert is rejected outright, not silently ignored.
+    await bind_tenant(db, tenant_id)
 
     await record_audit_event(
         db,
@@ -182,9 +209,9 @@ async def start_discovery(
         user_id=user_id,
         action="cloud.discovery_started",
         detail={
-            "discovery_job_id": str(job.id),
+            "discovery_job_id": str(job_id),
             "environment_id": str(environment_id),
-            "status": job.status,
+            "status": job_status,
         },
     )
     return job
