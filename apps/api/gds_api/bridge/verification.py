@@ -81,7 +81,7 @@ async def collect_verification() -> dict:
     evidence: dict = {}
     reasons: dict = {}
     tenant = os.environ.get("GDS_TENANT_ID", "").strip()
-    missions = tasks = isolation = None
+    missions = tasks = isolation = reasoning = None
     try:
         async with async_session_factory() as session:
             if tenant:
@@ -96,6 +96,15 @@ async def collect_verification() -> dict:
                       "WHERE status = 'completed' AND tool_name IS NOT NULL "
                       "AND created_at > now() - CAST(:d AS integer) * interval '1 day'"),
                 {"d": WINDOW_DAYS})).first()
+            reasoning = (await session.execute(
+                _text("SELECT count(*) FILTER (WHERE t.tool_name IS NOT NULL), "
+                      "       max(m.completed_at), "
+                      "       count(DISTINCT t.agent_name), "
+                      "       count(DISTINCT t.tool_name) "
+                      "FROM missions m JOIN mission_tasks t ON t.mission_id = m.id "
+                      "WHERE m.status = 'completed' AND t.status = 'completed' "
+                      "AND m.completed_at > now() - CAST(:d AS integer) * interval '1 day'"),
+                {"d": WINDOW_DAYS})).first()
             isolation = (await session.execute(
                 _text("SELECT count(*) FILTER (WHERE NOT c.relforcerowsecurity), count(*) "
                       "FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace "
@@ -104,10 +113,14 @@ async def collect_verification() -> dict:
                       "            WHERE col.table_name = c.relname AND col.column_name = 'tenant_id')"))).first()
     except Exception as exc:  # evidence unavailable is not evidence of failure
         reasons["database"] = f"evidence could not be read: {type(exc).__name__}"
-        missions = tasks = isolation = None
+        missions = tasks = isolation = reasoning = None
 
     workers_verified = bool(missions and missions[0])
     tool_canary_verified = bool(tasks and tasks[0])
+    # A reasoning mission counts only when the model's chosen tool actually ran and its result was stored. A
+    # mission row on its own proves a goal was submitted - templated work writes rows too - so the tool task is
+    # the only part that a function-calling loop produces and a template does not.
+    reasoning_verified = bool(reasoning and reasoning[0])
     unforced, tenant_tables = (isolation[0], isolation[1]) if isolation else (None, None)
     database_isolation_verified = unforced == 0 and bool(tenant_tables)
 
@@ -116,6 +129,12 @@ async def collect_verification() -> dict:
     evidence["tools"] = {"completed_tool_tasks_7d": tasks[0] if tasks else None,
                          "newest_task": tasks[1].isoformat() if tasks and tasks[1] else None}
     evidence["isolation"] = {"tenant_tables": tenant_tables, "not_forced": unforced}
+    evidence["reasoning"] = {
+        "reasoned_tool_calls_7d": reasoning[0] if reasoning else None,
+        "newest_reasoning_mission": reasoning[1].isoformat() if reasoning and reasoning[1] else None,
+        "agents_reasoned": reasoning[2] if reasoning else None,
+        "distinct_tools_chosen": reasoning[3] if reasoning else None,
+    }
     recovery = restore_evidence()
     evidence["recovery"] = recovery
 
@@ -128,11 +147,16 @@ async def collect_verification() -> dict:
     if not database_isolation_verified:
         reasons["isolation"] = (f"{unforced} tenant tables are not FORCE RLS"
                                 if unforced not in (None, 0) else reasons.get("database", "isolation unreadable"))
+    if not reasoning_verified:
+        reasons["reasoning"] = (
+            f"no reasoning mission stored a tool call in the last {WINDOW_DAYS} days"
+            if reasoning else reasons.get("database", "no reasoning record"))
     if not recovery["verified"]:
         reasons["recovery"] = recovery.get("reason")
 
     flags = {"workers_verified": workers_verified, "tool_canary_verified": tool_canary_verified,
              "database_isolation_verified": database_isolation_verified,
+             "reasoning_verified": reasoning_verified,
              "recovery_verified": recovery["verified"]}
     all_true = all(flags.values())
     return {**flags,

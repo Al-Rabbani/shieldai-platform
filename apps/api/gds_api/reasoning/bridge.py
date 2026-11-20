@@ -9,10 +9,17 @@ from datetime import datetime
 
 logger = logging.getLogger("gds.reasoning.bridge")
 
+# The provider model the loop calls. Named once so the mission report records what actually ran.
+REASONING_MODEL = "gpt-4.1"
+
 sys.path.insert(0, "/opt/gds-os/apps/api")
 
 from gds_api.reasoning.agent_loop import AgenticLoop, AgentResult
-from gds_api.reasoning.governed_tools import open_reasoning_mission, set_mission_outcome
+from gds_api.reasoning.governed_tools import (
+    open_reasoning_mission,
+    record_reasoning_tool_calls,
+    set_mission_outcome,
+)
 from gds_api.reasoning.prompts import AGENT_REGISTRY, list_agents
 
 
@@ -63,7 +70,14 @@ class ReasoningBridge:
             raise
         if mission_uuid:
             await set_mission_outcome(mission_id=mission_uuid, tenant_id=tenant_id,
-                                      success=result.success, summary=result.summary or "")
+                                      success=result.success, summary=result.summary or "",
+                                      iterations=result.iterations,
+                                      tool_call_count=len(result.tool_calls or []),
+                                      model=REASONING_MODEL)
+            # The decision, not just the outcome: without this the tool calls exist only in the response body and
+            # in this process's memory, and the platform cannot show after a restart that it reasoned at all.
+            await record_reasoning_tool_calls(mission_id=mission_uuid, tenant_id=tenant_id,
+                                              agent_id=agent_id, tool_calls=result.tool_calls or [])
         
         # Store result
         mission_id = f"mission_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}_{agent_id}"
@@ -92,7 +106,7 @@ class ReasoningBridge:
         ])
         
         response = await client.chat.completions.create(
-            model="gpt-4.1",
+            model=REASONING_MODEL,
             messages=[
                 {"role": "system", "content": f"You are a security mission router. Select the best agent for the given goal.\n\nAvailable agents:\n{agent_descriptions}\n\nRespond with ONLY the agent_id (e.g. ai-vuln-director). No other text."},
                 {"role": "user", "content": f"Goal: {goal}"}

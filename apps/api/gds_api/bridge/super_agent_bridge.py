@@ -139,7 +139,13 @@ async def bridge_health():
             "bridge": "base44-rabbani",
             "agents_available": len(AGENT_REGISTRY),
             "tools_available": len(TOOL_REGISTRY),
-            "reasoning_engine": "declared_unverified",
+            # Measured, not declared. This field was the literal "declared_unverified" for months: always the same
+            # string, so it understated the engine when it worked and could never warn anyone when it stopped. It
+            # now reports what the record shows, with the evidence beside it.
+            "reasoning_engine": "verified" if verification["reasoning_verified"] else "declared_unverified",
+            "reasoning_evidence": verification["evidence"].get("reasoning"),
+            "reasoning_unverified_reason": verification["unverified_reasons"].get("reasoning"),
+            "production_ready": verification["production_ready"],
             "timestamp": datetime.utcnow().isoformat()
         }
     except Exception as e:

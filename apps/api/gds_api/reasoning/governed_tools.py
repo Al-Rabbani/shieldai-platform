@@ -237,8 +237,14 @@ async def open_reasoning_mission(*, tenant_id: Any, user_id: Any, goal: str, age
         return mission.id
 
 
-async def set_mission_outcome(*, mission_id: Any, tenant_id: Any, success: bool, summary: str) -> bool:
-    """Close a reasoning mission. A mission must never be left running."""
+async def set_mission_outcome(*, mission_id: Any, tenant_id: Any, success: bool, summary: str,
+                             iterations: int | None = None, tool_call_count: int | None = None,
+                             model: str | None = None) -> bool:
+    """Close a reasoning mission. A mission must never be left running.
+
+    iterations and tool_call_count are recorded because they are what distinguishes a reasoning run from a
+    template: a mission that never iterated and never called a tool produced prose, not a decision.
+    """
     from gds_api.db import async_session_factory
     from gds_api.models import Mission
     from gds_api.tenant_binding import bind_tenant
@@ -259,9 +265,61 @@ async def set_mission_outcome(*, mission_id: Any, tenant_id: Any, success: bool,
         report["reasoning"] = {
             "outcome": "completed" if success else "failed",
             "summary": (summary or "")[:2000],
+            "iterations": iterations,
+            "tool_call_count": tool_call_count,
+            "model": model,
         }
         mission.status = "completed" if success else "failed"
         mission.completed_at = datetime.now(UTC)
         mission.report = json.dumps(report)
         await session.commit()
         return True
+
+
+async def record_reasoning_tool_calls(*, mission_id: Any, tenant_id: Any, agent_id: str,
+                                      tool_calls: list[Any]) -> int:
+    """Persist the tools the model chose to run, so the reasoning survives a restart.
+
+    The mission row already holds the goal and the summary. What it did not hold was the decision: which tools the
+    model picked, in what order, with what arguments, and what came back. Those lived only in the HTTP response and
+    in process memory, so after any restart there was no record that the engine had ever reasoned - which is
+    precisely why /bridge/health had to hardcode "declared_unverified" instead of measuring anything.
+
+    One task row per tool call, sequence-ordered, with the tool's real result. Nothing here is inferred: a tool
+    call that did not happen writes no row.
+    """
+    from gds_api.db import async_session_factory
+    from gds_api.models import MissionTask
+    from gds_api.tenant_binding import bind_tenant
+
+    tid = _as_uuid(tenant_id, "tenant_id")
+    mid = _as_uuid(mission_id, "mission_id")
+    if not tool_calls:
+        return 0
+
+    async with async_session_factory() as session:
+        # Bound before the flush: mission_tasks is FORCE RLS and the INSERT policy needs the tenant, and the
+        # ORM's RETURNING is checked against the SELECT policy as well.
+        await bind_tenant(session, tid)
+        written = 0
+        for index, call in enumerate(tool_calls, start=1):
+            name = call.get("tool") if isinstance(call, dict) else getattr(call, "tool_name", None)
+            args = call.get("arguments") if isinstance(call, dict) else getattr(call, "arguments", None)
+            result = call.get("result") if isinstance(call, dict) else getattr(call, "result", None)
+            rendered_args = json.dumps(args or {}, default=str)[:300]
+            session.add(MissionTask(
+                mission_id=mid,
+                tenant_id=tid,
+                sequence=index,
+                description=f"{agent_id} chose {name}: {rendered_args}"[:500],
+                tool_name=(str(name)[:100] if name else None),
+                agent_name=(str(agent_id)[:100] if agent_id else None),
+                # Reasoning missions run read-only tools through the governed gateway, which enforces its own
+                # risk class; this column records what the loop did, not what it was permitted to do.
+                risk_class="read_only",
+                status="completed",
+                result=result if isinstance(result, dict) else {"value": result},
+            ))
+            written += 1
+        await session.commit()
+        return written
