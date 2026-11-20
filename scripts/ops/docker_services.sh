@@ -62,11 +62,36 @@ run_minio() {
     minio/minio@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e server /data >/dev/null
 }
 
+run_neo4j() {
+  # neo4j was absent from this file and from the host, while memory.py and cloud/graph.py both depend on it.
+  # /health/ready therefore answered 503 and every deploy tripped its smoke gate, and relationship memory had
+  # nowhere to go. Pinned to a digest whose rescan on 20 Nov 2026 found 0 critical CVEs. Loopback only, like
+  # every other service here. The password lives in /opt/.env and is never echoed.
+  local pw
+  pw="${NEO4J_PASSWORD:-$(grep -m1 '^NEO4J_PASSWORD=' /opt/.env | cut -d= -f2- | tr -d "\"'")}"
+  if [ -z "$pw" ]; then
+    echo "neo4j: NEO4J_PASSWORD is not set in /opt/.env" >&2
+    return 1
+  fi
+  docker rm -f neo4j >/dev/null 2>&1 || true
+  mkdir -p /var/lib/gds-neo4j/data /var/lib/gds-neo4j/logs
+  docker run -d --name neo4j --restart unless-stopped \
+    -p 127.0.0.1:7687:7687 -p 127.0.0.1:7474:7474 \
+    -v /var/lib/gds-neo4j/data:/data -v /var/lib/gds-neo4j/logs:/logs \
+    -e NEO4J_AUTH="neo4j/${pw}" \
+    -e NEO4J_server_memory_heap_max__size=1G \
+    -e NEO4J_server_memory_pagecache_size=512M \
+    --health-cmd 'bash -c "exec 3<>/dev/tcp/127.0.0.1/7687"' \
+    --health-interval 30s --health-timeout 5s --health-retries 5 --health-start-period 60s \
+    neo4j@sha256:577eb43120e8688e62e753e962c47d30044ecaa95147ee5386c29f226b878008 >/dev/null
+}
+
 case "${1:-all}" in
   nats) run_nats ;;
   qdrant) run_qdrant ;;
   temporal) run_temporal ;;
   minio) run_minio ;;
-  all) run_nats; run_qdrant; run_temporal; run_minio ;;
-  *) echo "usage: $0 [all|nats|qdrant|temporal|minio]" >&2; exit 2 ;;
+  neo4j) run_neo4j ;;
+  all) run_nats; run_qdrant; run_temporal; run_minio; run_neo4j ;;
+  *) echo "usage: $0 [all|nats|qdrant|temporal|minio|neo4j]" >&2; exit 2 ;;
 esac
