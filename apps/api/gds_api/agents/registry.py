@@ -468,24 +468,28 @@ AGENT_REGISTRY: dict[str, AgentManifest] = {
         name="network_security",
         display_name="Network Security Agent",
         description=(
-            "Runs a real, passive TLS certificate check against a tenant-authorized domain."
+            "Runs a real, passive TLS certificate check and a read-only port inventory against "
+            "tenant-authorized domains."
         ),
         system_prompt=(
             "You are the Network Security Agent for GDS Security OS. You run a real, "
-            "passive TLS certificate check against a domain this tenant has explicitly "
-            "authorized on its Watchlist - refuse any other target and report the real "
-            "certificate expiry and issuer."
+            "passive TLS certificate check and a read-only port inventory against a domain this "
+            "tenant has explicitly authorized - refuse any other target, and report the real "
+            "certificate expiry, issuer and open ports."
         ),
-        tool_names=("check_domain_security",),
+        tool_names=("check_domain_security", "port_inventory_scan"),
         team=Team.BLUE,
         department="Network Security",
         risk_ceiling=RiskCeiling.R2,
-        allowed_capability_ids=("network.check_domain_security",),
+        allowed_capability_ids=("network.check_domain_security", "network.asset_inventory"),
         workforce="purple-cybersecurity-workforce",
         purple_role_id="purple-09",
         purple_role_name="Network Penetration Testing Agent",
         operational_domain="Network Security Testing",
-        mission_role="Real, passive TLS certificate check against a tenant-authorized domain.",
+        mission_role=(
+            "Real, passive TLS certificate check and read-only port inventory against a "
+            "tenant-authorized domain."
+        ),
         objectives=("Report real TLS certificate expiry/issuer for an authorized domain",),
         knowledge_domains=("TLS/certificate validation",),
         skills=("passive TLS probing",),

@@ -115,7 +115,12 @@ async def check_headers(db, tenant_id, base_url):
 
 
 async def check_ports(db, tenant_id, host="127.0.0.1"):
-    """Real nmap through the governed capability path.
+    """Real port inventory through the governed capability path.
+
+    The capability is network.asset_inventory (R2, read-only, target-authorisation required), not
+    network.port_scan (R4, offensive, human approval per run). Requesting the R4 one meant every six-hourly run
+    raised an approval nobody answered, so this control produced nothing while logging an attempt. The
+    authorisation gate is unchanged: an active AuthorizedTarget is still required.
 
     This used to call gds_api.tool_gateway.execute_tool, which routes to the legacy kernel executor
     and refuses every governed tool with GOVERNED_CAPABILITY_REQUIRED - so port coverage could never
@@ -131,7 +136,7 @@ async def check_ports(db, tenant_id, host="127.0.0.1"):
     tid = _uuid.UUID(str(tenant_id))
     owner = (os.environ.get("GDS_OWNER_USER_ID", "") or "").strip()
     if not owner:
-        log(f"nmap {host}: NOT ATTEMPTED - GDS_OWNER_USER_ID is not configured, so a capability request cannot be attributed")
+        log(f"port inventory {host}: NOT ATTEMPTED - GDS_OWNER_USER_ID is not configured, so a capability request cannot be attributed")
         return {"new": 0, "dupe": 0, "failed": 1, "reason": "no owner identity"}
     uid = _uuid.UUID(owner)
 
@@ -154,33 +159,34 @@ async def check_ports(db, tenant_id, host="127.0.0.1"):
     try:
         evaluation = await evaluate_capability_request(
             db, tenant_id=tid, user_id=uid, mission_id=mission_id,
-            requesting_agent_id="penetration_testing_coordinator", supervising_agent_id=None,
-            capability_key="network.port_scan", requested_tool_id="nmap_scan",
+            # The blue-team agent whose ceiling covers R2 inventory, not the red-team coordinator.
+            requesting_agent_id="network_security", supervising_agent_id=None,
+            capability_key="network.asset_inventory", requested_tool_id="port_inventory_scan",
             target_type="domain", target_reference=host, target_scope=None,
             purpose=f"scheduled exposure scan: port coverage of {host}"[:200],
             requested_parameters={"target": host},
         )
     except Exception as e:
-        log(f"nmap {host}: capability request raised {type(e).__name__}: {e}")
+        log(f"port inventory {host}: capability request raised {type(e).__name__}: {e}")
         return {"new": 0, "dupe": 0, "failed": 1}
 
     if evaluation.decision != "ALLOW":
-        log(f"nmap {host}: capability {evaluation.decision} - {getattr(evaluation, 'safe_message', '') or 'no reason given'}"
+        log(f"port inventory {host}: capability {evaluation.decision} - {getattr(evaluation, 'safe_message', '') or 'no reason given'}"
             f" (approval_id={getattr(evaluation, 'approval_id', None)})")
         return {"new": 0, "dupe": 0, "failed": 1, "decision": evaluation.decision}
 
     try:
         res = await execute_capability_request(
             db, tenant_id=tid, request_id=evaluation.request_id,
-            tool_name="nmap_scan", input_data={"target": host},
+            tool_name="port_inventory_scan", input_data={"target": host},
             user_id=uid, mission_id=mission_id,
         )
     except Exception as e:
-        log(f"nmap {host}: governed execution failed {type(e).__name__}: {e}")
+        log(f"port inventory {host}: governed execution failed {type(e).__name__}: {e}")
         return {"new": 0, "dupe": 0, "failed": 1}
 
     if not isinstance(res, dict) or not res.get("success", True):
-        log(f"nmap {host}: executor returned no usable result: {str(res)[:160]}")
+        log(f"port inventory {host}: executor returned no usable result: {str(res)[:160]}")
         return {"new": 0, "dupe": 0, "failed": 1}
 
     ports = res.get("ports") or res.get("open_ports") or []
@@ -214,7 +220,7 @@ async def check_ports(db, tenant_id, host="127.0.0.1"):
                 or any(_h.startswith(f"172.{n}.") for n in range(16, 32)))
     if _private:
         await db.commit()
-        log(f"nmap {host}: open={numbers} (local listener, not internet-facing; no finding filed)")
+        log(f"port inventory {host}: open={numbers} (local listener, not internet-facing; no finding filed)")
         return {"new": 0, "dupe": 0, "failed": 0}
 
     new = dupe = 0
@@ -226,7 +232,7 @@ async def check_ports(db, tenant_id, host="127.0.0.1"):
         new += outcome == "new"
         dupe += outcome == "dupe"
     await db.commit()
-    log(f"nmap {host}: open={numbers} new={new} duplicate={dupe}")
+    log(f"port inventory {host}: open={numbers} new={new} duplicate={dupe}")
     return {"new": new, "dupe": dupe, "failed": 0}
 
 

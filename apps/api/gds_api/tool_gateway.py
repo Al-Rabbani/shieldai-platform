@@ -89,6 +89,37 @@ async def _nmap_scan(params: dict) -> dict:
     return result
 
 
+# The ports this platform actually publishes or watches. Fixed on purpose: an inventory control must answer
+# "is my own perimeter the shape I think it is", not sweep 65,535 ports, and a constant list keeps the cost and
+# the noise identical every run, so a diff between two runs means a real change rather than a different sweep.
+INVENTORY_PORTS = "22,80,443,3000,5432,8000,8080,8222,9000,9001,9090"
+
+
+async def _port_inventory_scan(params: dict) -> dict:
+    """Read-only TCP port and service inventory of ONE authorised host.
+
+    Deliberately narrower than nmap_scan: a single host, no CIDR or range, a fixed port list and a fixed
+    non-aggressive profile. nmap_scan stays the red team's R4 tool with its per-run approval. This exists so the
+    scheduled coverage control can run unattended against an authorised asset: as an R4 capability every run
+    raised an approval nobody answered, so port coverage produced nothing for days while the log looked like a
+    scan had been attempted. It observes the perimeter and changes nothing on the target.
+    """
+    target = str(params.get("target") or "").strip()
+    if not target:
+        return {"success": False, "error": "target is required", "code": "MISSING_TARGET"}
+    if "/" in target or "," in target or " " in target or target.startswith("-"):
+        return {
+            "success": False,
+            "code": "SINGLE_HOST_ONLY",
+            "error": "inventory scan accepts one host or IP - never a range, CIDR, list or argument",
+        }
+    profile = {"ports": INVENTORY_PORTS, "flags": ["-sV", "-T4", "--open", "-Pn"]}
+    result = await _nmap_scan({"target": target, **profile})
+    result["tool"] = "port_inventory"
+    result["profile"] = profile
+    return result
+
+
 async def _nuclei_scan(params: dict) -> dict:
     """Run nuclei scan. params: target, templates."""
     target = params.get("target", "localhost")
@@ -625,6 +656,7 @@ TOOL_REGISTRY = {
     "evaluate_cloud_posture": _evaluate_cloud_posture,
     "discover_cloud_environment": _discover_cloud_environment,
     "nmap_scan": _nmap_scan,
+    "port_inventory_scan": _port_inventory_scan,
     "nuclei_scan": _nuclei_scan,
     "semgrep_scan": _semgrep_scan,
     "trivy_scan": _trivy_scan,

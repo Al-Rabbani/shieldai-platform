@@ -87,6 +87,20 @@ _ALL_TOOL_DEFINITIONS = [
     {
         "type": "function",
         "function": {
+            "name": "port_inventory_scan",
+            "description": "Read-only TCP port and service inventory of ONE authorised host, on a fixed port list. Use this for routine coverage of an asset you already have authorisation for: it changes nothing on the target and needs no per-run approval. Use nmap_scan instead only for an authorised penetration-test engagement, where the wider sweep is the point.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "target": {"type": "string", "description": "Single hostname or IP address. No ranges, CIDRs or lists."}
+                },
+                "required": ["target"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "nuclei_scan",
             "description": "Run Nuclei vulnerability templates against a target. Use AFTER nmap to check for known CVEs, misconfigurations, and exposures on discovered ports. Returns list of vulnerabilities found.",
             "parameters": {

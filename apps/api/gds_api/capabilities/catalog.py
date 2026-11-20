@@ -395,6 +395,33 @@ CAPABILITY_REGISTRY: dict[str, CapabilityDefinition] = {
         allows_network=True,
         audit_level="elevated",
     ),
+    # Scheduled, unattended coverage of an authorised asset - a DIFFERENT capability from
+    # network.port_scan, which stays R4/OFFENSIVE with a per-run human approval for red-team engagements.
+    # Same nmap binary, but one host, a fixed port list and a fixed non-aggressive profile, observing only.
+    # WHY THIS EXISTS: with only the R4 capability available, the six-hourly port coverage control raised an
+    # approval on every run that nobody was going to answer, so the control produced nothing for days while
+    # the log showed a scan attempt each time. A control that cannot run unattended is not a control. The
+    # real gate here is target authorisation: an active AuthorizedTarget row is still required.
+    "network.asset_inventory": CapabilityDefinition(
+        stable_key="network.asset_inventory",
+        display_name="Asset Port Inventory",
+        description=(
+            "Read-only TCP port and service inventory of a single explicitly authorized host, using a "
+            "fixed non-aggressive nmap profile. Observes the perimeter; changes nothing on the target."
+        ),
+        category="network",
+        risk_class=RiskClass.R2,
+        side_effect_type=SideEffectType.READ_EXTERNAL,
+        required_tool_ids=("port_inventory_scan",),
+        target_types=("domain", "ip"),
+        allowed_team_types=(Team.BLUE,),
+        requires_target_authorisation=True,
+        requires_human_approval=False,
+        allows_network=True,
+        # A service-version scan of eleven ports finishes in seconds; the headroom is for a slow network,
+        # not for a wider sweep.
+        maximum_duration_seconds=180,
+    ),
     "network.vulnerability_scan": CapabilityDefinition(
         stable_key="network.vulnerability_scan",
         display_name="Template Vulnerability Scan",
