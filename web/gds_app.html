@@ -162,7 +162,7 @@ tr:hover{background:var(--surface2)}
 <div class="stat"><div class="stat-val" id="stat-health">--</div><div class="stat-lbl">Services</div></div>
 <div class="stat"><div class="stat-val" id="stat-routes">--</div><div class="stat-lbl">API Routes</div></div>
 <div class="stat"><div class="stat-val" id="stat-findings">--</div><div class="stat-lbl">Findings</div></div>
-<div class="stat"><div class="stat-val" id="stat-incidents">--</div><div class="stat-lbl">Incidents</div></div>
+<div class="stat"><div class="stat-val" id="stat-incidents">--</div><div class="stat-lbl">Open incidents</div></div>
 </div>
 <div class="card" style="margin-bottom:24px">
 <div class="section-title">Live Posture</div>
@@ -1422,7 +1422,9 @@ async function loadIncidents() {
         });
         html += '</table>';
         document.getElementById('incidentsList').innerHTML = html;
-        document.getElementById('stat-incidents').textContent = incidents.length;
+        // The label says open, so the number has to be open. Now that an incident can be closed, counting every
+        // row would keep a closed incident in the headline figure for ever.
+        document.getElementById('stat-incidents').textContent = incidents.filter(i => i.status !== 'resolved').length;
     } else {
         document.getElementById('incidentsList').innerHTML = '<p class="muted">No active incidents. All clear.</p>';
         document.getElementById('stat-incidents').textContent = '0';
