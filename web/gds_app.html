@@ -271,11 +271,11 @@ run, so this page never shows a request that can no longer be honoured as if it 
 <div id="page-mssp" class="hidden">
 <h2>Managed tenants</h2>
 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px">
-<div class="stat"><div class="stat-val" id="mssp-count">--</div><div class="stat-lbl">Tenants</div></div>
+<div class="stat"><div class="stat-val" id="mssp-count">--</div><div class="stat-lbl">Customers</div></div>
 <div class="stat"><div class="stat-val" id="mssp-onboarded">--</div><div class="stat-lbl">Onboarded</div></div>
 <div class="stat"><div class="stat-val" id="mssp-assessed">--</div><div class="stat-lbl">With telemetry</div></div>
 </div>
-<p class="muted" id="msspScope">Every tenant on this platform, including the provider's own and any test tenants. This is not a count of paying customers.</p>
+<p class="muted" id="msspScope">Counting production customers only. The provider's own tenant and any non-production tenants are named here and excluded from the count.</p>
 <div id="msspChart"></div>
 <div id="msspCustomers"></div>
 </div>
@@ -820,6 +820,18 @@ async function loadMssp() {
   document.getElementById('mssp-onboarded').textContent = data.onboarded;
   document.getElementById('mssp-assessed').textContent = data.assessed;
 
+  // The count is customers only. Saying so on the page matters: this platform's tenant table holds the provider
+  // itself and the fixtures used to prove onboarding and isolation, and a reader who is not told will take the
+  // number at face value.
+  const excluded = data.non_production_count || 0;
+  const scopeNote = document.getElementById('msspScope');
+  if (scopeNote) {
+    const parts = [];
+    if (data.provider_tenant) parts.push('the provider tenant ' + (data.provider_tenant.display_name || data.provider_tenant.slug) + ' is not counted as its own customer');
+    if (excluded) parts.push(excluded + ' non-production tenant' + (excluded === 1 ? '' : 's') + ' excluded');
+    scopeNote.textContent = parts.length ? 'Counting production customers only: ' + parts.join(', ') + '.' : '';
+  }
+
   const tenants = data.customers || [];
   const maxFindings = Math.max(1, ...tenants.map(c => c.findings || 0));
   document.getElementById('msspChart').innerHTML = tenants.length
@@ -827,7 +839,8 @@ async function loadMssp() {
         tenants.map(c => ({ label: c.display_name || c.name || c.slug, a: c.findings, b: null })),
         { aria: 'Open findings per tenant', legend: { a: 'Open findings' }, max: maxFindings }
       )
-    : '<p class="muted">No tenant is present on this platform yet.</p>';
+    : '<p class="muted">No production customer is recorded yet' +
+      (excluded ? ' (the ' + excluded + ' tenant(s) on this platform are non-production)' : '') + '.</p>';
 
   const badge = st => st === 'at_risk' ? 'badge-red' : st === 'monitored' ? 'badge-green' : 'badge-blue';
   let html = '<table><tr><th>Customer</th><th>Plan</th><th>Onboarding</th><th>Users</th><th>Findings</th><th>Health</th></tr>';

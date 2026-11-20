@@ -64,6 +64,7 @@ def _shape(row) -> dict:
         "critical_findings": int(d["critical_findings"]),
         "missions": int(d["missions"]),
         "last_onboarding": d["last_onboarding"].isoformat() if d["last_onboarding"] else None,
+        "environment": d["environment"],
         "health": _health(d),
     }
 
@@ -77,12 +78,28 @@ async def list_customers(
         raise HTTPException(status.HTTP_403_FORBIDDEN, "MSSP provider administrator access required")
 
     rows = (await db.execute(text("SELECT * FROM mssp_customer_overview()"))).mappings().all()
-    customers = [_shape(r) for r in rows]
+    shaped = [_shape(r) for r in rows]
+    provider_id = str(provider_tenant_id())
+
+    # A customer count has to survive being read out loud in a board pack, so it counts only the tenants the
+    # platform is accountable for. The provider is not one of its own customers, and a fixture created to prove a
+    # path is not a customer either - measured 20 Nov 2026, five tenants were three fixtures, the provider and one
+    # real account, and the surface said "5". Both exclusions are reported with their reason rather than dropped,
+    # because a silently filtered list is indistinguishable from a complete one.
+    customers = [c for c in shaped if c["environment"] == "production" and c["tenant_id"] != provider_id]
+    provider = [c for c in shaped if c["tenant_id"] == provider_id]
+    excluded = [c for c in shaped if c["environment"] != "production"]
+
     return {
         "customers": customers,
         "count": len(customers),
         "onboarded": sum(1 for c in customers if c["onboarding_status"] == "complete"),
         "assessed": sum(1 for c in customers if c["health"]["status"] != "not_assessed"),
+        "provider_tenant": provider[0] if provider else None,
+        "non_production": [
+            {"slug": c["slug"], "name": c["name"], "environment": c["environment"]} for c in excluded
+        ],
+        "non_production_count": len(excluded),
         "note": ("health is derived from each customer's own telemetry; a customer with no scans is "
                  "reported not_assessed rather than given a default score"),
     }

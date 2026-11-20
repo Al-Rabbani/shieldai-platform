@@ -95,12 +95,16 @@ def test_views_do_not_invent_numbers_when_a_call_fails():
     assert "'Restricted'" in HTML
 
 
-def test_mssp_count_is_labelled_as_tenants_not_paying_customers():
-    # The endpoint lists every tenant, including the provider's own and test tenants. Calling that a
-    # customer count would overstate the business, which is the one number an owner must never see wrong.
+def test_mssp_count_names_what_it_excludes():
+    # This test used to hold a disclaimer: the endpoint returned every tenant, so the page said "Tenants" and
+    # warned that the number was not customers. The endpoint now returns a real customer count (migration 041
+    # separates production tenants from fixtures) and names the provider and non-production tenants it left
+    # out, so the number and its scope travel together instead of the label carrying a permanent excuse.
     assert "Managed tenants" in HTML
     assert 'id="msspScope"' in HTML
-    assert "not a count of paying customers" in HTML
+    assert '<div class="stat-lbl">Customers</div>' in HTML
+    assert "excluded from the count" in HTML
+    assert "not counted as its own customer" in HTML
 
 
 def test_session_is_verified_against_the_server_not_assumed():
