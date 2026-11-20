@@ -97,10 +97,15 @@ async def main_async(a) -> int:
                     band, policy, age, fid, a.tenant,
                 )
                 await conn.execute(
-                    "INSERT INTO notifications (id, tenant_id, user_id, type, message, created_at) "
-                    "VALUES (gen_random_uuid(), $1, $2, 'sla_escalation', $3, now())",
+                    # requires_ack is the flag the pager selects on. Without it this row is a log entry:
+                    # measured 20 Nov 2026, 194 notifications existed and 0 were ackable, so every
+                    # escalation was silent no matter how healthy the pager looked.
+                    "INSERT INTO notifications (id, tenant_id, user_id, type, message, severity, "
+                    "requires_ack, escalation_level, created_at) "
+                    "VALUES (gen_random_uuid(), $1, $2, 'sla_escalation', $3, $4, TRUE, 0, now())",
                     a.tenant, user,
                     f"[{band.upper()}] {sev} finding open {age:.0f}h, policy {policy}h: {title[:120]}",
+                    sev,
                 )
         print(f"escalated {len(plan)} findings and raised {len(plan)} notifications")
         return 0

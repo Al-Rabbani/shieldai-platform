@@ -34,24 +34,30 @@ LADDER_MINUTES = (5, 15, 60)
 MAX_LEVEL = len(LADDER_MINUTES)
 
 
-def _load_env(path: str = "/opt/.env") -> None:
+def _load_env(*paths: str) -> None:
     """Cron and `sudo -u postgres` both start without the service environment, so read it directly.
 
     Without this the pager runs, finds nothing configured, and reports slack=not_configured while the alert
     quietly never leaves the host - a paging system that pages nobody is worse than none, because it looks
     like one.
     """
-    try:
-        with open(path, encoding="utf-8") as fh:
-            for line in fh:
-                line = line.strip()
-                if not line or line.startswith("#") or "=" not in line:
-                    continue
-                key, _, value = line.partition("=")
-                os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
-    except OSError as exc:
-        # Not fatal by itself, but the caller below refuses to run with no channel at all.
-        print(f"  warning: could not read {path} ({type(exc).__name__})", file=sys.stderr)
+    # /opt/.env is 0600 root:postgres and this runs as postgres, so the first path it was given could never
+    # be opened: measured 20 Nov 2026, every run printed PermissionError and then "no delivery channel
+    # configured". /opt/gds-pager.env is written by deploy with only the delivery variables, 0640 root:postgres.
+    for path in paths:
+        try:
+            with open(path, encoding="utf-8") as fh:
+                lines = fh.readlines()
+        except OSError as exc:
+            print(f"  warning: could not read {path} ({type(exc).__name__})", file=sys.stderr)
+            continue
+        for line in lines:
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, value = line.partition("=")
+            os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
+        return
 
 
 def _post(url: str, payload: dict, headers: dict | None = None, timeout: int = 15) -> int:
@@ -100,7 +106,7 @@ def due(row: dict, now: dt.datetime) -> bool:
 
 
 def main() -> int:
-    _load_env()
+    _load_env("/opt/gds-pager.env", "/opt/.env")
     if not (os.getenv("SLACK_WEBHOOK_URL", "").strip() or os.getenv("RESEND_API_KEY", "").strip()):
         # A pager that cannot deliver is worse than no pager, because it looks like one.
         print("  FATAL: no delivery channel configured (SLACK_WEBHOOK_URL and RESEND_API_KEY both empty)",

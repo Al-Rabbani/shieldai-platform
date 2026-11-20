@@ -1,0 +1,62 @@
+"""A pager that cannot select a row, or cannot read its own credentials, is a log with a schedule.
+
+Measured 20 November 2026 on the live host, two independent defects in the notification path:
+
+  1. `notifications` held 194 rows and **zero** had `requires_ack` set, because no producer ever set it.
+     The pager selects `WHERE requires_ack AND acknowledged_at IS NULL`, so it matched nothing even
+     though every scheduled run "succeeded". An escalation that cannot be selected is not an alert.
+  2. The pager runs as postgres (it must see every tenant's notifications on FORCE-RLS tables) and
+     `/opt/.env` is 0600 root:postgres, so `_load_env` raised PermissionError on every run and the
+     process then refused with "no delivery channel configured". The two channels were configured the
+     whole time; the process could not read them.
+
+Both are pinned here, because both fail silently: the cron entry exits non-zero into a log nobody reads
+and the platform looks like it pages.
+"""
+import pathlib
+
+ROOT = pathlib.Path(__file__).resolve().parents[1]
+OPS = ROOT / "scripts" / "ops"
+
+ESCALATE = (OPS / "escalate_stale_findings.py").read_text()
+PAGER = (OPS / "gds-page.py").read_text()
+DEPLOY = (OPS / "deploy.sh").read_text()
+
+
+def test_escalation_notification_is_ackable():
+    """The pager's SELECT requires this flag; an escalation without it can never be delivered."""
+    assert "requires_ack" in ESCALATE, "escalation must set requires_ack or the pager cannot see the row"
+    assert "TRUE, 0, now()" in ESCALATE, "escalation must open the ladder at level 0"
+    assert "'sla_escalation', $3, $4" in ESCALATE, "escalation must store a severity so the page is graded"
+
+
+def test_pager_selects_only_ackable_unacknowledged_rows():
+    assert "WHERE n.requires_ack AND n.acknowledged_at IS NULL" in PAGER
+
+
+def test_pager_can_read_a_file_owned_by_its_own_user():
+    """It runs as postgres; /opt/.env is 0600 root:postgres, so a dedicated 0640 file is the only route."""
+    assert 'def _load_env(*paths: str)' in PAGER, "the loader must accept more than one path"
+    assert '_load_env("/opt/gds-pager.env", "/opt/.env")' in PAGER, (
+        "the pager must try the group-readable delivery file before the full secret file"
+    )
+    assert "continue" in PAGER.split("def _post")[0], "an unreadable path must fall through, not abort"
+
+
+def test_deploy_writes_the_pager_env_with_narrow_permissions():
+    assert "/opt/gds-pager.env" in DEPLOY
+    assert "chmod 640 /opt/gds-pager.env" in DEPLOY
+    assert "chown root:postgres /opt/gds-pager.env" in DEPLOY
+    for var in ("SLACK_WEBHOOK_URL", "RESEND_API_KEY"):
+        assert var in DEPLOY.split("/opt/gds-pager.env")[0], f"{var} must be copied into the pager env"
+
+
+def test_deploy_installs_every_script_its_cron_files_call():
+    """Cron runs /usr/local/bin/gds-page.py and gds-webhook-dispatch.py; a script missing from the
+    install loop keeps running whatever an earlier manual install left behind."""
+    for cron in (ROOT / "config" / "cron").glob("*"):
+        for line in cron.read_text().splitlines():
+            if line.startswith("#") or "/usr/local/bin/" not in line:
+                continue
+            script = line.split("/usr/local/bin/")[1].split()[0]
+            assert script in DEPLOY, f"{script} is called by cron but deploy never installs it"

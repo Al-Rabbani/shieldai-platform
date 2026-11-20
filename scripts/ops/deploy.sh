@@ -133,12 +133,23 @@ stamp_release "$NEW"
 # /usr/local/bin silently keeps running an older backup/watcher/drill than the repo holds - the
 # failure mode where a fix is committed, reviewed and deployed, and the scheduled job never sees it.
 echo "  installing ops scripts..."
-for script in gds-backup.sh gds-backup-watch.sh gds-restore-drill.sh gds-b2-upload.py assess_compliance.py gds-os-update.sh onboard_tenant.py; do
+for script in gds-backup.sh gds-backup-watch.sh gds-restore-drill.sh gds-wal-prune.sh gds-service-watch.sh gds-b2-upload.py assess_compliance.py gds-os-update.sh onboard_tenant.py gds-page.py gds-webhook-dispatch.py; do
   if [ -f "scripts/ops/$script" ]; then
     install -m 750 -o root -g root "scripts/ops/$script" "/usr/local/bin/$script" \
       && echo "    installed $script" || fail "could not install $script"
   fi
 done
+
+# The pager runs as postgres because it must see every tenant's notifications, and /opt/.env is
+# 0600 root:postgres, so it could not read one delivery credential and reported "no delivery channel
+# configured" on every five-minute run. It gets its own file with only the channel variables rather
+# than widening the permissions of the whole secret set.
+if [ -r /opt/.env ]; then
+  ( grep -E '^(SLACK_WEBHOOK_URL|RESEND_API_KEY|RESEND_FROM)=' /opt/.env || true ) > /opt/gds-pager.env
+  chown root:postgres /opt/gds-pager.env
+  chmod 640 /opt/gds-pager.env
+  echo "    wrote /opt/gds-pager.env ($(wc -l < /opt/gds-pager.env) delivery variables)"
+fi
 
 echo "  restarting services..."
 supervisorctl restart gds-os gds-worker gds-kernel >/dev/null 2>&1
