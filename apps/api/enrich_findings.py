@@ -11,8 +11,17 @@ existed. Two of them are derivable without guessing:
 Nothing is invented: a finding whose details carry no CVE keeps cve NULL, and a CVE that the
 feeds do not know keeps epss/kev_listed NULL rather than defaulting to 0/false.
 
-Run:  python enrich_findings.py [--tenant-id UUID] [--limit N] [--dry-run]
-Cron: every 12 hours.
+WHY IT RE-CHECKS RATHER THAN FILLING ONCE. Until 21 Nov 2026 the selection was
+`AND (cve IS NULL OR epss IS NULL OR kev_listed IS NULL)`. The first run wrote false into every
+row, so from then on that predicate matched nothing it had already touched and the job converged
+to a no-op that still exited 0: the log ran 500 rows, then 161, then 38, then 38 examined with 0
+carrying a CVE. Both feeds move daily - KEV is republished every day and EPSS is rescored - so a
+frozen answer is a wrong answer waiting to happen, and `false` is indistinguishable from `nobody
+looked`. Every row is now re-examined once its enrichment_checked_at is older than --max-age-hours,
+and kev_listed = false only means something because a timestamp says when it was established.
+
+Run:  python enrich_findings.py [--tenant-id UUID] [--limit N] [--max-age-hours H] [--dry-run]
+Cron: every 12 hours, which is why the default staleness window is 12 hours.
 """
 from __future__ import annotations
 
@@ -26,6 +35,7 @@ import sys
 import time
 
 import httpx
+from datetime import date, datetime, timezone
 from sqlalchemy import text
 
 KEV_URL = ("https://www.cisa.gov/sites/default/files/feeds/"
@@ -117,24 +127,47 @@ def store_cached_nvd(cve: str, payload: dict) -> None:
     _nvd_cache_path(cve).write_text(json.dumps(payload))
 
 
+def kev_index(payload: dict) -> dict[str, dict]:
+    """Pure helper, unit tested: the catalogue keyed by CVE, keeping the dates the feed publishes.
+
+    The previous loader kept a set of ids and threw dateAdded and dueDate away, so the remediation
+    deadline CISA publishes for every listed CVE was lost at load time and could not be recovered
+    without re-downloading the feed.
+    """
+    out: dict[str, dict] = {}
+    for v in payload.get("vulnerabilities", []):
+        cve = (v.get("cveID") or "").upper()
+        if not cve:
+            continue
+        out[cve] = {
+            "date_added": v.get("dateAdded"),
+            "due_date": v.get("dueDate"),
+            "vendor": v.get("vendorProject"),
+            "product": v.get("product"),
+            "name": v.get("vulnerabilityName"),
+        }
+    return out
+
+
 def kev_ids(payload: dict) -> set[str]:
-    return {v["cveID"].upper() for v in payload.get("vulnerabilities", []) if v.get("cveID")}
+    """The listed CVE ids alone, kept because callers and tests only need membership."""
+    return set(kev_index(payload))
 
 
-def load_kev() -> tuple[set[str], str]:
+def load_kev() -> tuple[dict[str, dict], str]:
     CACHE.parent.mkdir(parents=True, exist_ok=True)
     fresh = CACHE.exists() and (time.time() - CACHE.stat().st_mtime) < CACHE_TTL
     if fresh:
-        return kev_ids(json.loads(CACHE.read_text())), "cache"
+        return kev_index(json.loads(CACHE.read_text())), "cache"
     try:
         with httpx.Client(timeout=60) as c:
             r = c.get(KEV_URL)
             r.raise_for_status()
         CACHE.write_text(r.text)
-        return kev_ids(r.json()), "download"
+        return kev_index(r.json()), "download"
     except Exception as exc:  # network failure must not silently look like "not exploited"
         if CACHE.exists():
-            return kev_ids(json.loads(CACHE.read_text())), f"stale-cache ({type(exc).__name__})"
+            return kev_index(json.loads(CACHE.read_text())), f"stale-cache ({type(exc).__name__})"
         raise
 
 
@@ -241,10 +274,88 @@ async def cvss_backfill(args) -> int:
     return 0
 
 
+def resolve_cve(row) -> str | None:
+    """Pure helper, unit tested: the CVE for one examined row, from the best available evidence.
+
+    details first, because that is what the scanner wrote; then the cve column, because an earlier run
+    may have resolved an alias that details does not spell out; then a pattern match over the title and
+    a bounded slice of details, for scanners that put the id only in prose.
+    """
+    details = row["details"] or {}
+    return (
+        extract_cve(details)
+        or (row["cve"].upper() if row.get("cve") else None)
+        or extract_cve_from_text(row["title"], json.dumps(details)[:4000])
+    )
+
+
+def as_date(value) -> date | None:
+    """Pure helper, unit tested: the KEV feed publishes dates as ISO strings.
+
+    asyncpg refuses a string for a `date` column - "str object has no attribute toordinal" - which is a
+    failure a unit test on the mapping alone would not catch, because the mapping looks correct. Caught
+    by running the job against the real database with a real KEV CVE.
+    """
+    if isinstance(value, date):
+        return value
+    if not value:
+        return None
+    try:
+        return date.fromisoformat(str(value)[:10])
+    except ValueError:
+        return None
+
+
+def build_updates(rows, kev: dict[str, dict], epss: dict[str, float], now: str, kev_source: str):
+    """Pure helper, unit tested: turn examined rows into the two kinds of write this job performs.
+
+    Returns (cve_updates, no_cve_updates). Splitting them matters: a row with no CVE cannot be looked
+    up at all, so it must be stamped as examined without claiming anything about KEV, while a row with
+    a CVE gets a real answer and the timestamp that makes that answer evidence.
+    """
+    cve_updates, no_cve_updates = [], []
+    for row in rows:
+        cve = resolve_cve(row)
+        if not cve:
+            no_cve_updates.append({
+                "id": row["id"],
+                "raw": json.dumps({"at": now, "result": "no_cve_in_finding", "kev_source": kev_source}),
+            })
+            continue
+        entry = kev.get(cve) or {}
+        details = row["details"] or {}
+        cvss = details.get("cvss") if isinstance(details.get("cvss"), (int, float)) else None
+        if cvss is None and isinstance(row.get("cvss"), (int, float)):
+            cvss = row["cvss"]
+        cve_updates.append({
+            "id": row["id"],
+            "cve": cve,
+            "cvss": cvss,
+            "epss": epss.get(cve),
+            "kev": cve in kev,
+            "kev_date_added": as_date(entry.get("date_added")),
+            "kev_due_date": as_date(entry.get("due_date")),
+            "raw": json.dumps({
+                "at": now,
+                "kev_source": kev_source,
+                "kev_size": len(kev),
+                "kev_listed": cve in kev,
+                "epss_known": cve in epss,
+            }),
+        })
+    return cve_updates, no_cve_updates
+
+
 async def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--tenant-id", default=os.environ.get("GDS_TENANT_ID"))
     ap.add_argument("--limit", type=int, default=500)
+    ap.add_argument(
+        "--max-age-hours",
+        type=int,
+        default=12,
+        help="re-examine any open finding whose last enrichment check is older than this (default 12, the cron cadence)",
+    )
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument(
         "--cvss-backfill",
@@ -263,51 +374,56 @@ async def main() -> int:
         return await cvss_backfill(args)
 
     tenant = args.tenant_id
+    # Staleness, not emptiness. Selecting only NULLs is what let this job converge to a no-op: the
+    # first pass wrote false, and false is not NULL, so nothing it had touched was ever looked at again.
     async with async_session_factory() as s:
         await bind_tenant(s, tenant)
         rows = (await s.execute(text(
-            "SELECT id, title, details FROM security_findings "
+            "SELECT id, title, details, cve, cvss FROM security_findings "
             "WHERE tenant_id = :t AND status = 'open' "
-            "AND (cve IS NULL OR epss IS NULL OR kev_listed IS NULL) "
-            "ORDER BY detected_at DESC LIMIT :n"), {"t": tenant, "n": args.limit})).mappings().all()
+            "AND (enrichment_checked_at IS NULL "
+            "     OR enrichment_checked_at < now() - make_interval(hours => :age)) "
+            "ORDER BY enrichment_checked_at NULLS FIRST, detected_at DESC LIMIT :n"),
+            {"t": tenant, "n": args.limit, "age": args.max_age_hours})).mappings().all()
 
-    candidates = []
-    for row in rows:
-        details = row["details"] or {}
-        cve = extract_cve(details) or extract_cve_from_text(
-            row["title"], json.dumps(details)[:4000]
-        )
-        if cve:
-            candidates.append((row["id"], cve, row["details"] or {}))
-    cves = sorted({c for _, c, _ in candidates})
-    print(f"rows_needing_enrichment={len(rows)} rows_with_cve={len(candidates)} distinct_cves={len(cves)}")
-    if not cves:
+    if not rows:
+        print(f"nothing to re-check: no open finding is older than {args.max_age_hours}h in enrichment_checked_at")
         return 0
 
+    cves = sorted({c for c in (resolve_cve(r) for r in rows) if c})
     kev, kev_source = load_kev()
-    epss = fetch_epss(cves)
-    print(f"kev_source={kev_source} kev_size={len(kev)} epss_known={len(epss)}")
-
-    updates = []
-    for fid, cve, details in candidates:
-        cvss = details.get("cvss") if isinstance(details.get("cvss"), (int, float)) else None
-        updates.append({
-            "id": fid, "cve": cve, "cvss": cvss,
-            "epss": epss.get(cve), "kev": cve in kev,
-            "raw": json.dumps({"kev_source": kev_source, "epss_known": cve in epss}),
-        })
+    epss = fetch_epss(cves) if cves else {}
+    now = datetime.now(timezone.utc).isoformat()
+    cve_updates, no_cve_updates = build_updates(rows, kev, epss, now, kev_source)
+    kev_hits = [u for u in cve_updates if u["kev"]]
+    print(f"rows_rechecked={len(rows)} with_cve={len(cve_updates)} without_cve={len(no_cve_updates)} "
+          f"distinct_cves={len(cves)} kev_hits={len(kev_hits)} epss_known={len(epss)}")
+    print(f"kev_source={kev_source} kev_size={len(kev)}")
+    for u in kev_hits:
+        print(f"  KEV {u['cve']} added={u['kev_date_added']} due={u['kev_due_date']}")
 
     if args.dry_run:
-        print(f"dry run: would update {len(updates)} rows; sample={updates[:2]}")
+        print(f"dry run: would stamp {len(cve_updates)} CVE rows and {len(no_cve_updates)} no-CVE rows; "
+              f"sample={cve_updates[:2]}")
         return 0
 
     async with async_session_factory() as s:
         await bind_tenant(s, tenant)
-        for u in updates:
+        for u in cve_updates:
             await s.execute(text(
                 "UPDATE security_findings SET cve = :cve, "
                 "cvss = COALESCE(:cvss, cvss), epss = COALESCE(:epss, epss), "
-                "kev_listed = :kev, raw_data = COALESCE(raw_data, CAST(:raw AS jsonb)) "
+                "kev_listed = :kev, kev_date_added = :kev_date_added, kev_due_date = :kev_due_date, "
+                "enrichment_checked_at = now(), "
+                "raw_data = jsonb_set(COALESCE(raw_data, '{}'::jsonb), '{enrichment}', CAST(:raw AS jsonb), true) "
+                "WHERE id = :id AND tenant_id = :t"), {**u, "t": tenant})
+        # A finding with no CVE is examined and stamped, but makes no claim about KEV. Its existing
+        # no_cve note (written by enrich_package_findings.py with the alias list and vector) is kept.
+        for u in no_cve_updates:
+            await s.execute(text(
+                "UPDATE security_findings SET enrichment_checked_at = now(), "
+                "raw_data = CASE WHEN COALESCE(raw_data, '{}'::jsonb) ? 'no_cve' THEN raw_data "
+                "ELSE jsonb_set(COALESCE(raw_data, '{}'::jsonb), '{no_cve}', CAST(:raw AS jsonb), true) END "
                 "WHERE id = :id AND tenant_id = :t"), {**u, "t": tenant})
         await s.commit()
         # NullPool: the commit returned the physical connection to the pool, so this read starts
@@ -316,11 +432,14 @@ async def main() -> int:
         still = (await s.execute(text(
             "SELECT COUNT(*) FILTER (WHERE cve IS NULL) AS cve_null, "
             "COUNT(*) FILTER (WHERE kev_listed IS NULL) AS kev_null, "
-            "COUNT(*) FILTER (WHERE epss IS NULL) AS epss_null "
+            "COUNT(*) FILTER (WHERE epss IS NULL) AS epss_null, "
+            "COUNT(*) FILTER (WHERE enrichment_checked_at IS NULL) AS unchecked, "
+            "COUNT(*) FILTER (WHERE enrichment_checked_at > now() - make_interval(hours => :age)) AS fresh "
             "FROM security_findings WHERE tenant_id = :t AND status = 'open'"),
-            {"t": tenant})).mappings().one()
-    print(f"updated={len(updates)} remaining_open cve_null={still['cve_null']} "
-          f"kev_null={still['kev_null']} epss_null={still['epss_null']}")
+            {"t": tenant, "age": args.max_age_hours})).mappings().one()
+    print(f"stamped={len(cve_updates) + len(no_cve_updates)} "
+          f"remaining_open cve_null={still['cve_null']} kev_null={still['kev_null']} "
+          f"epss_null={still['epss_null']} unchecked={still['unchecked']} fresh_within_window={still['fresh']}")
     return 0
 
 
