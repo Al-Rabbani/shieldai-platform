@@ -55,5 +55,5 @@ def test_the_five_modules_have_recorded_decisions():
 
 
 def test_ci_no_longer_claims_an_autofix_endpoint():
-    wf = (ROOT / ".github" / "workflows" / "shieldai-security-gate.yml").read_text(encoding="utf-8")
+    wf = (ROOT / ".github" / "workflows" / "gdsa-radar-security-gate.yml").read_text(encoding="utf-8")
     assert "security_gate_client.py autofix" not in wf

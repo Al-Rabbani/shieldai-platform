@@ -1,4 +1,4 @@
-# ShieldAI — 3-Minute Demo Script
+# GDSA Radar — 3-Minute Demo Script
 ## For Sales Calls, Investor Pitches, and Video Recording
 
 ---
@@ -7,7 +7,7 @@
 
 "Security teams today are drowning. The average enterprise uses 47 different security tools — none of them talk to each other. Teams spend 60% of their time correlating alerts instead of fixing actual problems. And tool sprawl costs $2.4 million a year in wasted spend.
 
-ShieldAI replaces all of them."
+GDSA Radar replaces all of them."
 
 ---
 
@@ -15,7 +15,7 @@ ShieldAI replaces all of them."
 
 [OPEN: Executive Dashboard /]
 
-"This is ShieldAI — your entire security posture in one command centre. You can see instantly: 12 critical findings, 3,891 assets protected, 97% of threats handled automatically by AI — with no human needed. Our Autonomous SOC detected and blocked 2,847 threats in the last 24 hours alone.
+"This is GDSA Radar — your entire security posture in one command centre. You can see instantly: 12 critical findings, 3,891 assets protected, 97% of threats handled automatically by AI — with no human needed. Our Autonomous SOC detected and blocked 2,847 threats in the last 24 hours alone.
 
 Every pillar — Code, Cloud, Attack Surface, Runtime, AI Security, and Governance — is scored in real time. You always know exactly where you stand."
 
@@ -25,15 +25,15 @@ Every pillar — Code, Cloud, Attack Surface, Runtime, AI Security, and Governan
 
 [NAVIGATE TO: /code]
 
-"Let's start with code. We're connected to GitHub via OAuth. ShieldAI scanned 50 files in the shieldai-platform repo and found 4 critical issues — including hardcoded AWS credentials and an SQL injection vulnerability — in under 30 seconds.
+"Let's start with code. We're connected to GitHub via OAuth. GDSA Radar scanned 50 files in the shieldai-platform repo and found 4 critical issues — including hardcoded AWS credentials and an SQL injection vulnerability — in under 30 seconds.
 
 [CLICK: a finding]
 
-This is real. We found it in functions/shieldDASTScan.ts, line 367. ShieldAI doesn't just tell you it's a problem — it generates a fix PR automatically. One click. Done."
+This is real. We found it in functions/shieldDASTScan.ts, line 367. GDSA Radar doesn't just tell you it's a problem — it generates a fix PR automatically. One click. Done."
 
 [CLICK: AutoFix button]
 
-"Your developer doesn't need to understand cryptography or injection flaws. ShieldAI does the security work for them."
+"Your developer doesn't need to understand cryptography or injection flaws. GDSA Radar does the security work for them."
 
 ---
 
@@ -55,7 +55,7 @@ Your SOC analyst just became an AI supervisor."
 
 [NAVIGATE TO: /global-intel]
 
-"Every ShieldAI customer contributes anonymised threat intelligence to our global network. Right now, 12,847 organisations in 94 countries are sharing threat data. That attack that just hit a bank in Singapore? Every ShieldAI customer is already protected against it — automatically.
+"Every GDSA Radar customer contributes anonymised threat intelligence to our global network. Right now, 12,847 organisations in 94 countries are sharing threat data. That attack that just hit a bank in Singapore? Every GDSA Radar customer is already protected against it — automatically.
 
 This is collective defence at planetary scale. Like Waze — but for cybersecurity."
 
@@ -65,11 +65,11 @@ This is collective defence at planetary scale. Like Waze — but for cybersecuri
 
 [NAVIGATE TO: /quantum-readiness]
 
-"Here's something nobody else offers. Post-quantum cryptography scanning. Quantum computers will break RSA and ECC encryption by 2030 — that's 1,295 days from today. We found 31 quantum-vulnerable cryptographic implementations in this organisation's systems. NIST has finalised the replacement standards. ShieldAI guides the entire migration.
+"Here's something nobody else offers. Post-quantum cryptography scanning. Quantum computers will break RSA and ECC encryption by 2030 — that's 1,295 days from today. We found 31 quantum-vulnerable cryptographic implementations in this organisation's systems. NIST has finalised the replacement standards. GDSA Radar guides the entire migration.
 
 [NAVIGATE TO: /shield-home]
 
-And this — ShieldAI Home. The $226 billion smart home security market. A family dashboard protecting devices, identity, IoT, and children's safety. No other enterprise security vendor plays in this space. We do.
+And this — GDSA Radar Home. The $226 billion smart home security market. A family dashboard protecting devices, identity, IoT, and children's safety. No other enterprise security vendor plays in this space. We do.
 
 [NAVIGATE TO: /attack-forecast]
 
@@ -85,7 +85,7 @@ And this — Predictive Attack Forecasting. Our AI says there is a 78% probabili
 
 Free tier available today — no credit card. Enterprise pilots available on request with a dedicated Slack channel and 99.9% SLA.
 
-The question isn't whether you can afford ShieldAI. It's whether you can afford not to have it.
+The question isn't whether you can afford GDSA Radar. It's whether you can afford not to have it.
 
 Let's get you started."
 
@@ -94,13 +94,13 @@ Let's get you started."
 ## KEY OBJECTION RESPONSES
 
 **"We already use Wiz/Snyk/CrowdStrike"**
-"ShieldAI replaces all three and adds Autonomous SOC, Quantum Readiness, Predictive Forecasting, and Home/Gov protection that none of them offer — at a fraction of the combined cost. We also have bi-directional integrations with all of them if you want to run us alongside first."
+"GDSA Radar replaces all three and adds Autonomous SOC, Quantum Readiness, Predictive Forecasting, and Home/Gov protection that none of them offer — at a fraction of the combined cost. We also have bi-directional integrations with all of them if you want to run us alongside first."
 
 **"We're not ready to switch tools"**
 "Start with our free tier alongside your existing tools. Within 30 days you'll see findings your current tools missed. Most customers switch within 90 days — not because we asked, but because the ROI is obvious."
 
 **"We need enterprise compliance (FedRAMP/SOC2)"**
-"Our Enterprise/Sovereign tier is FedRAMP-ready, ISO27001-aligned, and has built-in compliance evidence collection for SOC2, ISO27001, NIS2, DORA, GDPR, and PCI-DSS. We eat our own dog food — ShieldAI's own platform is scanned by ShieldAI."
+"Our Enterprise/Sovereign tier is FedRAMP-ready, ISO27001-aligned, and has built-in compliance evidence collection for SOC2, ISO27001, NIS2, DORA, GDPR, and PCI-DSS. We eat our own dog food — GDSA Radar's own platform is scanned by GDSA Radar."
 
 **"How do you handle data residency?"**
 "Your data never leaves your chosen region. We offer EU, US, and APAC data residency on Enterprise plans. For government clients we support on-premise broker deployment."
@@ -111,6 +111,6 @@ Let's get you started."
 
 **For a CISO:** Dashboard → Compliance → Risk Quantification → Regulatory Intelligence → Pricing
 **For a Developer:** Code Security → AutoFix → CI/CD Security → Zen Firewall → Academy
-**For an Investor:** Dashboard → Global Intel Network → Attack Forecast → ShieldAI Home → Pricing comparison
-**For Government:** ShieldAI Gov → Compliance → Quantum Readiness → Regulatory Intel → MSSP Portal
+**For an Investor:** Dashboard → Global Intel Network → Attack Forecast → GDSA Radar Home → Pricing comparison
+**For Government:** GDSA Radar Gov → Compliance → Quantum Readiness → Regulatory Intel → MSSP Portal
 **For an MSSP:** MSSP Portal → White-label config → Client management → Marketplace → Pricing

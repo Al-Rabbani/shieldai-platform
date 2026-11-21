@@ -1,4 +1,4 @@
-name: ShieldAI Security Gate
+name: GDSA Radar Security Gate
 
 on:
   pull_request:
@@ -22,7 +22,7 @@ jobs:
           python -m unittest discover -s tests -p 'test_ci_gate_backend.py' -v
 
   security-gate:
-    name: ShieldAI Security Scan & Gate
+    name: GDSA Radar Security Scan & Gate
     runs-on: ubuntu-latest
     needs: client-contracts
     outputs:

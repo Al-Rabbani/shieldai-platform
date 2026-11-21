@@ -102,7 +102,7 @@ def main(mode="gate"):
             verdict, critical = gate_verdict(data, expected_repo=body["repo_full_name"],
                                             expected_commit=body["commit_sha"])
             write_outputs(verdict, critical)
-            print(f"ShieldAI gate verdict: {verdict}; critical findings: {critical}")
+            print(f"GDSA Radar gate verdict: {verdict}; critical findings: {critical}")
             return 0 if verdict == "passed" else 1
         if mode == "autofix":
             if os.environ.get("GATE_VERDICT") != "blocked" or os.environ.get("AUTOFIX_ENABLED") != "true":
@@ -118,7 +118,7 @@ def main(mode="gate"):
     except (IntegrationError, ValueError) as exc:
         write_outputs("integration_error")
         message = str(exc) if isinstance(exc, IntegrationError) else "Invalid client configuration"
-        print(f"ShieldAI integration error: {message}", file=sys.stderr)
+        print(f"GDSA Radar integration error: {message}", file=sys.stderr)
         return 2
 
 

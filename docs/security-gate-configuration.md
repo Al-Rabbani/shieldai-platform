@@ -1,4 +1,4 @@
-# ShieldAI CI gate configuration and verification
+# GDSA Radar CI gate configuration and verification
 
 Tracks issue #9; client in PR #10; VPS backend in PR #11. This client change
 reconciles the new production contract. It does not configure GitHub secrets

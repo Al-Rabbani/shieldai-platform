@@ -11,7 +11,7 @@ Hi [First Name],
 
 I'll keep this short — I know your inbox.
 
-We just launched ShieldAI: a unified security platform that replaces Wiz, Snyk, Aikido, and your SIEM in one dashboard, at $299/month instead of $50,000+.
+We just launched GDSA Radar: a unified security platform that replaces Wiz, Snyk, Aikido, and your SIEM in one dashboard, at $299/month instead of $50,000+.
 
 What it does that nothing else does today:
 - Autonomous SOC — AI handles 97% of alert triage, investigation, and response automatically
@@ -26,7 +26,7 @@ You connect your GitHub + AWS in 5 minutes. The first scan usually surfaces 3-5 
 Worth a 20-minute demo?
 
 [Your name]
-ShieldAI
+GDSA Radar
 hello@shieldai.dev
 
 ---
@@ -39,7 +39,7 @@ Hi [First Name],
 
 Quick question: when did you last run a secrets scan across your entire Git history?
 
-We built ShieldAI — it scans your repos for secrets, SQL injection, XSS, outdated dependencies, and IaC misconfigs in under 60 seconds. Then auto-generates fix PRs.
+We built GDSA Radar — it scans your repos for secrets, SQL injection, XSS, outdated dependencies, and IaC misconfigs in under 60 seconds. Then auto-generates fix PRs.
 
 We ran it on our own codebase yesterday and found 4 critical issues we didn't know about. Fixed all of them before lunch via AutoFix.
 
@@ -54,13 +54,13 @@ No credit card. No sales call required.
 
 ## EMAIL 3: Government / Public Sector Outreach
 
-**Subject:** ShieldAI Sovereign — National-grade cybersecurity for [Agency/Department]
+**Subject:** GDSA Radar Sovereign — National-grade cybersecurity for [Agency/Department]
 
 Dear [Name],
 
-The 2026 National Cyber Strategy mandates critical infrastructure protection across all government agencies. ShieldAI Sovereign is purpose-built for this requirement.
+The 2026 National Cyber Strategy mandates critical infrastructure protection across all government agencies. GDSA Radar Sovereign is purpose-built for this requirement.
 
-ShieldAI Sovereign provides:
+GDSA Radar Sovereign provides:
 ✅ NIST SP 800-53 + 800-82 (OT) compliance assessment
 ✅ FedRAMP-ready architecture
 ✅ IEC 62443 for OT/ICS/SCADA environments
@@ -74,7 +74,7 @@ We are offering a 30-day pilot for qualifying government organisations at no cos
 I would welcome the opportunity to arrange a classified briefing for your security leadership team.
 
 [Your name]
-ShieldAI — Sovereign Division
+GDSA Radar — Sovereign Division
 hello@shieldai.dev
 
 ---
@@ -85,7 +85,7 @@ hello@shieldai.dev
 
 Hi [First Name],
 
-If you're an MSSP managing security for multiple clients, ShieldAI has a white-label portal built specifically for you.
+If you're an MSSP managing security for multiple clients, GDSA Radar has a white-label portal built specifically for you.
 
 What the MSSP portal gives you:
 - Manage unlimited client tenants from one pane of glass
@@ -99,6 +99,6 @@ We're onboarding MSSP partners now. First 5 partners get Elite Partner status an
 Would a 30-minute technical walkthrough work this week?
 
 [Your name]
-ShieldAI Partner Program
+GDSA Radar Partner Program
 hello@shieldai.dev
 
