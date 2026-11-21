@@ -142,3 +142,51 @@ def test_the_response_no_longer_claims_an_assignment_that_did_not_happen():
     src = (ROOT / "apps" / "api" / "gds_api" / "agentic" / "action_triggers.py").read_text(encoding="utf-8")
     assert '"agent_assigned": agent_label' in src
     assert '"agent_assigned": agent_id or "auto-assigned"' not in src
+
+
+# ------------------------------------------------------------------ dispatch actually runs
+def test_dispatch_with_an_unmapped_agent_id_does_not_raise():
+    """The regression a live probe found: the honest warning referenced an undefined logger.
+
+    Every dispatcher naming an unmapped agent id (most of them) answered 500 instead of queueing. Calling
+    _dispatch_action is the only way to catch it, which is why the earlier tests did not.
+    """
+    import asyncio
+    import types
+
+    from gds_api.agentic.action_triggers import ActionTriggerRouter
+
+    class StubQueue:
+        async def enqueue(self, **kw):
+            self.seen = kw
+            return {"task_id": "stub-task", "status": "queued"}
+
+    class StubBus:
+        async def publish(self, **kw):
+            self.last = kw
+
+    router = ActionTriggerRouter(queue=StubQueue(), bus=StubBus())
+    user = types.SimpleNamespace(
+        tenant_id="11111111-1111-1111-1111-111111111111",
+        user_id="22222222-2222-2222-2222-222222222222",
+        email="probe@invalid",
+    )
+
+    async def run(agent_id):
+        return await router._dispatch_action(
+            task_name="probe",
+            task_type="probe",
+            channel="coordination",
+            message_type="coordination",
+            payload={},
+            user=user,
+            agent_id=agent_id,
+        )
+
+    unmapped = asyncio.run(run("agent-digital-twin"))
+    assert unmapped["agent_assigned"] == "auto-assigned"
+    assert router.bus.last["to_agent"] == "*", "an unassigned task must broadcast, not address a phantom"
+
+    mapped = asyncio.run(run("agent-soc-triage"))
+    assert mapped["agent_assigned"] == "ai-triage-agent"
+    assert router.bus.last["to_agent"] == "ai-triage-agent"

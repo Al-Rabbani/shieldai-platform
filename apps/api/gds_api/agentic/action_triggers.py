@@ -8,6 +8,7 @@ events over the AgentMessageBus.
 
 from __future__ import annotations
 
+import logging
 import uuid
 from datetime import datetime, timezone
 from typing import Any
@@ -22,6 +23,8 @@ from gds_api.agentic.message_bus import AgentMessageBus, MessageType
 from gds_api.db import get_db
 from gds_api.models import Approval, Evidence, Finding, Incident, User
 from gds_api.security import CurrentUser, get_current_user
+
+logger = logging.getLogger(__name__)
 
 
 # ============================================================================
