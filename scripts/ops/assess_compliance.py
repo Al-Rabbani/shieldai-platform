@@ -662,6 +662,17 @@ FRAMEWORKS = [
      "45 of 93 Annex A controls catalogued: all 34 technological controls plus the access and "
      "incident/continuity organisational controls this platform can answer for. The people and physical "
      "themes are deliberately not catalogued rather than left blank; see scripts/ops/catalogue_iso27001.py"),
+    ("nist_csf",      "NIST Cybersecurity Framework 2.0",             "2.0", 106, "US",
+     "67 of 106 subcategories catalogued: all of Identify-Asset, Identify-Risk Assessment, Protect, Detect, "
+     "Respond and Recover-Recovery Plan. Govern, Identify-Improvement, awareness and recovery-communication "
+     "are not catalogued because they are governance, workforce and comms artefacts this platform does not "
+     "hold; identifiers and wording extracted from NIST CSWP 29 on 21 Nov 2026 and cross-checked against an "
+     "independent mirror"),
+    ("pci_dss",       "PCI DSS v4.0.1",                              "4.0.1", 12, "International",
+     "12 requirements catalogued at requirement level, none marked passing: no cardholder data environment "
+     "has ever been defined and the platform stores no account data, so applicability is an open owner "
+     "decision. Requirement headings are v4.0.1 wording from published summaries - the standard itself is "
+     "gated, so they must be checked against the licensed copy before any external claim"),
     ("nis2",          "NIS2 Directive (EU) 2022/2555",               "2022/2555", 75, "EU",
      "technical decomposition of Art.20, Art.21 and Art.23 into 75 checkable controls; the directive "
      "publishes no official control list, so this count is ours and the mapping requires legal review"),
@@ -679,6 +690,8 @@ def _load_catalogue(module_name):
 
 
 ISO27001_CATALOGUE = _load_catalogue("catalogue_iso27001").CATALOGUE
+NIST_CSF_CATALOGUE = _load_catalogue("catalogue_nist_csf").CATALOGUE
+PCI_DSS_CATALOGUE = _load_catalogue("catalogue_pci_dss").CATALOGUE
 
 # (framework, ref, title, category, check_key or None, severity, mapping_basis)
 CATALOG = [
@@ -924,7 +937,7 @@ CATALOG = [
     ("nist_ai_rmf","MANAGE-4.1","Post-deployment monitoring","manage",'ai_post_deployment_monitoring',"high",
      "Completed missions and stored tool-call results from this platform's own agents are counted over 7 days, so "
      "the collector measures observed outcomes rather than a running process."),
-] + ISO27001_CATALOGUE
+] + ISO27001_CATALOGUE + NIST_CSF_CATALOGUE + PCI_DSS_CATALOGUE
 
 # Every mapping must state why its check is accepted as evidence for that control. Where a control
 # did not state one inline, this supplies the evidentiary logic for that check so a reviewer can
