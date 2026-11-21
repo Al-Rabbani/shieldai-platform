@@ -54,7 +54,9 @@ _RETIRED = {
 
 
 def _retire(capability: str, what: str):
-    async def _endpoint(**_kwargs) -> None:
+    # No parameters at all. An earlier version took **kwargs, which FastAPI cannot model, so a request with
+    # any body answered 422 (a validation error) instead of the 404 that states the capability is absent.
+    async def _endpoint() -> None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={

@@ -54,6 +54,27 @@ def test_a_retired_path_answers_404_and_names_why():
         )
 
 
+def test_a_retired_path_never_answers_422():
+    """A validation error would mean the route still accepts a body and never reaches the 404.
+
+    The first version of these handlers took **kwargs, which FastAPI cannot model, so a POST with any body
+    answered 422 - the caller learned nothing about the capability.
+    """
+    import inspect
+
+    for path in RETIRED_PATHS:
+        endpoint = _RETIRED[path][0]
+        handler = next(
+            r.endpoint for r in retired_router.routes if getattr(r, "name", "") == f"retired_{endpoint}"
+        )
+        params = [
+            p
+            for p in inspect.signature(handler).parameters.values()
+            if p.kind not in (p.VAR_POSITIONAL, p.VAR_KEYWORD)
+        ]
+        assert params == [], f"{path} declares {[p.name for p in params]}, so a body can fail validation"
+
+
 def test_the_endpoints_are_gone_from_the_action_router():
     """A 404 only means something if the 200 that preceded it is gone."""
     src = (ROOT / "apps" / "api" / "gds_api" / "agentic" / "action_triggers.py").read_text(encoding="utf-8")
