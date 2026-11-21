@@ -61,6 +61,15 @@ def cvss_v3_base(vector: str) -> float | None:
         return None
 
 
+def write_action(entry: dict) -> str:
+    """Pure helper, unit tested: what to do with one planned finding.
+
+    "cve" means the advisory resolves to a CVE, so the CVE must be written for EPSS and KEV to have anything to look
+    up. "no_cve" means no CVE is assigned anywhere and the finding must say so rather than look unenriched.
+    """
+    return "cve" if entry.get("cves") else "no_cve"
+
+
 def osv(advisory_id: str) -> dict | None:
     try:
         with urllib.request.urlopen(f"https://api.osv.dev/v1/vulns/{advisory_id}", timeout=25) as r:
@@ -112,7 +121,7 @@ async def main_async(a) -> int:
             })
         for p in plan:
             if p["cves"]:
-                print(f"  {p['advisory']:<26} has CVE {p['cves'][0]} - leave for the CVE enricher")
+                print(f"  {p['advisory']:<26} resolves to CVE {p['cves'][0]} - write it so EPSS and KEV can apply")
             else:
                 print(f"  {p['advisory']:<26} no CVE; vendor={p['vendor']} cvss={p['cvss']} "
                       f"vector={str(p['vector'])[:44]}")
@@ -121,8 +130,27 @@ async def main_async(a) -> int:
             return 0
         async with conn.transaction():
             for p in plan:
-                if p["cves"]:
-                    continue  # a CVE exists; the CVE-keyed enricher owns EPSS and KEV
+                if write_action(p) == "cve":
+                    # The alias resolver is the only component that knows this CVE: it is absent from details,
+                    # from the title and from the cve column, so the CVE-keyed enricher cannot discover it. Until
+                    # 21 Nov 2026 this branch did `continue`, reasoning that the CVE enricher owned EPSS and KEV -
+                    # which was true, but only for CVEs somebody had already written down. Three findings sat with
+                    # cve NULL and no EPSS or KEV answer while the answer had been fetched and discarded.
+                    # enrichment_checked_at is cleared so the next pass enriches EPSS and KEV for the new CVE
+                    # instead of waiting for the staleness window.
+                    await conn.execute(
+                        "UPDATE security_findings SET "
+                        "cve = $1::text, "
+                        "raw_data = coalesce(raw_data,'{}'::jsonb) || jsonb_build_object("
+                        "'cve_alias', jsonb_build_object('advisory', $2::text, 'cve', $1::text, "
+                        "'aliases', $3::text, "
+                        "'note', 'CVE resolved from the advisory alias list by enrich_package_findings.py'), "
+                        "'enriched_by', 'enrich_package_findings.py'), "
+                        "enrichment_checked_at = NULL "
+                        "WHERE id = $4 AND tenant_id = $5",
+                        p["cves"][0], p["advisory"], json.dumps(p["aliases"]), p["id"], a.tenant,
+                    )
+                    continue
                 await conn.execute(
                     "UPDATE security_findings SET "
                     "severity = coalesce($1::text, severity), "
@@ -137,7 +165,8 @@ async def main_async(a) -> int:
                     json.dumps(p["aliases"]), p["vendor"], p["vector"],
                     p["id"], a.tenant,
                 )
-        print(f"enriched {sum(1 for p in plan if not p['cves'])} findings")
+        print(f"enriched {sum(1 for p in plan if not p['cves'])} findings with no CVE, "
+              f"resolved {sum(1 for p in plan if p['cves'])} to a CVE")
         return 0
     finally:
         await conn.close()
