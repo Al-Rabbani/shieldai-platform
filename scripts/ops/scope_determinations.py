@@ -57,8 +57,42 @@ PCI_DETERMINATION = {
             "name": "Stripe",
             "service": "hosted checkout, card processing, subscriptions and invoices",
             "pci_status": "PCI DSS Level 1 service provider, as asserted by Stripe",
-            "written_agreement_recorded": False,
+            # 12.8.2 asks for a written agreement containing an acknowledgement that the TPSP is responsible for the
+            # security of the account data it holds. Stripe's DPA is incorporated by reference into the Services
+            # Agreement (DPA s1: "subject to and incorporated by reference into the Agreement"), so it is part of the
+            # contract GDS accepted when the account was created, and its "Certifications and Reports - PCI
+            # Compliance" clause contains that acknowledgement in Stripe's own words. The clause is quoted verbatim
+            # and hashed so a QSA can check the quotation against the source rather than trust this summary.
+            "written_agreement_recorded": True,
+            "written_agreement": {
+                "document": "Stripe Data Processing Agreement",
+                "incorporated_by": "DPA s1 Scope: 'subject to and incorporated by reference into the Agreement'",
+                "document_last_updated": "2026-09-28",
+                "source_url": "https://stripe.com/legal/dpa",
+                "retrieved_at": "2026-11-21T02:29:40+00:00",
+                "content_sha256": "70339c1ad9bcd95f89fdb569b2f39c85408584c55492bb55872f1c774880efa4",
+                "clause_heading": "Certifications and Reports - PCI Compliance",
+                "clause_verbatim": (
+                    "To the extent applicable to the Services, Stripe is responsible for providing the Services in a "
+                    "manner that is consistent with the highest certification level (PCI Level 1) provided by the "
+                    "PCI-DSS requirements. Stripe's certification is confirmed annually by a qualified security "
+                    "assessor (QSA)."
+                ),
+                "caveat": (
+                    "GDS holds no countersigned copy. Acceptance is evidenced by the account's acceptance of the "
+                    "Stripe Services Agreement, of which the DPA forms part. Whether this acknowledgement satisfies "
+                    "12.8.2 in full is a QSA judgement, so it is recorded as the candidate agreement with the clause "
+                    "quoted rather than as a closed control."
+                ),
+            },
             "attestation_reviewed_at": None,
+            "attestation_review_status": (
+                "not obtained. Stripe's own integration guide says to 'Review the documentation requirements for your "
+                "business in your Dashboard', and the attestation of compliance is served from the Dashboard rather "
+                "than published, so obtaining it needs the account owner's Stripe login. The DPA states the "
+                "certification is confirmed annually by a QSA, which establishes the monitoring mechanism but is not "
+                "itself a review of the attestation."
+            ),
         }
     ],
     "applicable_refs": PCI_APPLICABLE,
@@ -84,6 +118,18 @@ PCI_DETERMINATION = {
         {"method": "grep the API for card_number, cvv, pan, track2, emv_data",
          "result": "one hit, in the pentest scanner's list of sensitive field names it looks for; nothing stores "
                    "or handles them"},
+        {"method": "retrieved https://stripe.com/legal/dpa and searched the text for PCI and cardholder data",
+         "result": "31,922 characters, last updated 2026-09-28, sha256 70339c1a...efa4; section 'Certifications and "
+                   "Reports - PCI Compliance' states Stripe is responsible for providing the Services consistent with "
+                   "PCI Level 1 and that its certification is confirmed annually by a QSA; DPA s1 incorporates it by "
+                   "reference into the Services Agreement"},
+        {"method": "retrieved https://stripe.com/legal/ssa and searched its 128,035 characters for PCI and cardholder",
+         "result": "no match in the General Terms, so the acknowledgement lives in the DPA rather than the main body, "
+                   "which is why the DPA is the recorded agreement"},
+        {"method": "retrieved https://docs.stripe.com/security/guide",
+         "result": "'Stripe is certified annually by an independent PCI Qualified Security Assessor (QSA) as a PCI "
+                   "Level 1 Service Provider meeting all PCI requirements' and 'Review the documentation requirements "
+                   "for your business in your Dashboard' - the attestation is served from the Dashboard, not published"},
     ],
     "caveats": [
         "SAQ A is a candidate track, not a confirmed one. The definitive requirement subset must be read from the "
@@ -92,8 +138,11 @@ PCI_DETERMINATION = {
         "The PCI DSS v4.0.1 requirement headings in catalogue_pci_dss.py came from published summaries because the "
         "standard is gated behind a click-through; they must be checked against the licensed copy before any "
         "attestation.",
-        "Stripe's PCI DSS status is asserted by Stripe. No attestation of compliance has been obtained or reviewed, "
-        "and no written agreement is recorded in the platform, which is why requirement 12 currently fails.",
+        "The written agreement required by 12.8.2 is recorded as Stripe's Data Processing Agreement, incorporated by "
+        "reference into the Services Agreement, with its PCI Compliance clause quoted verbatim and hashed. What is "
+        "still missing is the review of Stripe's attestation of compliance, which 12.8.3 requires annually and which "
+        "cannot be performed without the account owner's Stripe Dashboard, so requirement 12 fails on that single "
+        "gap rather than on both.",
         "The determination is about infrastructure GDS controls. If card entry ever moves onto a GDS-hosted page, or "
         "card data is stored for any reason, this determination is void and the full SAQ D scope applies.",
     ],

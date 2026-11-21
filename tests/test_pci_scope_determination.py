@@ -108,16 +108,48 @@ def test_the_third_party_is_named():
     assert [t["name"] for t in DET["tpsp"]] == ["Stripe"]
 
 
-def test_the_agreement_and_attestation_review_are_absent_until_obtained():
-    """Requirement 12 fails on these two facts. When they are recorded, update the record and re-judge it."""
+def test_the_attestation_review_is_still_absent_so_requirement_12_still_fails():
+    """One gap remains, and requirement 12 must keep failing on it rather than be waved through."""
     stripe = DET["tpsp"][0]
-    assert stripe["written_agreement_recorded"] is False, (
-        "a written PCI responsibility agreement is now recorded: update the determination and let requirement 12 be "
-        "re-judged rather than leaving a stale fail"
-    )
     assert stripe["attestation_reviewed_at"] is None, (
         "an attestation review is now recorded: update the determination and let requirement 12 be re-judged"
     )
+    assert stripe["attestation_review_status"], (
+        "the record must say why the review has not happened and what obtaining it requires"
+    )
+
+
+def test_the_recorded_agreement_carries_its_own_provenance():
+    """A boolean is not evidence. The agreement is only recorded if the clause, its source and its hash are.
+
+    This is the same rule the rest of the compliance programme runs on: a verdict must name the thing that
+    establishes it. Flip written_agreement_recorded to True without the clause and this fails.
+    """
+    stripe = DET["tpsp"][0]
+    assert stripe["written_agreement_recorded"] is True
+    agreement = stripe["written_agreement"]
+    assert agreement["source_url"].startswith("https://stripe.com/legal/")
+    assert len(agreement["content_sha256"]) == 64, "the retrieved text must be hashed so a reviewer can verify it"
+    assert agreement["document_last_updated"], "an agreement without a version date cannot be monitored annually"
+    assert "PCI Level 1" in agreement["clause_verbatim"], (
+        "the acknowledgement 12.8.2 asks for must be quoted, not summarised"
+    )
+    assert "responsible" in agreement["clause_verbatim"].lower()
+    assert agreement["caveat"], "a clickwrap agreement held as no countersigned copy must say so"
+
+
+def test_the_agreement_is_the_dpa_and_not_the_main_body():
+    """Measured: the 128,035 characters of the General Terms contain no PCI clause, so the DPA is what carries it."""
+    agreement = DET["tpsp"][0]["written_agreement"]
+    assert "Data Processing Agreement" in agreement["document"]
+    assert "incorporated by reference" in agreement["incorporated_by"].lower()
+
+
+def test_the_evidence_list_records_the_retrieval_and_the_search_that_placed_the_clause():
+    methods = " ".join(e["method"] for e in DET["evidence"])
+    assert "stripe.com/legal/dpa" in methods
+    assert "stripe.com/legal/ssa" in methods
+    assert "docs.stripe.com/security/guide" in methods
 
 
 # ------------------------------------------------------------------ the writer refuses bad records
