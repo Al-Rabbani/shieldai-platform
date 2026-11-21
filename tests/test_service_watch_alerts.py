@@ -155,8 +155,22 @@ def test_the_raiser_dedupes_a_repeating_failure():
     assert "acknowledged_at IS NULL" in text, "dedupe ignores acknowledgement, so an acked alert is never re-raised"
 
 
-@pytest.mark.skipif(not os.environ.get("DATABASE_URL"), reason="no DATABASE_URL in this environment")
 def test_the_raiser_is_registered_for_deploy():
     """A script that only exists on this host is lost on the next rebuild."""
     deploy = (REPO / "scripts" / "ops" / "deploy.sh").read_text()
     assert "gds-raise-alert.py" in deploy, "gds-raise-alert.py is not installed by deploy.sh"
+
+
+def test_the_raiser_is_installed_for_the_postgres_group():
+    """Being in the install list is not enough, which the live host proved.
+
+    The generic loop installs root:root 0750. The watchdog runs the raiser as postgres, so that mode makes it
+    unreadable and every alert fails with Permission denied while the restart itself looks fine. Deploying 1cf1103
+    reproduced exactly this: "can't open file ... Permission denied" on the first real attempt to raise an alert.
+    """
+    deploy = (REPO / "scripts" / "ops" / "deploy.sh").read_text()
+    lines = [l for l in deploy.splitlines() if "gds-raise-alert.py" in l and "install" in l]
+    assert lines, "no explicit install line for gds-raise-alert.py"
+    assert any("-g postgres" in l for l in lines), (
+        f"gds-raise-alert.py is not installed readable by postgres: {lines}"
+    )

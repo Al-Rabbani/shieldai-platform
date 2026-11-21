@@ -159,6 +159,8 @@ install -m 750 -o root -g postgres "scripts/ops/gds-page.py" "/usr/local/bin/gds
   && echo "    installed gds-page.py (group postgres, runs as postgres)" || fail "could not install gds-page.py"
 install -m 750 -o root -g postgres "scripts/ops/gds-webhook-dispatch.py" "/usr/local/bin/gds-webhook-dispatch.py" \
   && echo "    installed gds-webhook-dispatch.py (group postgres, runs as postgres)" || fail "could not install gds-webhook-dispatch.py"
+install -m 750 -o root -g postgres "scripts/ops/gds-raise-alert.py" "/usr/local/bin/gds-raise-alert.py" \
+  && echo "    installed gds-raise-alert.py (group postgres, runs as postgres)" || fail "could not install gds-raise-alert.py"
 
 echo "  restarting services..."
 supervisorctl restart gds-os gds-worker gds-kernel >/dev/null 2>&1
