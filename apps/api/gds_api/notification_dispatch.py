@@ -233,7 +233,7 @@ async def _send_slack_notification(payload: dict[str, Any]) -> None:
         findings_text += f"\n• ... and {payload['critical_count'] - 5} more"
 
     slack_payload = {
-        "text": f"🚨 GDS OS Critical Alert",
+        "text": f"🚨 GDSA Radar Critical Alert",
         "blocks": [
             {
                 "type": "header",

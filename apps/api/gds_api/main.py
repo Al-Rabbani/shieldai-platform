@@ -134,7 +134,7 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(
-    title="GDS Super Agentic AI Security OS — API",
+    title="GDSA Radar — The Agentic AI Security Operating System",
     version=__version__,
     lifespan=_lifespan,
     description=(

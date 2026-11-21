@@ -87,7 +87,7 @@ async def send_backup_alert(reason: str, severity: str = "high") -> dict[str, An
 
     stamp = datetime.now(timezone.utc).isoformat()
     body = (
-        f"Backup subsystem alert from GDS OS.\n\n{reason}\n\n"
+        f"Backup subsystem alert from GDSA Radar.\n\n{reason}\n\n"
         f"Host: {os.uname().nodename}\nRaised: {stamp}\n\n"
         "Backups live in /var/backups/gds/daily on that host. Check /var/log/gds-backup.log, "
         "/var/log/gds-backup-watch.log and /var/log/gds-restore-drill.log."
@@ -98,7 +98,7 @@ async def send_backup_alert(reason: str, severity: str = "high") -> dict[str, An
         from gds_api.alerts.dispatch import dispatch_email
 
         result["email"] = await dispatch_email(
-            to_email, f"[GDS OS] Backup alert: {reason[:80]}", body
+            to_email, f"[GDSA Radar] Backup alert: {reason[:80]}", body
         )
     hook = os.environ.get("SLACK_WEBHOOK_URL")
     if hook:

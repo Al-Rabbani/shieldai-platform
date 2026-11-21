@@ -27,7 +27,7 @@ from cryptography.fernet import Fernet, InvalidToken
 STEP_SECONDS = 30
 DIGITS = 6
 DEFAULT_WINDOW = 1
-ISSUER = "GDS OS"
+ISSUER = "GDSA Radar"
 
 
 def _fernet() -> Fernet:

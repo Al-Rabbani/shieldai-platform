@@ -51,7 +51,7 @@ def test_provisioning_uri_is_standard():
     uri = mfa.provisioning_uri("ABCDEF234567", "owner@example.com")
     assert uri.startswith("otpauth://totp/")
     assert "secret=ABCDEF234567" in uri and "digits=6" in uri and "period=30" in uri
-    assert "issuer=GDS%20OS" in uri
+    assert "issuer=GDSA%20Radar" in uri
 
 
 def test_recovery_codes_are_unique_hashed_and_case_insensitive():

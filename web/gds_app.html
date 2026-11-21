@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>GDS OS — Security Operations Dashboard</title>
+<title>GDSA Radar — The Agentic AI Security Operating System</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 :root{--bg:#0a0e1a;--surface:#111827;--surface2:#1a2235;--surface3:#334155;--border:#1f2937;--border-strong:#334155;--primary:#3b82f6;--primary-hover:#2563eb;--primary-glow:rgba(59,130,246,.3);--text:#e5e7eb;--text-strong:#e2e8f0;--text-soft:#cbd5e1;--muted:#9ca3af;--accent:#06b6d4;--accent-soft:#67e8f9;--focus:#6ee7ff;--on-accent:#ffffff;--danger:#ef4444;--success:#10b981;--warn:#f59e0b;--ok-soft:#6ee7b7;--warn-soft:#fcd34d;--sev-critical:#f87171;--sev-high:#fb923c;--sev-medium:#f59e0b;--sev-low:#10b981;--sev-info:#9ca3af;--ink:#0a0e1a;--paper:#ffffff;--radius:12px;--radius-sm:6px;--radius-lg:20px;--surface-panel:#101827;--border-input:#2a3444}
@@ -32,7 +32,7 @@ td{padding:12px 16px;border-bottom:1px solid var(--border);font-size:14px}
 tr:hover{background:var(--surface2)}
 .nav{position:fixed;top:0;left:0;right:0;z-index:100;background:rgba(10,14,26,.9);backdrop-filter:blur(20px);border-bottom:1px solid var(--border);padding:14px 0}
 .nav-inner{max-width:1400px;margin:0 auto;padding:0 24px;display:flex;justify-content:space-between;align-items:center}
-.logo{font-size:18px;font-weight:700;color:var(--text);text-decoration:none}.logo span{color:var(--primary)}
+.logo{font-size:18px;font-weight:700;color:var(--text);text-decoration:none}.logo span{color:var(--primary)}.tagline{font-size:11px;color:var(--muted);margin-left:12px;letter-spacing:.02em}
 .nav-links{display:flex;gap:24px;align-items:center}
 .nav-links a{color:var(--muted);text-decoration:none;font-size:14px;transition:color .2s}.nav-links a:hover{color:var(--text)}
 .nav-links a.active{color:var(--primary)}
@@ -134,7 +134,7 @@ tr:hover{background:var(--surface2)}
 <div id="dashView" class="hidden">
 <nav aria-label="Primary">
 <div class="nav-inner">
-<a href="/" class="logo">GDS<span>OS</span></a>
+<a href="/" class="logo">GDSA<span> Radar</span></a><span class="tagline">The Agentic AI Security Operating System</span>
 <div class="nav-links">
 <a href="#/overview" data-route="overview" id="nav-overview">Overview</a>
 <a href="#/findings" data-route="findings" id="nav-findings">Findings</a>
@@ -917,7 +917,7 @@ function setActiveNav(page) {
     a.classList.toggle('active', on);
     if (on) { a.setAttribute('aria-current', 'page'); } else { a.removeAttribute('aria-current'); }
   });
-  document.title = ROUTES[page] + ' \u00b7 ' + (window.__gdsBrandName || 'GDS OS');
+  document.title = ROUTES[page] + ' \u00b7 ' + (window.__gdsBrandName || 'GDSA Radar');
 }
 
 async function withBusy(page, loader) {

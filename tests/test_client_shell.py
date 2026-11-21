@@ -70,7 +70,7 @@ def test_branding_name_is_not_overwritten_by_the_router():
     assert "window.__gdsBrandName = brand.display_name;" in HTML
     assert "window.__gdsBrandName = (ROUTES" not in HTML
     router = HTML[HTML.index("function setActiveNav"):HTML.index("async function withBusy")]
-    assert "__gdsBrandName || 'GDS OS'" in router
+    assert "__gdsBrandName || 'GDSA Radar'" in router
 
 
 def test_compliance_view_reads_real_endpoints_and_states_its_basis():
