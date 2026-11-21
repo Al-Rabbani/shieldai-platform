@@ -533,6 +533,99 @@ def chk_ai_action_accountability():
 
 
 
+# ---------------------------------------------------------------- identity and inventory
+# Three controls that four frameworks had catalogued with no evidence and no explanation. Each is answerable from
+# data the platform already holds, so leaving them blank was a gap in the assessment rather than in the platform.
+def chk_asset_inventory():
+    """An inventory is real when it is complete enough to name its providers and current enough to be trusted."""
+    row = one("""SELECT count(*) || '|'
+                        || count(*) FILTER (WHERE last_seen_at > now() - interval '30 days') || '|'
+                        || coalesce(string_agg(DISTINCT provider, ','), 'none')
+                 FROM cloud_assets;""", "0|0|none")
+    total, fresh, providers = row.split("|")
+    obs = {"assets": int(total), "fresh_30d": int(fresh), "providers": providers}
+    if int(total) == 0:
+        return bad(obs, "cloud_assets is empty: there is no asset inventory to evidence")
+    stale = int(total) - int(fresh)
+    if stale:
+        return bad(obs, f"{stale} of {total} assets have not been seen in 30 days, so the inventory is stale")
+    return ok(obs, f"{total} assets inventoried across {providers}, all seen within 30 days")
+
+
+def chk_unique_user_identity():
+    """HIPAA 164.312(a)(2)(i): every account is uniquely identifiable, with no shared or blank login."""
+    row = one("""SELECT count(*) || '|' || count(DISTINCT lower(email)) || '|'
+                        || count(*) FILTER (WHERE email IS NULL OR btrim(email) = '')
+                 FROM users;""", "0|0|0")
+    total, distinct, blank = (int(x) for x in row.split("|"))
+    obs = {"users": total, "distinct_emails": distinct, "blank_emails": blank}
+    if total == 0:
+        return bad(obs, "no user accounts exist, so unique identification cannot be evidenced")
+    if blank:
+        return bad(obs, f"{blank} account(s) have no email address and are therefore not identifiable")
+    if distinct != total:
+        return bad(obs, f"{total - distinct} account(s) share an email address with another account")
+    return ok(obs, f"{total} account(s), each with a unique identifier")
+
+
+HASH_PREFIXES = (
+    ("$argon2", "argon2"),
+    ("$2b$", "bcrypt"),
+    ("$2a$", "bcrypt"),
+    ("$2y$", "bcrypt"),
+    ("$scrypt$", "scrypt"),
+    ("$pbkdf2", "pbkdf2"),
+)
+
+
+def classify_password_hash(digest: str) -> str:
+    """Name the one-way function behind a stored password value, or "unknown" if it is not one.
+
+    Deliberately strict. A sentinel such as "disabled-<uuid>" is not a hash, and treating it as an acceptable
+    "disabled account" convention would let any unrecognised value pass as long as the account was inactive. The
+    column should only ever hold hashes; disabled accounts keep a real hash of a discarded secret.
+    """
+    if not digest:
+        return "empty"
+    for prefix, name in HASH_PREFIXES:
+        if digest.startswith(prefix):
+            return name
+    return "unknown"
+
+
+
+def chk_password_hashing():
+    """CIS 5.2: passwords are unique per account and stored with a modern one-way function."""
+    rows = psql("""SELECT coalesce(password_hash, ''), count(*) FROM users GROUP BY 1;""").splitlines()
+    obs = {"accounts": 0, "hashed": 0, "unhashed": 0, "algorithms": [], "duplicate_hashes": 0}
+    seen: dict[str, int] = {}
+    for line in rows:
+        if "|" not in line:
+            continue
+        digest, count = line.rsplit("|", 1)
+        count = int(count)
+        obs["accounts"] += count
+        if not digest:
+            obs["unhashed"] += count
+            continue
+        obs["hashed"] += count
+        seen[digest] = seen.get(digest, 0) + count
+        algo = classify_password_hash(digest)
+        if algo not in obs["algorithms"]:
+            obs["algorithms"].append(algo)
+    obs["duplicate_hashes"] = sum(n for n in seen.values() if n > 1)
+    if obs["accounts"] == 0:
+        return bad(obs, "no accounts exist, so password handling cannot be evidenced")
+    if obs["unhashed"]:
+        return bad(obs, f"{obs['unhashed']} account(s) hold no password hash")
+    if obs["duplicate_hashes"]:
+        return bad(obs, f"{obs['duplicate_hashes']} account(s) share a password hash, so passwords are not unique")
+    if set(obs["algorithms"]) - {"argon2", "bcrypt", "scrypt", "pbkdf2"}:
+        return bad(obs, f"unsupported or plaintext hashing in use: {obs['algorithms']}")
+    return ok(obs, f"all {obs['hashed']} accounts hold a distinct {', '.join(obs['algorithms'])} hash")
+
+
+
 COLLECTORS = {
     "rls_forced": chk_rls_forced, "least_priv_db": chk_least_priv_db, "audit_log": chk_audit_log,
     "log_retention": chk_log_retention, "backup_offhost": chk_backup_offhost,
@@ -552,6 +645,9 @@ COLLECTORS = {
     "ai_post_deployment_monitoring": chk_ai_post_deployment_monitoring,
     "ai_risk_response_decisions": chk_ai_risk_response_decisions,
     "ai_action_accountability": chk_ai_action_accountability,
+    "asset_inventory": chk_asset_inventory,
+    "unique_user_identity": chk_unique_user_identity,
+    "password_hashing": chk_password_hashing,
 }
 
 # ---------------------------------------------------------------- catalog
@@ -651,7 +747,9 @@ CATALOG = [
     ("nis2", 'Art.23.5', 'The reporting procedure is documented and rehearsed', 'reporting', None, 'medium', 'Requires a rehearsed procedure; not evidenced.'),
 
     # CIS Controls v8 — controls this platform can genuinely evidence, plus ones it cannot yet.
-    ("cis_v8","1.1","Inventory of enterprise assets","inventory",None,"medium",None),
+    ("cis_v8","1.1","Inventory of enterprise assets","inventory",'asset_inventory',"medium",
+     "cloud_assets holds every discovered resource per provider with a last-seen time, so the inventory is the "
+     "measured table rather than a claim about one."),
     ("cis_v8","3.3","Configure data access control lists","data",'rls_forced',"high","RLS FORCE on every tenant table is a row-level access control list enforced by the database, not the application"),
     ("cis_v8","3.10","Encrypt sensitive data in transit","data",'tls_hsts',"high","HSTS with includeSubDomains on the public API evidences enforced TLS for data in transit"),
     ("cis_v8","3.11","Encrypt sensitive data at rest","data",'encryption_at_rest',"high",None),
@@ -659,10 +757,16 @@ CATALOG = [
     ("cis_v8","4.2","Secure configuration for network infrastructure","config",'ports_minimal',"high","Only 22/80/443 listening publicly evidences a minimised network service footprint"),
     ("cis_v8","4.7","Manage default accounts","config",'least_priv_db',"high","Application database roles holding neither superuser nor BYPASSRLS evidences removal of default elevated access"),
     ("cis_v8","4.8","Uninstall or disable unnecessary services","config",'ports_minimal',"medium","No unnecessary service listening publicly"),
-    ("cis_v8","5.1","Establish access control policy","access",None,"medium",None),
-    ("cis_v8","5.2","Use unique passwords","access",None,"high",None),
+    ("cis_v8","5.1","Establish access control policy","access",None,"medium",
+     "Not evidenced: needs a written access control policy. The enforced mechanism is measured under 3.3 and "
+     "6.8 instead of being claimed twice."),
+    ("cis_v8","5.2","Use unique passwords","access",'password_hashing',"high",
+     "Every account holds a distinct one-way hash, so no two accounts share a password and none is stored in a "
+     "recoverable form."),
     ("cis_v8","5.4","Restrict administrator privileges","access",'least_priv_db',"high","Least-privilege database roles"),
-    ("cis_v8","6.1","Establish access granting process","access",None,"medium",None),
+    ("cis_v8","6.1","Establish access granting process","access",None,"medium",
+     "Not evidenced: access is a single role_id column on users with no grantor, approver or grant date, so there "
+     "is no record of who granted what to whom."),
     ("cis_v8","6.3","Require MFA for externally exposed applications","access",'mfa_enforced',"critical",None),
     ("cis_v8","6.4","Require MFA for remote network access","access",'mfa_enforced',"critical",None),
     ("cis_v8","6.8","Define and maintain role-based access control","access",'rls_forced',"high","Tenant-scoped RLS policies are enforced role-based access at the data layer"),
@@ -680,16 +784,23 @@ CATALOG = [
     ("cis_v8","12.1","Secure network infrastructure","network",'ports_minimal',"high",None),
     ("cis_v8","12.2","Establish secure network architecture","network",'ufw_default_deny',"high","A default-deny host firewall evidences an enforced network boundary"),
     ("cis_v8","13.1","Centralize security event alerting","monitoring",'monitoring',"high","Prometheus targets up evidences centralised collection of platform telemetry"),
-    ("cis_v8","13.6","Deploy network intrusion detection","monitoring",None,"high",None),
-    ("cis_v8","14.1","Establish security awareness training","people",None,"medium",None),
+    ("cis_v8","13.6","Deploy network intrusion detection","monitoring",None,"high",
+     "Not evidenced: no network IDS sensor is deployed. Host and application monitoring is measured under "
+     "Art.21.2.b.2 and does not substitute for it."),
+    ("cis_v8","14.1","Establish security awareness training","people",None,"medium",
+     "Not evidenced: an organisational programme. No training records exist in the platform."),
     ("cis_v8","16.1","Establish secure application development process","appsec",'deploy_gated',"high","A deploy that refuses a dirty tree and gates on smoke tests evidences a controlled change process"),
     ("cis_v8","17.1","Designate personnel for incident handling","ir",'incident_response_staffing',"high",'Requires named incident personnel; no on-call rota exists, so this is measured as a failure.'),
     ("cis_v8","17.4","Establish incident response process","ir",'incident_response_plan',"high",'A versioned response plan AND recorded incidents are both required before this passes.'),
-    ("cis_v8","18.1","Establish penetration test program","appsec",None,"medium",None),
+    ("cis_v8","18.1","Establish penetration test program","appsec",None,"medium",
+     "Not evidenced: no documented programme or engagement reports. Individual governed scans are measured "
+     "under 7.1-7.4 and are not a test programme."),
 
     # SOC 2 Type II
     ("soc2_type2","CC4.1","Monitoring of internal controls","monitoring",'monitoring',"high",None),
-    ("soc2_type2","CC5.1","Control activities selection","governance",None,"medium",None),
+    ("soc2_type2","CC5.1","Control activities selection","governance",None,"medium",
+     "Not evidenced: needs a documented control selection rationale. The controls themselves are measured "
+     "across this framework; the selection record is not."),
     ("soc2_type2","CC6.1","Logical access security","access",'rls_forced',"critical","Row-level security forced in the database evidences logical access restriction at the data layer"),
     ("soc2_type2","CC6.2","Registration and deprovisioning of users","access",'access_review',"high",None),
     ("soc2_type2","CC6.3","Role-based access and least privilege","access",'least_priv_db',"high",None),
@@ -704,14 +815,19 @@ CATALOG = [
     ("soc2_type2","A1.2","Availability capacity and backup","recovery",'backup_automated',"high",None),
     ("soc2_type2","A1.3","Recovery testing","recovery",'backup_restore_tested',"high",None),
     ("soc2_type2","C1.1","Confidentiality of data at rest","data",'encryption_at_rest',"high",None),
-    ("soc2_type2","P1.1","Privacy notice and consent","privacy",None,"high",None),
+    ("soc2_type2","P1.1","Privacy notice and consent","privacy",None,"high",
+     "Not evidenced: no published privacy notice and no consent record are held by the platform."),
 
     # HIPAA Security Rule
     ("hipaa","164.312(a)(1)","Access control","access",'rls_forced',"critical","Forced row-level security evidences technical access control on ePHI stores"),
-    ("hipaa","164.312(a)(2)(i)","Unique user identification","access",None,"high",None),
+    ("hipaa","164.312(a)(2)(i)","Unique user identification","access",'unique_user_identity',"high",
+     "Every account carries a unique email identifier and none is blank, so no two accounts are the same "
+     "principal."),
     ("hipaa","164.312(a)(2)(iv)","Encryption and decryption","data",'encryption_at_rest',"high",None),
     ("hipaa","164.312(b)","Audit controls","logging",'audit_log',"critical",None),
-    ("hipaa","164.312(c)(1)","Integrity","data",None,"high",None),
+    ("hipaa","164.312(c)(1)","Integrity","data",None,"high",
+     "Not evidenced: the platform is not an ePHI system and holds no ePHI integrity mechanism. Claiming this "
+     "control would be claiming a healthcare data programme that does not exist."),
     ("hipaa","164.312(e)(1)","Transmission security","data",'tls_hsts',"critical",None),
     ("hipaa","164.308(a)(1)(ii)(D)","Information system activity review","logging",'audit_log',"high",None),
     ("hipaa","164.308(a)(3)(ii)(A)","Authorization and supervision","access",'least_priv_db',"high",None),
@@ -723,10 +839,16 @@ CATALOG = [
     ("hipaa","164.316(b)(2)(i)","Retention of documentation","logging",'log_retention',"medium",None),
 
     # DORA
-    ("dora","Art.5","ICT risk management governance","governance",None,"high",None),
-    ("dora","Art.6","ICT risk management framework","governance",None,"high",None),
-    ("dora","Art.8","Identification of ICT assets and dependencies","inventory",None,"high",None),
-    ("dora","Art.9(2)","Protection and prevention","config",None,"high",None),
+    ("dora","Art.5","ICT risk management governance","governance",None,"high",
+     "Not evidenced: needs a governing-body ICT risk mandate. No such record exists."),
+    ("dora","Art.6","ICT risk management framework","governance",None,"high",
+     "Not evidenced: needs a documented ICT risk framework."),
+    ("dora","Art.8","Identification of ICT assets and dependencies","inventory",'asset_inventory',"high",
+     "cloud_assets is the identified asset register per provider, current within 30 days. Dependency mapping "
+     "beyond that register is not evidenced."),
+    ("dora","Art.9(2)","Protection and prevention","config",None,"high",
+     "Not evidenced as a whole: the clause spans several controls that are each measured separately (firewall, "
+     "headers, TLS, patching, least privilege). No single artefact evidences the clause."),
     ("dora","Art.9(3)","Hardening of ICT systems","config",'security_headers',"high",None),
     ("dora","Art.9(4)(c)","Encryption of data in transit","data",'tls_hsts',"high",None),
     ("dora","Art.10","Detection of anomalous activity","monitoring",'monitoring',"critical",None),
@@ -735,7 +857,8 @@ CATALOG = [
     ("dora","Art.11(6)","Restoration and recovery testing","recovery",'backup_restore_tested',"critical",None),
     ("dora","Art.12(1)","Backup and restoration","recovery",'backup_restore_tested',"critical",None),
     ("dora","Art.17(1)","ICT-related incident management process","ir",'incident_response_plan',"critical",'A versioned incident management process AND recorded incidents are both required.'),
-    ("dora","Art.28(1)","ICT third-party risk management","thirdparty",None,"high",None),
+    ("dora","Art.28(1)","ICT third-party risk management","thirdparty",None,"high",
+     "Not evidenced: no register of ICT third-party providers with contractual and concentration risk."),
 
     # NIST AI RMF — four controls are evidenced from the platform's own AI operations; the rest are organisational
     # artefacts GDS OS does not hold, and each says so rather than leaving a blank. Every basis below is about this
