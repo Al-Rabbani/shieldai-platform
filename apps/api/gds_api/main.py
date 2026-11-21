@@ -226,6 +226,12 @@ _agentic_bus = AgentMessageBus()
 _action_trigger = ActionTriggerRouter(queue=_agentic_queue, bus=_agentic_bus)
 app.include_router(_action_trigger.get_router())
 
+# B19: capabilities with no data model behind them answer 404 with the reason rather than 200 "queued".
+# Mounted after the action router so its explicit paths are the ones that resolve for those seven routes.
+from gds_api.retired_endpoints import router as _retired_router  # noqa: E402
+
+app.include_router(_retired_router)
+
 
 def _sample_value(metric_name: str, labels: dict[str, str] | None = None) -> float:
     """Sum every sample matching metric_name (and, if given, a label subset) across every

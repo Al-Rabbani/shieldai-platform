@@ -72,6 +72,45 @@ class ActionTriggerRouter:
         """Return configured router with all trigger endpoints."""
         return self.router
 
+    # ------------------------------------------------------------------ agent identity
+    # Legacy action-router agent ids, mapped to the reasoning roster (gds_api.reasoning.governed_tools).
+    # Until 21 Nov 2026 every one of these dispatchers named an "agent-*" id that exists nowhere in the
+    # codebase: the caller was told "agent_assigned": "agent-digital-twin" while no such agent existed, so
+    # the response asserted an assignment that could not happen. Only unambiguous counterparts are mapped
+    # here; an id with no clear counterpart is dispatched unassigned rather than pointed at a guessed agent.
+    _AGENT_ALIASES = {
+        "agent-soc-triage": "ai-triage-agent",
+        "agent-red-team": "ai-redteam-director",
+        "agent-compliance-officer": "ai-compliance-director",
+        "agent-threat-analyst": "ai-threat-intel-director",
+        "agent-iam-governance": "ai-identity-director",
+        "agent-cloud-auditor": "ai-cloud-director",
+        "agent-auto-fixer": "ai-autofix-agent",
+        "agent-self-healer": "ai-autofix-agent",
+        "agent-code-auditor": "ai-devsecops-director",
+        "agent-incident-responder": "ai-incident-commander",
+        "agent-executive-reporter": "ai-report-agent",
+    }
+
+    @classmethod
+    def resolve_dispatch_agent(cls, agent_id: str | None) -> tuple[str | None, str]:
+        """Map a legacy dispatcher agent id onto a real roster agent.
+
+        Returns (resolved_id, label). A None id means unassigned, and the response says so instead of
+        naming an agent that does not exist. Imported lazily because the reasoning package imports this one.
+        """
+        if not agent_id:
+            return None, "auto-assigned"
+        from gds_api.reasoning.governed_tools import REASONING_AGENT_REGISTERED_MAP
+
+        roster = set(REASONING_AGENT_REGISTERED_MAP)
+        if agent_id in roster:
+            return agent_id, agent_id
+        mapped = cls._AGENT_ALIASES.get(agent_id)
+        if mapped and mapped in roster:
+            return mapped, mapped
+        return None, "auto-assigned"
+
     async def _dispatch_action(
         self,
         task_name: str,
@@ -91,6 +130,16 @@ class ActionTriggerRouter:
             p_enum = TaskPriority(priority)
         except ValueError:
             p_enum = TaskPriority.MEDIUM
+
+        requested_agent = agent_id
+        agent_id, agent_label = self.resolve_dispatch_agent(agent_id)
+        if requested_agent and agent_id is None:
+            # The facts go in the message: this logger's formatter writes "%(message)s" only, so anything
+            # passed as extra would never reach the log file.
+            logger.warning(
+                "action trigger named agent %s, which is not in the roster; dispatching unassigned",
+                requested_agent,
+            )
 
         corr_id = correlation_id or str(uuid.uuid4())
         context_payload = {
@@ -129,7 +178,7 @@ class ActionTriggerRouter:
             "task_id": task_id,
             "status": queue_res.get("status", "queued"),
             "message_type": message_type,
-            "agent_assigned": agent_id or "auto-assigned",
+            "agent_assigned": agent_label,
             "requires_approval": requires_approval,
             "correlation_id": corr_id,
             "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -804,49 +853,6 @@ class ActionTriggerRouter:
             )
 
         # --------------------------------------------------------------------
-        # 10. Attack Graph
-        # --------------------------------------------------------------------
-        @self.router.post("/attack-graph/rebuild")
-        async def rebuild_attack_graph(
-            body: TriggerRequest = TriggerRequest(),
-            user: CurrentUser = Depends(get_current_user),
-        ):
-            """Trigger attack graph rebuild based on latest asset telemetry."""
-            return await self._dispatch_action(
-                task_name="rebuild-attack-graph",
-                task_type="attack_graph_build",
-                channel="coordination",
-                message_type=MessageType.COORDINATION,
-                payload=body.parameters,
-                user=user,
-                priority=body.priority,
-                requires_approval=body.requires_approval,
-                correlation_id=body.correlation_id,
-                agent_id="agent-graph-engine",
-                subject="Rebuild attack graph requested",
-            )
-
-        @self.router.post("/attack-graph/blast-radius")
-        async def compute_blast_radius(
-            body: TriggerRequest = TriggerRequest(),
-            user: CurrentUser = Depends(get_current_user),
-        ):
-            """Compute attack graph blast radius analysis for target node."""
-            return await self._dispatch_action(
-                task_name="compute-blast-radius",
-                task_type="blast_radius_computation",
-                channel="coordination",
-                message_type=MessageType.COORDINATION,
-                payload=body.parameters,
-                user=user,
-                priority=body.priority,
-                requires_approval=False,
-                correlation_id=body.correlation_id,
-                agent_id="agent-graph-engine",
-                subject="Blast radius graph analysis triggered",
-            )
-
-        # --------------------------------------------------------------------
         # 11. Adversary Simulation
         # --------------------------------------------------------------------
         @self.router.post("/adversary-sim/run")
@@ -887,102 +893,6 @@ class ActionTriggerRouter:
                 correlation_id=body.correlation_id,
                 agent_id="agent-red-team",
                 subject="APT emulation campaign execution requested",
-            )
-
-        # --------------------------------------------------------------------
-        # 12. Digital Twin
-        # --------------------------------------------------------------------
-        @self.router.post("/digital-twin/{env_id}/chaos")
-        async def run_chaos_experiment(
-            env_id: str,
-            body: TriggerRequest = TriggerRequest(),
-            user: CurrentUser = Depends(get_current_user),
-        ):
-            """Trigger chaos experiment in digital twin environment (requires approval)."""
-            if not env_id.strip():
-                raise HTTPException(status_code=400, detail="Environment ID required")
-
-            payload = {"env_id": env_id, **body.parameters}
-            return await self._dispatch_action(
-                task_name=f"chaos-experiment-{env_id}",
-                task_type="chaos_experiment",
-                channel="coordination",
-                message_type=MessageType.COORDINATION,
-                payload=payload,
-                user=user,
-                priority=TaskPriority.HIGH.value,
-                requires_approval=True,
-                correlation_id=body.correlation_id,
-                agent_id="agent-digital-twin",
-                subject=f"Digital twin chaos experiment in env {env_id}",
-            )
-
-        @self.router.post("/digital-twin/sync-state")
-        async def sync_digital_twin_state(
-            body: TriggerRequest = TriggerRequest(),
-            user: CurrentUser = Depends(get_current_user),
-        ):
-            """Synchronize digital twin state with live environment state."""
-            return await self._dispatch_action(
-                task_name="sync-digital-twin",
-                task_type="digital_twin_state_sync",
-                channel="coordination",
-                message_type=MessageType.COORDINATION,
-                payload=body.parameters,
-                user=user,
-                priority=body.priority,
-                requires_approval=False,
-                correlation_id=body.correlation_id,
-                agent_id="agent-digital-twin",
-                subject="Digital twin state synchronization triggered",
-            )
-
-        # --------------------------------------------------------------------
-        # 13. Marketplace
-        # --------------------------------------------------------------------
-        @self.router.post("/marketplace/{listing_id}/auto-certify")
-        async def auto_certify_listing(
-            listing_id: str,
-            body: TriggerRequest = TriggerRequest(),
-            user: CurrentUser = Depends(get_current_user),
-        ):
-            """Trigger automated certification for a marketplace listing."""
-            if not listing_id.strip():
-                raise HTTPException(status_code=400, detail="Listing ID required")
-
-            payload = {"listing_id": listing_id, **body.parameters}
-            return await self._dispatch_action(
-                task_name=f"certify-listing-{listing_id}",
-                task_type="certification",
-                channel="compliance",
-                message_type=MessageType.COMPLIANCE_VIOLATION,
-                payload=payload,
-                user=user,
-                priority=body.priority,
-                requires_approval=body.requires_approval,
-                correlation_id=body.correlation_id,
-                agent_id="agent-marketplace-evaluator",
-                subject=f"Auto-certify marketplace listing {listing_id}",
-            )
-
-        @self.router.post("/marketplace/publish-agent")
-        async def publish_agent_validation(
-            body: TriggerRequest = TriggerRequest(),
-            user: CurrentUser = Depends(get_current_user),
-        ):
-            """Trigger security verification before publishing a new agent listing."""
-            return await self._dispatch_action(
-                task_name="marketplace-publish-agent-check",
-                task_type="agent_publication_check",
-                channel="coordination",
-                message_type=MessageType.COORDINATION,
-                payload=body.parameters,
-                user=user,
-                priority=body.priority,
-                requires_approval=False,
-                correlation_id=body.correlation_id,
-                agent_id="agent-marketplace-evaluator",
-                subject="Marketplace publication verification triggered",
             )
 
         # --------------------------------------------------------------------
@@ -1179,26 +1089,6 @@ class ActionTriggerRouter:
         # --------------------------------------------------------------------
         # 17. Advanced Analytics, PQC & Behavioral AI
         # --------------------------------------------------------------------
-        @self.router.post("/data-residency/verify")
-        async def verify_data_residency(
-            body: TriggerRequest = TriggerRequest(),
-            user: CurrentUser = Depends(get_current_user),
-        ):
-            """Trigger data residency compliance verification task."""
-            return await self._dispatch_action(
-                task_name="data-residency-verify",
-                task_type="data_residency_verification",
-                channel="compliance",
-                message_type=MessageType.COMPLIANCE_VIOLATION,
-                payload=body.parameters,
-                user=user,
-                priority=body.priority,
-                requires_approval=False,
-                correlation_id=body.correlation_id,
-                agent_id="agent-compliance-officer",
-                subject="Data residency verification requested",
-            )
-
         @self.router.post("/quantum-crypto/pqc-audit")
         async def pqc_crypto_audit(
             body: TriggerRequest = TriggerRequest(),
