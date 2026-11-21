@@ -102,6 +102,11 @@ def test_a_trip_is_logged_with_a_stable_event_marker(redis, caplog):
     assert rec.limit == "login"
     assert rec.subject == "203.0.113.9", "the log must name who was throttled or it cannot support an investigation"
     assert rec.count == 3 and rec.max_requests == 2 and rec.window_seconds == 60
+    # The formatter is "%(message)s", so the written line must carry the facts itself. A record that only
+    # holds them in `extra` produces "rate limit exceeded: login" in the file, which supports nothing.
+    rendered = rec.getMessage()
+    assert "subject=203.0.113.9" in rendered
+    assert "count=3" in rendered and "max=2" in rendered
 
 
 def test_a_trip_is_counted_so_its_rate_can_be_read_without_grepping(redis):

@@ -49,8 +49,13 @@ async def _check_and_increment(key: str, max_requests: int, window_seconds: int)
             limit = parts[1] if len(parts) > 1 else key
             subject = parts[2] if len(parts) > 2 else "unknown"
             await r.incr(f"ratelimit_hits:{limit}")
+            # The facts go in the message, not only in `extra`. gds_api/logging_config.py formats with
+            # "%(message)s", so extra fields never reach the file: the first version of this wrote
+            # "rate limit exceeded: login" with the subject and count invisible, which is a log line that
+            # records that something happened and nothing an investigation can use.
             _log.warning(
-                "rate limit exceeded: %s", limit,
+                "rate limit exceeded: limit=%s subject=%s count=%s max=%s window=%ss",
+                limit, subject, count, max_requests, window_seconds,
                 extra={
                     "event": "rate_limit.exceeded",
                     "limit": limit,
