@@ -27,4 +27,11 @@ check nats    'curl -sf -m 5 http://127.0.0.1:8222/healthz'            'docker r
 check temporal 'cd /opt/gds-os/apps/api && PYTHONPATH=/opt/gds-os/apps/api /opt/gds-os/apps/api/venv/bin/python /usr/local/bin/gds-temporal-probe.py' 'docker restart temporal'
 check api     'curl -sf -m 8 http://127.0.0.1:8000/health/ready'       'supervisorctl restart gds-os'
 check worker  'supervisorctl status gds-worker | grep -q RUNNING'      'supervisorctl restart gds-worker'
+# A failed systemd unit is not something this watchdog manages, so it is recorded rather than "fixed": auto-masking
+# an unknown unit could disable something real. The case that prompted this was neo4j.service, an apt package that
+# fought the Docker container for 7687 and failed on every boot until it was masked.
+units=$(systemctl --failed --no-legend 2>/dev/null | wc -l)
+if [ "$units" -ne 0 ]; then
+  echo "[$(date -u +%FT%TZ)] FAILED-UNITS $units: $(systemctl --failed --no-legend 2>/dev/null | awk '{print $1}' | tr '\n' ' ')" >> "$LOG"
+fi
 echo "[$(date -u +%FT%TZ)] ok=$ok bad=$bad" >> "$LOG"
