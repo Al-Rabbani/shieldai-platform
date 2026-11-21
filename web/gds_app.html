@@ -168,6 +168,12 @@ tr:hover{background:var(--surface2)}
 <div class="section-title">Live Posture</div>
 <div id="posturePanel"><div class="spinner"></div></div>
 </div>
+<div class="card" style="margin-bottom:24px">
+<div class="section-title">Estate at a glance</div>
+<p class="muted" style="font-size:12px;margin:0 0 16px">Counted from the API on this load. A series the API
+cannot supply says so rather than drawing an empty chart, because zero and unknown are different facts.</p>
+<div id="vizGrid" class="grid-2"><div class="spinner"></div></div>
+</div>
 <div class="grid-2">
 <div class="card">
 <div class="section-title">Service Health</div>
@@ -1253,8 +1259,111 @@ async function loadPosturePanel() {
   panel.innerHTML = blocks.join('');
 }
 
+// A horizontal bar chart drawn as inline SVG, matching the compliance chart already on the page. No chart
+// library: the page has no bundler and a CDN script would fail closed on an air-gapped install.
+function svgBars(rows, opts) {
+  opts = opts || {};
+  const ROW = 26, LABEL = 120, BAR = 300, PAD = 6;
+  const H = rows.length * ROW + PAD;
+  const max = Math.max(1, ...rows.map(r => (typeof r.value === 'number' ? r.value : 0)));
+  const total = rows.reduce((s, r) => s + (typeof r.value === 'number' ? r.value : 0), 0);
+  let svg = '<svg viewBox="0 0 620 ' + H + '" width="100%" role="img" aria-label="' + escapeHtml(opts.aria || 'chart') + '">';
+  rows.forEach((r, i) => {
+    const y = i * ROW + PAD;
+    const v = typeof r.value === 'number' ? r.value : null;
+    const len = v === null ? 0 : Math.max(v > 0 ? 2 : 0, (v / max) * BAR);
+    svg += '<text x="0" y="' + (y + 13) + '" fill="var(--text)" font-size="11">' + escapeHtml(r.label) + '</text>';
+    svg += '<rect x="' + LABEL + '" y="' + y + '" width="' + BAR + '" height="12" rx="3" fill="rgba(255,255,255,0.05)"/>';
+    if (v === null) {
+      svg += '<text x="' + (LABEL + 6) + '" y="' + (y + 10) + '" fill="var(--muted)" font-size="10">not reported</text>';
+    } else {
+      svg += '<rect x="' + LABEL + '" y="' + y + '" width="' + len.toFixed(1) + '" height="12" rx="3" fill="' + (r.colour || 'var(--primary)') + '"/>';
+      svg += '<text x="' + (LABEL + BAR + 8) + '" y="' + (y + 10) + '" fill="var(--muted)" font-size="11">' +
+             formatNumber(v) + (total > 0 && v > 0 ? ' (' + Math.round((v / total) * 100) + '%)' : '') + '</text>';
+    }
+  });
+  return svg + '</svg>';
+}
+
+function vizBlock(title, body, note) {
+  return '<figure style="margin:0">'
+    + '<figcaption class="muted" style="font-size:12px;text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px">'
+    + escapeHtml(title) + '</figcaption>'
+    + body
+    + (note ? '<p class="muted" style="font-size:11px;margin:8px 0 0">' + escapeHtml(note) + '</p>' : '')
+    + '</figure>';
+}
+
+function vizUnavailable(label, what) {
+  return '<p role="alert" class="muted" style="font-size:12px">' + escapeHtml(label) +
+         ' - nothing is known about ' + escapeHtml(what) + ' on this load.</p>';
+}
+
+async function loadViz() {
+  const grid = document.getElementById('vizGrid');
+  if (!grid) return;
+  const [summary, incidents, agents] = await Promise.all([
+    apiResult('/findings/summary'), apiResult('/incidents'), apiResult('/agents')
+  ]);
+  const blocks = [];
+
+  // 1. Findings by severity, from the summary (which is not paged, unlike the findings list).
+  if (summary.ok && summary.data && typeof summary.data === 'object') {
+    const s = summary.data;
+    const rows = [
+      {label: 'Critical', value: s.critical, colour: 'var(--sev-critical)'},
+      {label: 'High', value: s.high, colour: 'var(--sev-high)'},
+      {label: 'Medium', value: s.medium, colour: 'var(--sev-medium)'},
+      {label: 'Low', value: s.low, colour: 'var(--sev-low)'},
+      {label: 'Info', value: s.info, colour: 'var(--sev-info)'}
+    ];
+    const open = typeof s.open === 'number' ? s.open : null;
+    blocks.push(vizBlock('Open findings by severity', svgBars(rows, {aria: 'Open findings by severity'}),
+      open === null ? null : open + ' open of ' + formatNumber(s.total) + ' recorded'));
+  } else {
+    blocks.push(vizBlock('Open findings by severity', vizUnavailable(unavailableLabel(summary), 'findings')));
+  }
+
+  // 2. Incidents by severity, and how many still have live work behind them.
+  if (incidents.ok && Array.isArray(incidents.data)) {
+    const bySeverity = sev => incidents.data.filter(i => String(i.severity).toLowerCase() === sev).length;
+    const live = incidents.data.filter(i => i.status !== 'resolved' && i.open_findings > 0).length;
+    const rows = [
+      {label: 'Critical', value: bySeverity('critical'), colour: 'var(--sev-critical)'},
+      {label: 'High', value: bySeverity('high'), colour: 'var(--sev-high)'},
+      {label: 'Medium', value: bySeverity('medium'), colour: 'var(--sev-medium)'},
+      {label: 'Low', value: bySeverity('low'), colour: 'var(--sev-low)'}
+    ];
+    blocks.push(incidents.data.length === 0
+      ? vizBlock('Incidents by severity', '<p class="muted" style="font-size:12px">No incidents recorded. This is an empty result, not a missing one.</p>')
+      : vizBlock('Incidents by severity', svgBars(rows, {aria: 'Incidents by severity'}),
+          live + ' of ' + incidents.data.length + ' still have open findings behind them'));
+  } else {
+    blocks.push(vizBlock('Incidents by severity', vizUnavailable(unavailableLabel(incidents), 'incidents')));
+  }
+
+  // 3. Agents by status. PLANNED agents are drawn separately from operational ones: a declared agent that has
+  // never run is not evidence of a working fleet.
+  if (agents.ok && Array.isArray(agents.data)) {
+    const count = st => agents.data.filter(a => String(a.status || '').toUpperCase() === st).length;
+    const rows = [
+      {label: 'Operational', value: count('OPERATIONAL'), colour: 'var(--success)'},
+      {label: 'Degraded', value: count('DEGRADED'), colour: 'var(--sev-medium)'},
+      {label: 'Planned', value: count('PLANNED'), colour: 'var(--muted)'},
+      {label: 'Other', value: agents.data.filter(a => !['OPERATIONAL', 'DEGRADED', 'PLANNED'].includes(String(a.status || '').toUpperCase())).length, colour: 'var(--sev-high)'}
+    ];
+    blocks.push(vizBlock('Agents by status', svgBars(rows, {aria: 'Agents by status'}),
+      formatNumber(agents.data.length) + ' agents in the registry'));
+  } else {
+    blocks.push(vizBlock('Agents by status', vizUnavailable(unavailableLabel(agents), 'the agent fleet')));
+  }
+
+  grid.innerHTML = blocks.join('');
+}
+
 async function loadOverview() {
     loadPosturePanel();
+    loadViz();
     applyBranding();
     const health = await apiGet('/health');
     if (health && health.services) {
