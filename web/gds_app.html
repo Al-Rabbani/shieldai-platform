@@ -702,6 +702,18 @@ async function loadCompliance() {
     (data.score_basis ? '<p class="muted">' + escapeHtml(data.score_basis) + '</p>' : '') +
     (data.coverage_basis ? '<p class="muted">' + escapeHtml(data.coverage_basis) + '</p>' : '') +
     (data.manual_unevidenced ? '<p class="muted">' + data.manual_unevidenced + ' manual verdicts carry no evidence. They are excluded from the score and from coverage, and are listed per framework above.</p>' : '') +
+    // A framework can report requirements as not applicable. That is a written decision, not an absence of testing, so
+    // the console names the record, who approved it and when it expires. Without this line "not applicable" would be
+    // indistinguishable from "we never looked", which is exactly the ambiguity the determination exists to remove.
+    (data.frameworks || []).filter(f => f.scope_determination).map(f => {
+      const d = f.scope_determination;
+      return '<p class="muted">' + escapeHtml(f.name) + ' scope: <strong>' + escapeHtml(d.determination_ref) + '</strong>' +
+        ' (' + (d.cde_defined ? 'a cardholder data environment is defined' : 'no cardholder data environment on GDS infrastructure') + ')' +
+        ' &middot; ' + d.applicable_refs + ' applicable, ' + d.not_applicable_refs + ' excluded' +
+        ' &middot; approved by ' + escapeHtml(d.approved_by || 'unrecorded') +
+        (d.review_due_at ? ' &middot; review due ' + formatDateTime(d.review_due_at) : '') +
+        ' &middot; evidence and caveats: GET /compliance/determinations</p>';
+    }).join('') +
     (data.note ? '<p class="muted">' + escapeHtml(data.note) + '</p>' : '');
 
   // Two different denominators used to sit in the same row without being named: "28 / 35" was assessed against the
@@ -709,17 +721,24 @@ async function loadCompliance() {
   // size (153 for CIS v8). 80% and 18.3% described the same framework. Each number now states its basis, an
   // uncatalogued framework reports no coverage rather than a division by an unknown total, and unevidenced manual
   // verdicts are shown instead of being dropped.
-  const fwName = f => escapeHtml(f.name || f.framework) + (f.catalogued ? '' : ' <span class="muted" style="font-size:11px">(no catalogue row: key ' + escapeHtml(f.framework) + ')</span>');
-  let html = '<table><tr><th>Framework</th><th>Jurisdiction</th><th>Assessed of official size</th><th>Coverage</th><th>Pass</th><th>Fail</th><th>Score over assessed</th><th>Unevidenced</th><th>Last assessed</th></tr>';
+  const fwName = f => escapeHtml(f.name || f.framework) + (f.catalogued ? '' : ' <span class="muted" style="font-size:11px">(no catalogue row: key ' + escapeHtml(f.framework) + ')</span>') +
+    (f.scope_determination ? ' <span class="muted" style="font-size:11px">(scope ' + escapeHtml(f.scope_determination.determination_ref) + ')</span>' : '');
+  let html = '<table><tr><th>Framework</th><th>Jurisdiction</th><th>Assessed of official size</th><th>Coverage of applicable</th><th>Pass</th><th>Fail</th><th>Not applicable</th><th>Score over assessed</th><th>Unevidenced</th><th>Last assessed</th></tr>';
   (data.frameworks || []).forEach(f => {
     const size = f.catalogued && f.official_control_count ? f.official_control_count : null;
     const assessedCell = size !== null
       ? f.assessed + ' of ' + size + (f.control_rows && f.control_rows !== size ? ' <span class="muted" style="font-size:11px">(' + f.control_rows + ' control rows recorded)</span>' : '')
       : f.assessed + ' <span class="muted" style="font-size:11px">(official size unknown)</span>';
+    const applicableCell = f.applicable_count && size !== null
+      ? f.assessed + ' of ' + f.applicable_count + ' applicable'
+      : null;
     html += '<tr><td>' + fwName(f) + '</td><td><span class="badge badge-blue">' + escapeHtml(f.jurisdiction || 'Unspecified') +
       '</span></td><td>' + assessedCell + '</td><td>' +
-      pct(f.coverage_pct) + '</td><td>' + f.passing + '</td><td class="' + (f.failing ? 'sev-h' : '') + '">' +
-      f.failing + '</td><td>' + pct(f.score_over_assessed) + '</td><td class="muted">' +
+      pct(f.coverage_pct) + (applicableCell ? ' <span class="muted" style="font-size:11px">(' + applicableCell + ')</span>' : '') +
+      '</td><td>' + f.passing + '</td><td class="' + (f.failing ? 'sev-h' : '') + '">' +
+      f.failing + '</td><td class="muted">' +
+      (f.not_applicable ? f.not_applicable + ' <span style="font-size:11px">out of scope</span>' : '-') +
+      '</td><td>' + pct(f.score_over_assessed) + '</td><td class="muted">' +
       (f.manual_unevidenced ? f.manual_unevidenced + ' <span style="font-size:11px">manual, no evidence</span>' : '-') +
       '</td><td class="muted">' +
       (f.last_assessed ? formatDateTime(f.last_assessed) : 'never') + '</td></tr>';

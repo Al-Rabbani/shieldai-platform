@@ -10,7 +10,7 @@ Scores are computed over ASSESSED controls only (pass+fail). Coverage against th
 control count is reported separately, so a 100% score over 6 assessed controls out of 153 can never be
 read as a compliant framework.
 """
-import hashlib, json, os, re, subprocess, sys
+import hashlib, json, os, re, subprocess, sys, time
 from datetime import datetime, timezone, timedelta
 
 DB = ["sudo", "-u", "postgres", "psql", "-d", "gds_os", "-tAc"]
@@ -626,6 +626,54 @@ def chk_password_hashing():
 
 
 
+def chk_tpsp_management():
+    """PCI DSS 12.8 shape: the third party that holds account data is named, bound by a recorded agreement, and
+    reviewed against its PCI attestation at least annually.
+
+    This is the one PCI obligation that survives outsourcing. The evidence is the scope determination itself: a
+    determination that names Stripe but records neither a written agreement nor a review of Stripe's attestation is
+    exactly the gap 12.8 exists to close, so it must fail rather than be waved through on the strength of Stripe
+    being a large company.
+    """
+    raw = one("""SELECT coalesce((SELECT tpsp::text FROM compliance_scope_determinations
+                                 WHERE framework_key = 'pci_dss' AND status = 'approved'
+                                 ORDER BY approved_at DESC LIMIT 1), '');""", "")
+    if not raw:
+        return unknown("no approved PCI scope determination names a third-party service provider")
+    try:
+        tpsp = json.loads(raw)
+    except Exception as e:
+        return unknown(f"the stored third-party list could not be read: {type(e).__name__}")
+    if not isinstance(tpsp, list) or not tpsp:
+        return bad({"tpsps": 0}, "the approved determination names no third-party service provider")
+
+    review_due = one("""SELECT coalesce(to_char(review_due_at, 'YYYY-MM-DD'), '') FROM compliance_scope_determinations
+                        WHERE framework_key = 'pci_dss' AND status = 'approved'
+                        ORDER BY approved_at DESC LIMIT 1;""", "")
+    overdue = bool(review_due) and review_due < time.strftime("%Y-%m-%d")
+
+    names = [str(x.get("name") or "unnamed") for x in tpsp]
+    no_agreement = [str(x.get("name")) for x in tpsp if not x.get("written_agreement_recorded")]
+    no_review = [str(x.get("name")) for x in tpsp if not x.get("attestation_reviewed_at")]
+    obs = {
+        "tpsps": len(tpsp),
+        "listed": names,
+        "without_written_agreement": no_agreement,
+        "without_attestation_review": no_review,
+        "determination_review_due": review_due or None,
+        "determination_overdue": overdue,
+    }
+    if overdue:
+        return bad(obs, f"the scope determination is past its review date ({review_due})")
+    if no_agreement and no_review:
+        return bad(obs, f"{', '.join(names)} is named but no written agreement or attestation review is recorded")
+    if no_agreement:
+        return bad(obs, f"no written PCI responsibility agreement is recorded for {', '.join(no_agreement)}")
+    if no_review:
+        return bad(obs, f"no review of the PCI attestation is recorded for {', '.join(no_review)}")
+    return ok(obs, f"{len(tpsp)} third party provider(s) listed, agreed and reviewed")
+
+
 COLLECTORS = {
     "rls_forced": chk_rls_forced, "least_priv_db": chk_least_priv_db, "audit_log": chk_audit_log,
     "log_retention": chk_log_retention, "backup_offhost": chk_backup_offhost,
@@ -648,6 +696,7 @@ COLLECTORS = {
     "asset_inventory": chk_asset_inventory,
     "unique_user_identity": chk_unique_user_identity,
     "password_hashing": chk_password_hashing,
+    "tpsp_management": chk_tpsp_management,
 }
 
 # ---------------------------------------------------------------- catalog
@@ -669,10 +718,11 @@ FRAMEWORKS = [
      "hold; identifiers and wording extracted from NIST CSWP 29 on 21 Nov 2026 and cross-checked against an "
      "independent mirror"),
     ("pci_dss",       "PCI DSS v4.0.1",                              "4.0.1", 12, "International",
-     "12 requirements catalogued at requirement level, none marked passing: no cardholder data environment "
-     "has ever been defined and the platform stores no account data, so applicability is an open owner "
-     "decision. Requirement headings are v4.0.1 wording from published summaries - the standard itself is "
-     "gated, so they must be checked against the licensed copy before any external claim"),
+     "12 requirements catalogued at requirement level. Scope is determined by SCOPE-PCI-2026-11: no cardholder "
+     "data environment exists on infrastructure GDS controls, so requirements 1-11 are not_applicable and only 12 "
+     "(third-party service provider management) is judged, where it currently fails. Requirement headings are "
+     "v4.0.1 wording from published summaries - the standard itself is gated, so they must be checked against the "
+     "licensed copy before any external claim"),
     ("nis2",          "NIS2 Directive (EU) 2022/2555",               "2022/2555", 75, "EU",
      "technical decomposition of Art.20, Art.21 and Art.23 into 75 checkable controls; the directive "
      "publishes no official control list, so this count is ours and the mapping requires legal review"),
@@ -692,6 +742,7 @@ def _load_catalogue(module_name):
 ISO27001_CATALOGUE = _load_catalogue("catalogue_iso27001").CATALOGUE
 NIST_CSF_CATALOGUE = _load_catalogue("catalogue_nist_csf").CATALOGUE
 PCI_DSS_CATALOGUE = _load_catalogue("catalogue_pci_dss").CATALOGUE
+SCOPE_DETERMINATIONS = _load_catalogue("scope_determinations")
 
 # (framework, ref, title, category, check_key or None, severity, mapping_basis)
 CATALOG = [
@@ -988,6 +1039,63 @@ def main():
                      official_control_count = EXCLUDED.official_control_count,
                      jurisdiction = EXCLUDED.jurisdiction, source = EXCLUDED.source;""")
 
+    # 1b. scope determinations. Written before the catalogue is judged, because a determination decides which
+    # requirements are even applicable. validate() refuses a record that leaves a requirement unclassified, so an
+    # incomplete decision fails the run instead of quietly leaving controls at not_tested forever.
+    for det in SCOPE_DETERMINATIONS.DETERMINATIONS:
+        record = dict(det)
+        record.setdefault("approved_at", datetime.now(timezone.utc).isoformat() if record.get("status") == "approved" else None)
+        SCOPE_DETERMINATIONS.validate(record)
+        psql(f"""INSERT INTO compliance_scope_determinations
+                 (framework_key, determination_ref, status, cde_defined, cde_summary, chd_stored, chd_processed,
+                  chd_transmitted, saq_track, systems_in_scope, systems_out_of_scope, tpsp, applicable_refs,
+                  not_applicable_refs, evidence, caveats, determined_by, determined_at, approved_by, approved_at,
+                  approval_basis, review_due_at, updated_at)
+                 VALUES ({q(record['framework_key'])}, {q(record['determination_ref'])}, {q(record['status'])},
+                         {'true' if record['cde_defined'] else 'false'}, {q(record['cde_summary'])},
+                         {'true' if record['chd_stored'] else 'false'}, {'true' if record['chd_processed'] else 'false'},
+                         {'true' if record['chd_transmitted'] else 'false'}, {q(record.get('saq_track'))},
+                         {jq(record.get('systems_in_scope') or [])}, {jq(record.get('systems_out_of_scope') or [])},
+                         {jq(record.get('tpsp') or [])}, {jq(record.get('applicable_refs') or [])},
+                         {jq(record.get('not_applicable_refs') or [])}, {jq(record.get('evidence') or [])},
+                         {jq(record.get('caveats') or [])}, {q(record['determined_by'])}, now(),
+                         {q(record.get('approved_by'))}, {q(record.get('approved_at'))}::timestamptz,
+                         {q(record.get('approval_basis'))}, {q(record.get('review_due_at'))}::timestamptz, now())
+                 ON CONFLICT (determination_ref) DO UPDATE
+                 SET status = EXCLUDED.status, cde_defined = EXCLUDED.cde_defined, cde_summary = EXCLUDED.cde_summary,
+                     chd_stored = EXCLUDED.chd_stored, chd_processed = EXCLUDED.chd_processed,
+                     chd_transmitted = EXCLUDED.chd_transmitted, saq_track = EXCLUDED.saq_track,
+                     systems_in_scope = EXCLUDED.systems_in_scope,
+                     systems_out_of_scope = EXCLUDED.systems_out_of_scope, tpsp = EXCLUDED.tpsp,
+                     applicable_refs = EXCLUDED.applicable_refs, not_applicable_refs = EXCLUDED.not_applicable_refs,
+                     evidence = EXCLUDED.evidence, caveats = EXCLUDED.caveats, determined_by = EXCLUDED.determined_by,
+                     approved_by = EXCLUDED.approved_by, approved_at = EXCLUDED.approved_at,
+                     approval_basis = EXCLUDED.approval_basis, review_due_at = EXCLUDED.review_due_at,
+                     updated_at = now();""")
+        print(f"  scope {record['determination_ref']:22s} {record['status']:9s} "
+              f"applicable={len(record.get('applicable_refs') or [])} "
+              f"not_applicable={len(record.get('not_applicable_refs') or [])}")
+
+    # 1c. applicability must be complete for every catalogued requirement of a determined framework.
+    scoped = {}
+    for det in SCOPE_DETERMINATIONS.DETERMINATIONS:
+        if det.get("status") != "approved":
+            continue
+        applicable = set(det.get("applicable_refs") or [])
+        excluded = set(det.get("not_applicable_refs") or [])
+        catalogued = {c[1] for c in CATALOG if c[0] == det["framework_key"]}
+        unclassified = sorted(catalogued - applicable - excluded)
+        if unclassified:
+            raise SystemExit(
+                f"{det['determination_ref']}: {len(unclassified)} catalogued requirement(s) are neither applicable "
+                f"nor excluded: {unclassified}. A determination must classify every requirement it governs."
+            )
+        scoped[det["framework_key"]] = {
+            "ref": det["determination_ref"],
+            "not_applicable": excluded,
+            "summary": det.get("cde_summary", ""),
+        }
+
     # 2. catalog
     for fw, ref, title, cat, check, sev, basis in CATALOG:
         psql(f"""INSERT INTO compliance_controls (framework_key, control_ref, title, category, check_key, severity, mapping_basis)
@@ -1013,8 +1121,26 @@ def main():
         print(f"  {check:24s} {r['verdict']:11s} {r['detail'][:78]}")
 
     # 4. rewrite automated verdicts (manual rows are left untouched)
-    psql("DELETE FROM compliance_assessments WHERE verdict_source = 'automated';")
+    psql("DELETE FROM compliance_assessments WHERE verdict_source IN ('automated', 'determination');")
     for fw, ref, title, cat, check, sev, basis in CATALOG:
+        scope = scoped.get(fw)
+        if scope and ref in scope["not_applicable"]:
+            # Out of scope by a written determination, not untested. The distinction matters: not_tested invites
+            # someone to come back and test it, while not_applicable says the requirement does not apply to this
+            # architecture and names the record that decided so.
+            verdict = "not_applicable"
+            collector = None
+            detail = f"out of scope by determination {scope['ref']}"
+            observed = {"determination_ref": scope["ref"], "reason": scope["summary"]}
+            sha = hashlib.sha256(json.dumps(observed, sort_keys=True, default=str).encode()).hexdigest()
+            obs = dict(observed)
+            obs["_detail"] = detail
+            psql(f"""INSERT INTO compliance_assessments
+                     (framework, control_id, control_name, status, severity, mapped_finding, assessment_date,
+                      check_key, verdict_source, collector, observed, evidence_sha, assessed_at)
+                     VALUES ({q(fw)}, {q(ref)}, {q(title)}, {q(verdict)}, {q(sev)}, NULL, now(),
+                      NULL, 'determination', NULL, {jq(obs)}, {q(sha)}, now());""")
+            continue
         if check:
             r = results[check]
             verdict, observed, collector = r["verdict"], r["observed"], r["collector"]
@@ -1032,23 +1158,30 @@ def main():
                   {jq(obs)}, {q(sha)}, now());""")
 
     # 5. summary
-    print("\n" + "=" * 96)
-    print(f"{'framework':16s} {'official':>8s} {'catalog':>7s} {'assessed':>8s} {'pass':>5s} {'fail':>5s} {'n/t':>4s} {'cov%':>6s} {'score*':>7s}")
-    print("=" * 96)
+    print("\n" + "=" * 100)
+    print(f"{'framework':16s} {'official':>8s} {'applic':>6s} {'n/a':>4s} {'assessed':>8s} {'pass':>5s} {'fail':>5s} "
+          f"{'n/t':>4s} {'cov%':>6s} {'score*':>7s}")
+    print("=" * 100)
     for key, name, version, official, *_ in FRAMEWORKS:
-        row = one(f"""SELECT count(*) || '|' ||
-                      count(*) FILTER (WHERE status='pass') || '|' ||
+        row = one(f"""SELECT count(*) FILTER (WHERE status='pass') || '|' ||
                       count(*) FILTER (WHERE status='fail') || '|' ||
-                      count(*) FILTER (WHERE status NOT IN ('pass','fail'))
-                      FROM compliance_assessments WHERE framework = {q(key)} AND verdict_source='automated';""")
-        total, p, f, nt = (int(x) for x in row.split("|"))
+                      count(*) FILTER (WHERE status NOT IN ('pass','fail','not_applicable')) || '|' ||
+                      count(*) FILTER (WHERE status='not_applicable')
+                      FROM compliance_assessments
+                      WHERE framework = {q(key)} AND verdict_source IN ('automated','determination');""")
+        p, f, nt, na = (int(x) for x in row.split("|"))
         assessed = p + f
-        cov = round(100.0 * assessed / official, 1) if official else 0.0
+        # Coverage divides by what actually applies. A requirement excluded by a written determination is not an
+        # untested one, and dividing by the full official count would punish the framework for being out of scope.
+        applicable = official - na if official else 0
+        cov = round(100.0 * assessed / applicable, 1) if applicable else 0.0
         score = round(100.0 * p / assessed, 1) if assessed else None
-        print(f"{key:16s} {official:8d} {total:7d} {assessed:8d} {p:5d} {f:5d} {nt:4d} {cov:6.1f} {str(score):>7s}")
-    print("=" * 96)
-    print("score* is over ASSESSED controls only. cov% is assessed / the framework's official control count,")
-    print("so a high score over a small number of assessed controls is not a compliant framework.")
+        print(f"{key:16s} {official:8d} {applicable:6d} {na:4d} {assessed:8d} {p:5d} {f:5d} {nt:4d} {cov:6.1f} "
+              f"{str(score):>7s}")
+    print("=" * 100)
+    print("score* is over ASSESSED controls only. cov% is assessed / APPLICABLE controls (official count minus those")
+    print("excluded by a written scope determination), so a high score over a small number of assessed controls is")
+    print("not a compliant framework.")
 
 if __name__ == "__main__":
     main()

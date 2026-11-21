@@ -101,20 +101,41 @@ def test_pci_has_twelve_requirements():
     assert refs == [str(n) for n in range(1, 13)], f"requirement refs are {refs}"
 
 
-def test_no_pci_requirement_is_marked_against_a_scope_that_does_not_exist():
-    """The guard on this whole catalogue: applicability is undetermined, so nothing may pass."""
-    mapped = [(c[1], c[4]) for c in PCI if c[4]]
-    assert not mapped, (
-        f"PCI requirements are mapped to collectors: {mapped}. No cardholder data environment has been defined, so a "
-        "mapping would certify a scope that was never established. Change this test deliberately when the CDE is set."
+def test_pci_mapping_follows_the_scope_determination():
+    """The guard that replaced "nothing may be mapped": now the scope IS determined, so mapping is allowed for exactly
+    the requirements the determination makes applicable, and forbidden for the rest.
+
+    This test used to assert that no PCI requirement was mapped at all, because no cardholder data environment had been
+    defined and a mapping would have certified a scope that was never established. SCOPE-PCI-2026-11 established it, so
+    the guard moved rather than disappeared: it now fails if a mapping appears for a requirement the determination
+    excludes, which is the same error in the other direction.
+    """
+    scope = _load("scope_determinations", ROOT / "scripts" / "ops" / "scope_determinations.py")
+    determination = scope.PCI_DETERMINATION
+    applicable = set(determination["applicable_refs"])
+    excluded = set(determination["not_applicable_refs"])
+    mapped = {c[1] for c in PCI if c[4]}
+    assert mapped <= applicable, (
+        f"requirements mapped outside the determination's applicable set: {sorted(mapped - applicable)}. Excluded "
+        f"requirements are {sorted(excluded)}; mapping one would judge a scope the owner excluded."
+    )
+    assert mapped == applicable, (
+        f"requirements {sorted(applicable - mapped)} are applicable by the determination but have no collector, so "
+        "they would sit at not_tested while the framework reports itself as scoped"
     )
 
 
 def test_every_pci_row_states_its_applicability_position():
+    """A requirement must say where it stands. Before the scope was determined that meant "applicability
+    undetermined"; now it means "out of scope by determination SCOPE-PCI-2026-11" or "applies by determination ...".
+    Both state a position; a row that states neither is the failure this guards."""
     for _fw, ref, _title, _cat, _check, _sev, basis in PCI:
         assert basis and len(basis) > 60, f"requirement {ref} has a stub basis"
-        assert "applicab" in basis.lower() or "not applicable" in basis.lower(), (
-            f"requirement {ref} does not state whether it applies: {basis[:80]}"
+        low = basis.lower()
+        stated = any(phrase in low for phrase in ("applicab", "out of scope", "applies by determination"))
+        assert stated, f"requirement {ref} does not state whether it applies: {basis[:80]}"
+        assert "SCOPE-PCI-2026-11" in basis, (
+            f"requirement {ref} states a position without naming the determination behind it"
         )
 
 

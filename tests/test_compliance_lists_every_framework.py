@@ -19,6 +19,16 @@ ROUTE = (ROOT / "apps" / "api" / "gds_api" / "compliance_api.py").read_text(enco
 CLIENT = (ROOT / "web" / "gds_app.html").read_text(encoding="utf-8")
 
 
+def _load_route():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        "compliance_api_probe", ROOT / "apps" / "api" / "gds_api" / "compliance_api.py"
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def test_the_listing_is_a_union_of_catalogue_and_verdicts():
     assert "UNION ALL" in ROUTE
     assert "a.framework NOT IN (SELECT framework_key FROM compliance_frameworks)" in ROUTE
@@ -31,16 +41,32 @@ def test_an_uncatalogued_framework_is_marked_not_invented():
 
 
 def test_an_unknown_framework_size_never_produces_a_coverage_percentage():
-    """Dividing by an unknown total is how a fabricated 0% or 100% reaches a board pack."""
-    assert '"coverage_pct": round(100.0 * assessed / official, 1) if official else None' in ROUTE
+    """Dividing by an unknown total is how a fabricated 0% or 100% reaches a board pack.
+
+    The denominator moved on 21 Nov 2026: coverage now divides by APPLICABLE controls, because a requirement excluded
+    by an approved scope determination is not an untested one. The invariant is unchanged - no denominator, no
+    percentage - and coverage_of() is where it now lives, so it is checked directly as well as in the source.
+    """
+    assert '"coverage_pct": coverage_of(assessed, applicable)' in ROUTE
     assert '"official_control_count": official or None' in ROUTE
+    api = _load_route()
+    assert api.coverage_of(0, 0) is None, "nothing applicable must produce no percentage, not a division by zero"
+    assert api.coverage_of(5, 0) is None
+    assert api.coverage_of(1, 1) == 100.0
 
 
 def test_the_two_denominators_are_named_apart():
-    assert '"control_rows": (passing + failing + not_tested)' in ROUTE
+    # control_rows counts every recorded row, including those a determination excluded, so it can never be mistaken
+    # for the assessed count.
+    assert '"control_rows": (passing + failing + not_tested + not_applicable)' in ROUTE
     assert "<th>Assessed of official size</th>" in CLIENT
     assert "control rows recorded" in CLIENT
     assert "official size unknown" in CLIENT
+    # Coverage now names its denominator explicitly, and out-of-scope requirements get their own column rather than
+    # being folded into "not tested".
+    assert "<th>Coverage of applicable</th>" in CLIENT
+    assert "<th>Not applicable</th>" in CLIENT
+    assert "out of scope" in CLIENT
 
 
 def test_unevidenced_verdicts_are_counted_and_disclosed_not_dropped():
