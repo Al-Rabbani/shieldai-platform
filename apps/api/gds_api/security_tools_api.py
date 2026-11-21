@@ -22,6 +22,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from gds_api.db import get_db
+from gds_api.rate_limit import tenant_rate_limit
 from gds_api.security import CurrentUser, require_permission
 from gds_api.security_tools import (
     run_semgrep_scan,
@@ -36,6 +37,12 @@ from gds_api.security_tools import (
 import asyncio
 
 router = APIRouter(prefix="/security-tools", tags=["security-tools"])
+
+# These five routes are the expensive ones: each runs a real scanner (semgrep, a container scan, an
+# SBOM generation, an IaC pass) against whatever the caller names, and a loop of them would starve
+# the host of CPU and disk. They were the only scan triggers with no limit at all. Named so the test
+# suite can override just this dependency, matching mission_create_rate_limit.
+scan_rate_limit = tenant_rate_limit("security_scan", max_requests=30, window_seconds=3600)
 
 
 # ---------------------------------------------------------------------------
@@ -124,7 +131,7 @@ async def tools_status(
 # SAST
 # ---------------------------------------------------------------------------
 
-@router.post("/sast")
+@router.post("/sast", dependencies=[Depends(scan_rate_limit)])
 async def api_sast_scan(
     req: SASTRequest,
     current_user: CurrentUser = Depends(require_permission("security_tools:write")),
@@ -144,7 +151,7 @@ async def api_sast_scan(
 # DAST
 # ---------------------------------------------------------------------------
 
-@router.post("/dast")
+@router.post("/dast", dependencies=[Depends(scan_rate_limit)])
 async def api_dast_scan(
     req: DASTRequest,
     current_user: CurrentUser = Depends(require_permission("security_tools:write")),
@@ -165,7 +172,7 @@ async def api_dast_scan(
 # Container Scanning
 # ---------------------------------------------------------------------------
 
-@router.post("/container")
+@router.post("/container", dependencies=[Depends(scan_rate_limit)])
 async def api_container_scan(
     req: ContainerScanRequest,
     current_user: CurrentUser = Depends(require_permission("security_tools:write")),
@@ -186,7 +193,7 @@ async def api_container_scan(
 # SBOM
 # ---------------------------------------------------------------------------
 
-@router.post("/sbom")
+@router.post("/sbom", dependencies=[Depends(scan_rate_limit)])
 async def api_generate_sbom(
     req: SBOMRequest,
     current_user: CurrentUser = Depends(require_permission("security_tools:write")),
@@ -207,7 +214,7 @@ async def api_generate_sbom(
 # IaC Scanning
 # ---------------------------------------------------------------------------
 
-@router.post("/iac")
+@router.post("/iac", dependencies=[Depends(scan_rate_limit)])
 async def api_iac_scan(
     req: IaCScanRequest,
     current_user: CurrentUser = Depends(require_permission("security_tools:write")),
