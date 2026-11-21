@@ -658,10 +658,27 @@ FRAMEWORKS = [
     ("hipaa",         "HIPAA Security Rule (45 CFR 164)",            "2013", 75, "US", "catalogued 2026-11-19"),
     ("dora",          "DORA (EU) 2022/2554",                         "2022", 58, "EU", "catalogued 2026-11-19"),
     ("soc2_type2",    "SOC 2 Type II (AICPA TSC 2017)",              "2017", 61, "International", "catalogued 2026-11-19"),
+    ("iso27001",      "ISO/IEC 27001:2022 Annex A",                  "2022", 93, "International",
+     "45 of 93 Annex A controls catalogued: all 34 technological controls plus the access and "
+     "incident/continuity organisational controls this platform can answer for. The people and physical "
+     "themes are deliberately not catalogued rather than left blank; see scripts/ops/catalogue_iso27001.py"),
     ("nis2",          "NIS2 Directive (EU) 2022/2555",               "2022/2555", 75, "EU",
      "technical decomposition of Art.20, Art.21 and Art.23 into 75 checkable controls; the directive "
      "publishes no official control list, so this count is ours and the mapping requires legal review"),
 ]
+
+# Frameworks whose catalogues are large enough to live in their own module. Loaded by path because the test suite
+# loads this file with importlib rather than as a package member, so a plain import would fail there.
+def _load_catalogue(module_name):
+    import importlib.util
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), f"{module_name}.py")
+    spec = importlib.util.spec_from_file_location(f"_catalogue_{module_name}", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+ISO27001_CATALOGUE = _load_catalogue("catalogue_iso27001").CATALOGUE
 
 # (framework, ref, title, category, check_key or None, severity, mapping_basis)
 CATALOG = [
@@ -907,7 +924,7 @@ CATALOG = [
     ("nist_ai_rmf","MANAGE-4.1","Post-deployment monitoring","manage",'ai_post_deployment_monitoring',"high",
      "Completed missions and stored tool-call results from this platform's own agents are counted over 7 days, so "
      "the collector measures observed outcomes rather than a running process."),
-]
+] + ISO27001_CATALOGUE
 
 # Every mapping must state why its check is accepted as evidence for that control. Where a control
 # did not state one inline, this supplies the evidentiary logic for that check so a reviewer can
