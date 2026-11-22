@@ -4,6 +4,7 @@ import OffensiveMetricsRow from "@/components/redteam/OffensiveMetricsRow";
 import HermesCapabilityTiles from "@/components/redteam/HermesCapabilityTiles";
 import AssessmentsTable from "@/components/redteam/AssessmentsTable";
 import RedTeamAdvisorPanel from "@/components/redteam/RedTeamAdvisorPanel";
+import RedTeamEvidenceBasis from "@/components/redteam/RedTeamEvidenceBasis";
 
 export default function RedTeamCommandPage() {
   const [loading, setLoading] = useState(true);
@@ -12,6 +13,7 @@ export default function RedTeamCommandPage() {
   const [attackFindings, setAttackFindings] = useState([]);
   const [attackPaths, setAttackPaths] = useState([]);
   const [simulations, setSimulations] = useState([]);
+  const [overview, setOverview] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -47,18 +49,23 @@ export default function RedTeamCommandPage() {
         <div className="w-8 h-8 border-4 border-t-red-500 border-white/10 rounded-full animate-spin mx-auto mt-20" />
       ) : (
         <>
+          <RedTeamEvidenceBasis onLoad={setOverview} />
+          {/* Counts come from stores that exist. attackPaths and exploitsValidated are null because no attack-path or
+              attack-finding store exists here, and MITRE coverage is not measured on this platform - a hardcoded 43%
+              used to sit in that tile. */}
           <OffensiveMetricsRow
             attackSurfaceScore={risk?.cloud_score}
-            activeAssessments={activeAssessments}
-            attackPaths={attackPaths.length}
-            exploitsValidated={exploitsValidated}
+            activeAssessments={overview ? overview.engagements_total : null}
+            attackPaths={null}
+            exploitsValidated={null}
+            mitreCoverage={null}
           />
 
           <HermesCapabilityTiles
-            activeScans={campaigns.filter(c => c.status === "active").length}
-            pathsMapped={attackPaths.length}
-            exploitsPending={exploitsPending}
-            simsRun={simulations.length}
+            activeScans={overview ? overview.authorizations_total : null}
+            pathsMapped={null}
+            exploitsPending={null}
+            simsRun={null}
           />
 
           <AssessmentsTable campaigns={campaigns} />

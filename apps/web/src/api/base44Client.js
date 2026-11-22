@@ -79,6 +79,12 @@ const ENTITY_ROUTES = {
   AssetDependency: { path: '/cloud/relationships' },
   TriagedFinding: { path: '/findings', summaryPath: '/findings/summary' },
   Finding: { path: '/findings', summaryPath: '/findings/summary' },
+  /* The offensive side: real stores only. authorized_targets holds 2 rows and red_team_safety_state 1, so those are
+   * served. /red-team/overview states the absent stores (attack paths, simulations, campaigns, attack findings) by name
+   * instead of letting four counters print 0. */
+  AuthorizedTarget: { path: "/red-team/targets" },
+  RedTeamStatus: { path: "/red-team/status", single: true },
+  RedTeamOverview: { path: "/red-team/overview", single: true },
   /* Four routed pages ask for a TeamMember to fill assignment dropdowns (Assets, Risk Thresholds, Vulnerability
    * Management, escalation settings). Measured 22 Nov 2026: there is no team_members table. GET /team/members serves the
    * caller's own tenant users with their role name, and `name` is the email because this platform stores no display

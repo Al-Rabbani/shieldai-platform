@@ -3,12 +3,14 @@ import { Link } from "react-router-dom";
 import { Swords, Map, Target, Zap, Search, Crosshair } from "lucide-react";
 import MagneticCard from "@/components/home/MagneticCard";
 
+const fmt = (value, unit) => (value === null || value === undefined ? "not recorded here" : `${value} ${unit}`);
+
 export default function HermesCapabilityTiles({ activeScans, pathsMapped, exploitsPending, simsRun }) {
   const tiles = [
-    { icon: Swords, title: "Continuous Pentesting", desc: "AI-powered hybrid pentesting", stat: `${activeScans} scans running`, cta: "Launch Pentest →", to: "/red-team/pentest" },
-    { icon: Map, title: "Attack Path Discovery", desc: "Graph-based lateral movement analysis", stat: `${pathsMapped} paths mapped`, cta: "View Paths →", to: "/red-team/attack-paths" },
-    { icon: Target, title: "Exploit Validation", desc: "Safe CVE exploitation proof", stat: `${exploitsPending} pending review`, cta: "View →", to: "/offensive/exploits" },
-    { icon: Zap, title: "Adversary Simulation", desc: "LockBit · Scattered Spider · APT", stat: `${simsRun} simulations`, cta: "Run New →", to: "/red-team/adversary-sim" },
+    { icon: Swords, title: "Continuous Pentesting", desc: "AI-powered hybrid pentesting", stat: fmt(activeScans, "pentest authorisation(s)"), cta: "Launch Pentest →", to: "/red-team/pentest" },
+    { icon: Map, title: "Attack Path Discovery", desc: "Graph-based lateral movement analysis", stat: fmt(pathsMapped, "paths mapped"), cta: "View Paths →", to: "/red-team/attack-paths" },
+    { icon: Target, title: "Exploit Validation", desc: "Safe CVE exploitation proof", stat: fmt(exploitsPending, "pending review"), cta: "View →", to: "/offensive/exploits" },
+    { icon: Zap, title: "Adversary Simulation", desc: "LockBit · Scattered Spider · APT", stat: fmt(simsRun, "simulations"), cta: "Run New →", to: "/red-team/adversary-sim" },
     { icon: Crosshair, title: "Kill Chain Analyzer", desc: "MITRE ATT&CK 14-tactic coverage", stat: "43% coverage", cta: "Improve →", to: "/red-team/kill-chain" },
     { icon: Search, title: "Recon & OSINT", desc: "External exposure & attack surface", stat: "ASM live", cta: "Run Recon →", to: "/offensive/osint" },
   ];
