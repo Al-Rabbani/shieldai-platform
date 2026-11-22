@@ -61,7 +61,7 @@ _COLUMNS = """
        cvss,
        epss,
        kev_listed,
-       recommended_remediation AS remediation,
+       remediation,
        source,
        detected_at,
        resolved_at
