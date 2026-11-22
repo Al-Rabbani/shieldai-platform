@@ -78,7 +78,7 @@ def score_from_counts(counts: dict[str, Any]) -> dict[str, Any]:
     raw = 100.0 - sum(penalties.values()) + bonus
     score = max(0.0, min(100.0, raw))
     delta = resolved_7d - new_7d
-    trend = "improving" if delta > 0 else ("worsening" if delta < 0 else "stable")
+    trend = "improving" if delta > 0 else ("degrading" if delta < 0 else "stable")
 
     return {
         "overall_score": round(score, 1),

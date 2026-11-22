@@ -57,7 +57,8 @@ def test_score_never_exceeds_100():
 
 def test_trend_follows_resolved_against_new():
     assert score_from_counts(clean(new_7d=3, resolved_7d=5))["trend"] == "improving"
-    assert score_from_counts(clean(new_7d=5, resolved_7d=3))["trend"] == "worsening"
+    # "degrading", not "worsening": the shipped dashboard renders any other word as "Stable".
+    assert score_from_counts(clean(new_7d=5, resolved_7d=3))["trend"] == "degrading"
     assert score_from_counts(clean(new_7d=3, resolved_7d=3))["trend"] == "stable"
 
 
