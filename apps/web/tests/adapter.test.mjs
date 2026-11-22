@@ -62,7 +62,7 @@ test('a refused entity refuses to write', async () => {
 
 test('a refused function throws instead of inventing a result', async () => {
   const { base44 } = await loadAdapter();
-  await assert.rejects(() => base44.functions.invoke('gdsMasterOrchestrator', {}), /not served/i);
+  await assert.rejects(() => base44.functions.invoke('gdsDataFabric', {}), /not served/i);
 });
 
 test('a mapped entity calls its real path and translates field names', async () => {

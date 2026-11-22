@@ -37,6 +37,7 @@ from gds_api import (
     mission_api,
     missions,
     notifications,
+    platform_intel_api,
     policy,
     redteam,
     repository_api,
@@ -202,6 +203,7 @@ app.include_router(notifications.router)
 app.include_router(missions.router)
 app.include_router(agents_router.router)
 app.include_router(findings.router)
+app.include_router(platform_intel_api.router)
 app.include_router(incidents.router)
 app.include_router(knowledge.router)
 app.include_router(workflow_runs.router)

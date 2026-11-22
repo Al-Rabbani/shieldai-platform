@@ -123,6 +123,21 @@ const ENTITY_ROUTES = {
 const FUNCTION_ROUTES = {
   // Linear is ported and proved against the live workspace; this is its sync action.
   gdsLinearSync: { path: '/integrations/linear', method: 'POST', body: { action: 'sync' } },
+  /* The shell asks for platform_intel on every page load; that function does not exist here, so the header showed
+   * dashes on all 100 pages. GET /platform/intel answers it from security_findings and compliance_controls, returning
+   * exactly risk.{score,grade} and defensive.{cloud_open,cloud_critical,vuln_total,vuln_critical,exploited_in_wild,
+   * compliance_avg} that PlatformShell reads. The execute action stays refused: its only real equivalent needs the
+   * shared bridge key, which must not live in a browser bundle. */
+  gdsMasterOrchestrator: {
+    path: '/platform/intel',
+    method: 'GET',
+    mapPayload: (payload = {}) => {
+      if ((payload.action || 'platform_intel') !== 'platform_intel') {
+        throw new NotOnThisPlatform('gdsMasterOrchestrator.execute', 'Function');
+      }
+      return undefined;
+    },
+  },
   /* The Co-Pilot chat. POST /reasoning/mission runs the real reasoning loop and is guarded by ai_guard, so an injected
    * instruction comes back 422 prompt_guard_refused instead of reaching a model. The engine returns summary, agent_id,
    * tool_calls and duration_ms; the page renders response, agent_steps and agents_count, so the mapping is explicit here
