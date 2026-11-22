@@ -35,6 +35,7 @@ from gds_api.db import async_session_factory, get_db
 from gds_api.models import Base
 from gds_api.security import CurrentUser, require_permission
 from gds_api.finding_lifecycle import FindingStatus, validate_finding_transition
+from gds_api.tenant_binding import bind_tenant
 from gds_api.logging_config import get_logger
 from gds_api.models import Finding
 
@@ -56,9 +57,10 @@ class RemediationPlan(Base):
     # Exactly one of these is set: finding_id for the governed register (uuid ids), security_finding_id for the
     # scanner register (integer ids) that every finding the UI shows comes from.
     finding_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("findings.id"), default=None)
-    security_finding_id: Mapped[int | None] = mapped_column(
-        ForeignKey("security_findings.id"), default=None
-    )
+    # No ORM model maps security_findings, so a ForeignKey here fails at mapper build time with
+    # NoReferencedTableError and the route answers 500 while /health stays 200. Migration 054 creates the real
+    # constraint; the ORM only carries the column.
+    security_finding_id: Mapped[int | None] = mapped_column(default=None)
 
     # What type of fix
     remediation_type: Mapped[str] = mapped_column(String(50))
@@ -320,6 +322,13 @@ async def generate_remediation_plan(
     # Auto-fixable if it's a dependency upgrade with a known fixed version
     auto_fixable = remediation_type == "dependency_upgrade" and bool(fix_steps.get("fixed_version"))
 
+    # Scanner-register rows carry no recognised source, so the branch above leaves them "manual" with no steps.
+    if not fix_steps:
+        classified = classify_scanner_finding(finding)
+        if classified is not None:
+            remediation_type, fix_description, fix_steps = classified
+            verification_type = "manual"
+
     plan = RemediationPlan(
         tenant_id=tenant_id,
         finding_id=finding_id,
@@ -341,6 +350,9 @@ async def generate_remediation_plan(
         finding.status = FindingStatus.REMEDIATION_PLANNED.value
 
     await db.commit()
+    # remediation_plans is FORCE-RLS: the commit released the connection and with it the tenant bind, so the read-back
+    # has to be re-bound or it sees nothing and refresh() raises "Could not refresh instance".
+    await bind_tenant(db, tenant_id)
     await db.refresh(plan)
 
     _logger.info(
@@ -573,6 +585,47 @@ class RemediationPlanOut(BaseModel):
     verification_result: dict[str, Any]
 
     model_config = {"from_attributes": True}
+
+
+def classify_scanner_finding(finding: Any) -> tuple[str, str, dict[str, Any]] | None:
+    """Turn a scanner-register row into (remediation_type, fix_description, fix_steps), or None when it carries no CVE.
+
+    Measured 22 Nov 2026: source is the empty string on 834 of 1002 scanner rows, so the source-based branch classified
+    83% of the estate as "manual" with fix_steps {}. Everything here comes from fields the row really has: cve, the
+    package named in the title, KEV status and CVSS vector from raw_data. No command is invented; the last step is a
+    re-scan, because that is the only thing that actually closes the finding.
+    """
+    cve_ref = getattr(finding, "cve", None)
+    if not cve_ref:
+        return None
+    raw = getattr(finding, "raw_data", None) or {}
+    if not isinstance(raw, dict):
+        raw = {}
+    enrichment = raw.get("enrichment") if isinstance(raw.get("enrichment"), dict) else {}
+    kev_listed = bool(enrichment.get("kev_listed") or raw.get("kev_listed"))
+    cvss_lookup = raw.get("cvss_lookup") if isinstance(raw.get("cvss_lookup"), dict) else {}
+    cvss_vector = cvss_lookup.get("vector")
+    title_text = getattr(finding, "title", "") or ""
+    named_package = title_text.rsplit(" in ", 1)[1].strip() if " in " in title_text else ""
+    if " " in named_package or len(named_package) > 60:
+        named_package = ""
+    target_text = getattr(finding, "target", None) or "the affected host"
+
+    urgency = " Listed in CISA KEV - treat as an emergency patch." if kev_listed else ""
+    description = (f"Patch {named_package or 'the affected component'} for {cve_ref}.{urgency}"
+                   + (f" CVSS vector {cvss_vector}." if cvss_vector else ""))
+    steps = {
+        "cve": cve_ref,
+        "package": named_package or None,
+        "kev_listed": kev_listed,
+        "cvss_vector": cvss_vector,
+        "steps": [
+            f"Confirm the installed version of {named_package or 'the affected component'} on {target_text}.",
+            f"Upgrade to a release carrying the vendor fix for {cve_ref}.",
+            f"Re-run the scan; this finding closes only when {cve_ref} is no longer detected.",
+        ],
+    }
+    return ("dependency_upgrade" if named_package else "manual"), description, steps
 
 
 def parse_finding_reference(raw: str) -> tuple[int | None, uuid.UUID | None]:

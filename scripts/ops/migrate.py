@@ -11,7 +11,27 @@ import hashlib, os, subprocess, sys, time
 from pathlib import Path
 
 MIGRATION_DIR = Path("/opt/gds-os/migrations/security_isolation")
+# The directory a migration is easy to drop a file into by mistake. Anything here is refused loudly, because the
+# runner does not read it: a misfiled migration was deployed as success and its column never existed (22 Nov 2026).
+STRAY_DIR = Path("/opt/gds-os/migrations")
 DB = os.environ.get("PGDATABASE", "gds_os")
+
+
+def find_misfiled(stray_dir: Path, migration_dir: Path) -> list[str]:
+    """SQL sitting beside the runner's directory instead of inside it."""
+    if not stray_dir.is_dir():
+        return []
+    inside = {p.name for p in migration_dir.glob("*.sql")}
+    return sorted(p.name for p in stray_dir.glob("*.sql") if p.name not in inside)
+
+
+def duplicate_versions(files: list[Path]) -> dict[str, list[str]]:
+    """A migration is identified by its numeric prefix, so two files sharing one number means the second is skipped
+    as already applied, silently."""
+    seen: dict[str, list[str]] = {}
+    for f in files:
+        seen.setdefault(f.name.split("_", 1)[0], []).append(f.name)
+    return {v: names for v, names in seen.items() if len(names) > 1}
 
 def psql(sql: str, *, tuples_only: bool = False) -> str:
     cmd = ["sudo", "-u", "postgres", "psql", "-d", DB, "-v", "ON_ERROR_STOP=1"]
@@ -31,8 +51,18 @@ def applied() -> dict[str, str]:
     return dict(line.split("|", 1) for line in out.splitlines() if "|" in line)
 
 def main() -> int:
-    done = applied()
+    misfiled = find_misfiled(STRAY_DIR, MIGRATION_DIR)
+    if misfiled:
+        print("ERROR refusing to run: SQL in " + str(STRAY_DIR) + " that this runner will NOT apply: "
+              + ", ".join(misfiled) + " - move it into " + str(MIGRATION_DIR))
+        return 3
     files = sorted(MIGRATION_DIR.glob("*.sql"))
+    clashes = duplicate_versions(files)
+    if clashes:
+        print("ERROR refusing to run: migrations sharing a version number (the later one would be skipped silently): "
+              + "; ".join(f"{v}: {', '.join(n)}" for v, n in clashes.items()))
+        return 4
+    done = applied()
     if not files:
         print("no migration files found"); return 0
     pending = 0

@@ -1,4 +1,4 @@
--- Item 8: a remediation plan must be able to point at the finding anyone can see.
+-- Item 8 (migration 055): a remediation plan must be able to point at the finding anyone can see.
 --
 -- Measured 22 Nov 2026: findings (uuid ids, governed register) 317 rows, security_findings (integer ids, scanner
 -- register) 1002 rows. remediation_plans.finding_id was uuid NOT NULL with a foreign key to findings(id), so the
