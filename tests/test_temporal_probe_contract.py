@@ -15,7 +15,11 @@ count slowness as a strike.
 """
 from __future__ import annotations
 
+import os
 import subprocess
+import sys
+
+import pytest
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
@@ -87,3 +91,35 @@ def test_the_watchdog_still_discards_output_for_probes_that_cannot_signal_slowne
     source = WATCH.read_text(encoding="utf-8")
     assert 'if [ "$rc" -eq 2 ]' in source
     assert "out=$(eval \"$probe\" 2>&1); rc=$?" in source
+
+
+def test_the_probe_cannot_report_a_successful_check_as_a_failure():
+    """The probe aborted AFTER printing OK, so a healthy Temporal was counted as a failed strike.
+
+    Measured on the live host, 22 Nov 2026: `FAIL temporal (consecutive 1) rc=134 reason=OK temporal server=1.29.3
+    capabilities_present=True address=127.0.0.1:7233 attempt=1`. A re-run of 30 executions produced 29 zeros and one
+    SIGABRT (exit 134, core dumped) - about 3.3%, i.e. roughly nine false failures a day on a five-minute cron. That is
+    what restarted a container whose own log held zero errors. The verdict is printed before the abort, so the probe now
+    leaves through os._exit and never runs interpreter teardown.
+    """
+    source = PROBE.read_text(encoding="utf-8")
+    assert "os._exit(code)" in source
+    assert "sys.exit(asyncio.run(main()))" not in source, "module-level sys.exit runs teardown, which is what aborted"
+    assert "sys.stdout.flush()" in source, "os._exit skips buffered output, so the verdict must be flushed first"
+
+
+def test_the_probe_returns_zero_on_every_run_when_the_server_is_up():
+    """Behavioural: 20 runs against the live server. An abort is a real defect; an unreachable server is skipped."""
+    import subprocess
+
+    def run_once():
+        return subprocess.run(
+            [sys.executable, str(PROBE)], capture_output=True, text=True, timeout=120,
+            env={**os.environ, "GDS_TEMPORAL_ADDRESS": "127.0.0.1:7233"},
+        )
+
+    first = run_once()
+    if first.returncode == 1:
+        pytest.skip("temporal is not reachable on this host, so the abort path cannot be exercised")
+    codes = [first.returncode] + [run_once().returncode for _ in range(19)]
+    assert codes == [0] * 20, f"a successful check must always exit 0, got {codes}"

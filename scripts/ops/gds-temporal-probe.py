@@ -77,4 +77,18 @@ async def main() -> int:
     return last_code
 
 
-sys.exit(asyncio.run(main()))
+def _exit(code: int) -> None:
+    """Leave without running interpreter teardown.
+
+    Measured on the live host, 22 Nov 2026: 1 run in 30 printed "OK temporal server=1.29.3" and then died with SIGABRT
+    (exit 134, core dumped) during shutdown, so gds-service-watch.sh recorded "FAIL temporal (consecutive 1) rc=134
+    reason=OK temporal server=1.29.3..." - a successful check counted as a strike. On a five-minute cron that is about
+    nine false failures a day, which is what kept restarting a healthy Temporal. The abort happens after the verdict is
+    printed, so the verdict is sound; only the teardown is unsafe. Skipping it keeps the exit code honest.
+    """
+    sys.stdout.flush()
+    sys.stderr.flush()
+    os._exit(code)
+
+
+_exit(asyncio.run(main()))
