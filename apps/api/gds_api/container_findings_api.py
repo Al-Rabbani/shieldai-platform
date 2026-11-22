@@ -67,11 +67,11 @@ _LIST_SQL = f"""
       FROM findings
      WHERE tenant_id = :tenant_id
        AND source = :source
-       AND (:severity IS NULL OR severity = :severity)
-       AND (:status_filter IS NULL OR status = :status_filter)
-       AND (:image IS NULL OR raw_data->>'image' = :image)
-       AND (:cve IS NULL OR cve = :cve)
-       AND (:search IS NULL OR title ILIKE :search OR cve ILIKE :search)
+       AND (cast(:severity AS text) IS NULL OR severity = cast(:severity AS text))
+       AND (cast(:status_filter AS text) IS NULL OR status = cast(:status_filter AS text))
+       AND (cast(:image AS text) IS NULL OR raw_data->>'image' = cast(:image AS text))
+       AND (cast(:cve AS text) IS NULL OR cve = cast(:cve AS text))
+       AND (cast(:search AS text) IS NULL OR title ILIKE cast(:search AS text) OR cve ILIKE cast(:search AS text))
      ORDER BY created_at DESC, id
      LIMIT :limit OFFSET :offset
 """
@@ -81,11 +81,11 @@ _COUNT_SQL = """
       FROM findings
      WHERE tenant_id = :tenant_id
        AND source = :source
-       AND (:severity IS NULL OR severity = :severity)
-       AND (:status_filter IS NULL OR status = :status_filter)
-       AND (:image IS NULL OR raw_data->>'image' = :image)
-       AND (:cve IS NULL OR cve = :cve)
-       AND (:search IS NULL OR title ILIKE :search OR cve ILIKE :search)
+       AND (cast(:severity AS text) IS NULL OR severity = cast(:severity AS text))
+       AND (cast(:status_filter AS text) IS NULL OR status = cast(:status_filter AS text))
+       AND (cast(:image AS text) IS NULL OR raw_data->>'image' = cast(:image AS text))
+       AND (cast(:cve AS text) IS NULL OR cve = cast(:cve AS text))
+       AND (cast(:search AS text) IS NULL OR title ILIKE cast(:search AS text) OR cve ILIKE cast(:search AS text))
 """
 
 _SUMMARY_SQL = """
