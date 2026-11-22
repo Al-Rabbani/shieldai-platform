@@ -128,6 +128,10 @@ const ENTITY_ROUTES = {
  * department or threshold table of any kind, so a risk-limit check has nothing to read. Escalation RULES are real and
  * are served through VulnEscalationRule -> /siem/correlation/rules; it is only these two halves that are absent. */
 const REFUSAL_REASONS = {
+  gdsFleetAutoscale:
+    'No autoscaler exists on this platform: nothing watches a backlog and nothing starts or retires an agent process. ' +
+    'The registry declares max_concurrency per agent, but no process adjusts it, so scaling cannot run and a policy ' +
+    'has nowhere to be stored.',
   gdsVulnEscalation:
     'Escalation rules are served (they read and write the platform\'s own correlation rules), but two halves are not: ' +
     'the Slack channel list, because this host holds only a webhook and enumerating channels needs a bot token, and ' +
@@ -151,6 +155,40 @@ const FUNCTION_ROUTES = {
     },
   },
   // Linear is ported and proved against the live workspace; this is its sync action.
+  /* Item 15. GET /agents/fleet/status has existed since item 11 and two routed components were calling a refused name
+   * instead, so the fleet panel read "unknown - backend status unavailable" over a route answering 200 with 23 roles.
+   * The payload carries no `success`, no `release` object and no `checked_at`, and both components gate on
+   * `payload.success`. Nothing is invented in this mapping: success means the route answered, the release sha is the one
+   * the newest heartbeat reported, checked_at is the newest heartbeat RECEIPT (which is what the label now says), and a
+   * freshness window the route does not report stays null so the panel prints "not reported". */
+  gdsFleetStatus: {
+    path: '/agents/fleet/status',
+    method: 'GET',
+    mapResponse: (data) => {
+      const roles = Array.isArray(data?.roles) ? data.roles : [];
+      const newestOf = (key) => roles.map((role) => role?.[key]).filter(Boolean).sort().pop() || null;
+      const withSha = roles
+        .filter((role) => role?.release_sha)
+        .sort((a, b) => String(a.last_received_at || '').localeCompare(String(b.last_received_at || '')));
+      return {
+        success: true,
+        source: 'agent heartbeats (verified) + capability decisions (executed)',
+        checked_at: newestOf('last_received_at'),
+        release: {
+          sha: withSha.length ? withSha[withSha.length - 1].release_sha : null,
+          branch: null,
+          deployed_at: null,
+        },
+        freshness: {
+          fresh_seconds: data?.freshness?.fresh_within_seconds ?? null,
+          stale_seconds: data?.freshness?.stale_after_seconds ?? null,
+          capable_window_hours: null,
+        },
+        counts: data?.counts || {},
+        roles,
+      };
+    },
+  },
   gdsLinearSync: { path: '/integrations/linear', method: 'POST', body: { action: 'sync' } },
   /* The shell asks for platform_intel on every page load; that function does not exist here, so the header showed
    * dashes on all 100 pages. GET /platform/intel answers it from security_findings and compliance_controls, returning

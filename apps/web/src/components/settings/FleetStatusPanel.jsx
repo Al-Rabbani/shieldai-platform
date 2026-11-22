@@ -59,7 +59,7 @@ export default function FleetStatusPanel() {
         <>
           <div className="grid gap-2 sm:grid-cols-3 text-[11px]">
             <div className="rounded-lg px-3 py-2" style={{ background: "#0a0f1e", border: "1px solid #1e3a5f" }}>
-              <p className="text-slate-500">Release SHA (/health/version)</p>
+              <p className="text-slate-500">Release SHA (from the newest heartbeat)</p>
               <p className="font-mono text-slate-200 break-all">{release?.sha || "unavailable"}</p>
               <p className="text-slate-500 mt-1">{release?.deployed_at ? `deployed ${release.deployed_at}` : "deploy time unavailable"}{release?.branch ? ` · ${release.branch}` : ""}</p>
             </div>
@@ -76,7 +76,9 @@ export default function FleetStatusPanel() {
               <p className="text-slate-200">
                 {status.counts ? Object.entries(status.counts).map(([k, v]) => `${k}: ${v}`).join(" · ") : "not reported"}
               </p>
-              <p className="text-slate-500 mt-1">checked {new Date(status.checked_at).toISOString().replace("T", " ").slice(0, 19)} UTC</p>
+              <p className="text-slate-500 mt-1">{status.checked_at
+                ? `newest heartbeat received ${new Date(status.checked_at).toISOString().replace("T", " ").slice(0, 19)} UTC`
+                : "no heartbeat has ever been received"}</p>
             </div>
           </div>
 

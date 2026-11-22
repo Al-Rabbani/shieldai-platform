@@ -123,15 +123,23 @@ export default function FleetScalingPage() {
           <div>
             <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-300 border border-blue-500/30">FLT-021 | FLEET SCALING</span>
             <h1 className="text-xl font-bold text-white mt-1">Agent fleet autoscaling</h1>
-            <p className="text-xs text-slate-500">Capacity follows the task backlog between a floor and a ceiling; burst agents are retired when the load drops.</p>
+            <p className="text-xs text-slate-500">There is no autoscaler on this platform: nothing measures a task backlog and nothing starts or retires an agent process, and no scaling policy is stored here. The floor, ceiling and limits below are not saved or applied. What is real on this page is the registry count and the performance tab, which read the platform.</p>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <button onClick={save} disabled={busy} className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold bg-blue-500/20 text-blue-300 border border-blue-500/40 hover:bg-blue-500/30 transition disabled:opacity-40">
-            <Save size={13} /> {busy ? "Saving…" : "Save policy"}
+          <button
+            disabled
+            title="No scaling policy store exists on this platform, so there is nothing to save."
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold bg-blue-500/10 text-blue-300/50 border border-blue-500/20 cursor-not-allowed"
+          >
+            <Save size={13} /> Save policy (no store)
           </button>
-          <button onClick={runNow} disabled={busy} className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-500/30 transition disabled:opacity-40">
-            <Play size={13} /> Run scaling now
+          <button
+            disabled
+            title="No autoscaler process exists on this platform, so scaling cannot run."
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold bg-emerald-500/10 text-emerald-300/50 border border-emerald-500/20 cursor-not-allowed"
+          >
+            <Play size={13} /> Run scaling (no autoscaler)
           </button>
         </div>
       </div>
