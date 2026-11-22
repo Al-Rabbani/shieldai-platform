@@ -21,7 +21,7 @@ from gds_api.audit import record_audit_event
 from gds_api.config import settings
 from gds_api.db import get_db
 from gds_api.models import Evidence
-from gds_api.schemas import EvidenceOut
+from gds_api.schemas import EvidenceIntegrityOut, EvidenceOut
 from gds_api.security import CurrentUser, require_permission
 
 router = APIRouter(prefix="/evidence", tags=["evidence"])
@@ -195,6 +195,55 @@ async def list_evidence(
         )
         for e in rows
     ]
+
+
+@router.get("/{evidence_id}/verify", response_model=EvidenceIntegrityOut)
+async def verify_evidence_integrity_route(
+    evidence_id: uuid.UUID,
+    current_user: CurrentUser = Depends(require_permission("evidence:read")),
+) -> EvidenceIntegrityOut:
+    """Recompute the stored object's SHA-256 and compare it with the hash recorded at write time.
+
+    This does not reimplement the check: gds_api.platform_data.evidence_integrity is the engine the agent tool
+    verify_evidence_integrity already runs, including the tenant scope check on the storage key, the bounded read and the
+    constant-time comparison. The route only exposes it, so the vault and the agent cannot disagree about the same bytes.
+
+    Three outcomes are kept apart deliberately: 200 intact, 200 modified, and 409 for "the object could not be read". A
+    missing object is not evidence of integrity, so it must never answer 200.
+    """
+    from gds_api import platform_data
+
+    result = await platform_data.evidence_integrity(str(evidence_id))
+    code = result.get("code")
+    if code == "EVIDENCE_NOT_FOUND":
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Evidence not found")
+    if code:
+        # Every other refusal means the check could not run. Answering 200 here would claim a verification that never
+        # happened.
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            f"cannot verify: {code}: {result.get('error') or 'no reason recorded'}",
+        )
+
+    evidence = result["evidence"]
+    intact = bool(result.get("intact"))
+    return EvidenceIntegrityOut(
+        evidence_id=uuid.UUID(str(evidence["id"])),
+        subject_type=evidence["subject_type"],
+        subject_id=evidence.get("subject_id"),
+        intact=intact,
+        verdict="intact" if intact else "modified",
+        stored_sha256=str(result.get("stored_sha256") or ""),
+        measured_sha256=str(result.get("measured_sha256") or ""),
+        stored_size_bytes=int(evidence.get("size_bytes") or 0),
+        measured_size_bytes=int(result.get("measured_size_bytes") or 0),
+        checked_content=str(result.get("checked_content") or ""),
+        basis=(
+            "SHA-256 recomputed over the stored object bytes and compared in constant time with the hash recorded when "
+            "the evidence was written. This is an integrity check, not a signature: no signing key exists here, so it "
+            "cannot prove who wrote the bytes."
+        ),
+    )
 
 
 @router.get("/{evidence_id}", response_model=EvidenceOut)

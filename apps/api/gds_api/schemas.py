@@ -95,6 +95,26 @@ class EvidenceOut(BaseModel):
     download_url: str | None = None
 
 
+class EvidenceIntegrityOut(BaseModel):
+    """A hash comparison, and named as one.
+
+    No signing key exists on this platform, so this cannot prove WHO wrote the bytes. It proves the bytes still match the
+    SHA-256 recorded when they were stored, which is the chain-of-custody question the vault actually asks.
+    """
+
+    evidence_id: uuid.UUID
+    subject_type: str
+    subject_id: str | None
+    intact: bool
+    verdict: str
+    stored_sha256: str
+    measured_sha256: str
+    stored_size_bytes: int
+    measured_size_bytes: int
+    checked_content: str
+    basis: str
+
+
 class NotificationOut(BaseModel):
     id: uuid.UUID
     type: str

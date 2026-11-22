@@ -127,7 +127,18 @@ const ENTITY_ROUTES = {
  * SLACK_WEBHOOK_URL (a webhook can post, it cannot enumerate channels - that needs a bot token), and there is no
  * department or threshold table of any kind, so a risk-limit check has nothing to read. Escalation RULES are real and
  * are served through VulnEscalationRule -> /siem/correlation/rules; it is only these two halves that are absent. */
+/* A function name can cover actions that are served and actions that are not. gdsForensicChain verifies hash integrity
+ * from MinIO, which is real, and exports to Google Drive, which needs a service account this host does not have. One
+ * name, two truths, so the route is resolved per action and an unserved action is declared absent rather than guessed. */
+const ABSENT = Symbol('absent');
+
 const REFUSAL_REASONS = {
+  'gdsForensicChain:export_package':
+    'Building the evidence package needs Google Drive, and this host holds no Google service account, so nothing can be ' +
+    'uploaded or listed there. Integrity verification on the same page is real and reads the stored MinIO objects.',
+  gdsEvidenceDriveExport:
+    'Google Drive export needs a service account this host does not have. No file can be created or listed in Drive, so ' +
+    'this cannot run; the evidence objects themselves are stored in MinIO and can be downloaded from the vault.',
   gdsFleetAutoscale:
     'No autoscaler exists on this platform: nothing watches a backlog and nothing starts or retires an agent process. ' +
     'The registry declares max_concurrency per agent, but no process adjusts it, so scaling cannot run and a policy ' +
@@ -161,6 +172,32 @@ const FUNCTION_ROUTES = {
    * `payload.success`. Nothing is invented in this mapping: success means the route answered, the release sha is the one
    * the newest heartbeat reported, checked_at is the newest heartbeat RECEIPT (which is what the label now says), and a
    * freshness window the route does not report stays null so the panel prints "not reported". */
+  /* verify_signature reads GET /evidence/{id}/verify, which recomputes a SHA-256 over the stored MinIO object using the
+   * same engine as the agent tool verify_evidence_integrity. collect_evidence is absent on purpose: the real upload is
+   * multipart POST /evidence, and this page now uploads through evidence.upload() rather than pretending a title is a
+   * file. export_package needs Drive, which this host cannot reach. */
+  gdsForensicChain: {
+    byAction: {
+      verify_signature: {
+        path: (payload) => `/evidence/${encodeURIComponent(String((payload && payload.evidence_id) || ''))}/verify`,
+        method: 'GET',
+        mapResponse: (data) => ({
+          intact: data && data.intact === true,
+          verdict: (data && data.verdict) || 'unknown',
+          stored_sha256: (data && data.stored_sha256) || null,
+          measured_sha256: (data && data.measured_sha256) || null,
+          stored_size_bytes: (data && data.stored_size_bytes) ?? null,
+          measured_size_bytes: (data && data.measured_size_bytes) ?? null,
+          checked_content: (data && data.checked_content) || null,
+          note: 'SHA-256 of the stored object, compared in constant time. Not a signature: no signing key exists here.',
+        }),
+      },
+      export_package: ABSENT,
+      collect_evidence: ABSENT,
+    },
+    default: ABSENT,
+  },
+  gdsEvidenceDriveExport: ABSENT,
   gdsFleetStatus: {
     path: '/agents/fleet/status',
     method: 'GET',
@@ -275,11 +312,14 @@ async function request(path, { method = 'GET', body, query } = {}) {
     const qs = params.toString();
     if (qs) url += `?${qs}`;
   }
+  /* A multipart body must keep the browser-generated boundary, so FormData is passed through with no Content-Type of
+   * our own. Sending it as JSON.stringify(body) would post "[object FormData]" and the upload route would 422. */
+  const isForm = typeof FormData !== 'undefined' && body instanceof FormData;
   const response = await fetch(url, {
     method,
     credentials: 'same-origin',
-    headers: body ? { 'Content-Type': 'application/json' } : undefined,
-    body: body ? JSON.stringify(body) : undefined,
+    headers: body && !isForm ? { 'Content-Type': 'application/json' } : undefined,
+    body: isForm ? body : (body ? JSON.stringify(body) : undefined),
   });
 
   if (response.status === 401) {
@@ -629,15 +669,39 @@ export const base44 = {
     },
   ),
 
+  evidence: {
+    /* POST /evidence takes multipart: file, subject_type, subject_id. The bytes are hashed and stored in MinIO by the
+     * API, which is why the vault can then verify them. */
+    async upload(file, { subject_type = 'manual-upload', subject_id = null } = {}) {
+      const form = new FormData();
+      form.append('file', file);
+      form.append('subject_type', subject_type);
+      if (subject_id) form.append('subject_id', subject_id);
+      return request('/evidence', { method: 'POST', body: form });
+    },
+  },
+
   functions: {
     async invoke(name, payload) {
-      const route = FUNCTION_ROUTES[name];
-      if (!route) {
+      const declared = FUNCTION_ROUTES[name];
+      if (!declared) {
         unmapped.add(`fn:${name}`);
         throw new NotOnThisPlatform(name, 'Function', REFUSAL_REASONS[name]);
       }
+      const route = declared.byAction
+        ? (declared.byAction[payload && payload.action] || declared.default)
+        : declared;
+      if (!route || route === ABSENT) {
+        unmapped.add(`fn:${name}:${(payload && payload.action) || ''}`);
+        throw new NotOnThisPlatform(
+          name,
+          'Function',
+          REFUSAL_REASONS[`${name}:${payload && payload.action}`] || REFUSAL_REASONS[name],
+        );
+      }
       const outgoing = route.mapPayload ? route.mapPayload(payload) : (route.body || payload);
-      const data = await request(route.path, {
+      const path = typeof route.path === 'function' ? route.path(payload) : route.path;
+      const data = await request(path, {
         method: route.method || 'POST',
         body: route.method === 'GET' ? undefined : outgoing,
       });
