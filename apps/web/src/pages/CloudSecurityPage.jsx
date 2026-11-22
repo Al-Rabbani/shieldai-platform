@@ -5,6 +5,7 @@ import { buildLiveDataOverride } from "@/lib/liveDataOverride";
 import CloudFindingsTable from "@/components/cloud/CloudFindingsTable";
 import CIEMIdentityTable from "@/components/cloud/CIEMIdentityTable";
 import AttackSurfaceCards from "@/components/cloud/AttackSurfaceCards";
+import AttackSurfaceBasis from "@/components/cloud/AttackSurfaceBasis";
 import AIResponseModal from "@/components/shared/AIResponseModal";
 
 const TABS = [
@@ -108,7 +109,12 @@ export default function CloudSecurityPage() {
         <>
           {tab === "findings" && <CloudFindingsTable findings={cloudFindings} onRemediate={remediateFinding} />}
           {tab === "ciem" && <CIEMIdentityTable findings={ciemFindings} onRemediate={remediateIdentity} />}
-          {tab === "surface" && <AttackSurfaceCards assets={attackSurface} />}
+          {tab === "surface" && (
+            <>
+              <AttackSurfaceBasis />
+              <AttackSurfaceCards assets={attackSurface} />
+            </>
+          )}
         </>
       )}
 

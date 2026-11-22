@@ -66,6 +66,8 @@ const ENTITY_ROUTES = {
   CloudAccount: { path: '/cloud/connections' },
   Asset: { path: '/cloud/assets' },
   ASPMAsset: { path: '/cloud/assets' },
+  /* 145 cloud assets with real linked-finding counts and stated nulls where nothing was measured. */
+  AttackSurface: { path: '/cloud/attack-surface', summaryPath: '/cloud/attack-surface/summary' },
   ComplianceChecklistItem: { path: '/compliance/controls' },
   ComplianceFramework: { path: '/compliance/frameworks', summaryPath: '/compliance/frameworks' },
   /* Control-level verdicts from the assessment engine: 297 controls, each carrying its own pass/fail. */
