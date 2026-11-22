@@ -184,7 +184,7 @@ export default function CommandCenter() {
 
   return (
     <div className="min-h-screen p-4 space-y-4" style={{ background: "#0a0f1e" }}>
-      <GlobeHero risk={risk} activeIncident={incidents.find(i => !i.closed_at && i.status !== "resolved")} />
+      <GlobeHero risk={risk} activeIncident={incidents.find(i => !i.closed_at && i.status !== "resolved")} assets={assets} incidents={incidents} />
 
       <ExecutiveOverviewLink />
 
