@@ -25,7 +25,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy import String, Text, Integer, Boolean, ForeignKey
@@ -53,7 +53,12 @@ class RemediationPlan(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id"))
-    finding_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("findings.id"))
+    # Exactly one of these is set: finding_id for the governed register (uuid ids), security_finding_id for the
+    # scanner register (integer ids) that every finding the UI shows comes from.
+    finding_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("findings.id"), default=None)
+    security_finding_id: Mapped[int | None] = mapped_column(
+        ForeignKey("security_findings.id"), default=None
+    )
 
     # What type of fix
     remediation_type: Mapped[str] = mapped_column(String(50))
@@ -100,10 +105,48 @@ class RemediationPlan(Base):
 # ---------------------------------------------------------------------------
 
 
+class _ScannerFinding:
+    """A row of the scanner register, carrying real column values only. The generator reads source, title, severity,
+    cve, external_id, target, remediation and raw_data; nothing is synthesised for a field the row does not have."""
+
+    __slots__ = ("id", "source", "title", "severity", "status", "cve", "external_id", "target", "remediation", "raw_data")
+
+    def __init__(self, **row: Any) -> None:
+        for name in self.__slots__:
+            setattr(self, name, row.get(name))
+
+
+_SCANNER_FINDING_SQL = text("""
+    SELECT id, source, title, severity, status, cve, external_id, target, remediation, raw_data
+      FROM security_findings
+     WHERE id = :finding_id
+""")
+
+
+async def _load_scanner_finding(db: AsyncSession, finding_id: int) -> _ScannerFinding | None:
+    row = (await db.execute(_SCANNER_FINDING_SQL, {"finding_id": finding_id})).mappings().first()
+    return _ScannerFinding(**dict(row)) if row else None
+
+
+async def _load_finding(
+    db: AsyncSession,
+    *,
+    finding_id: uuid.UUID | None = None,
+    security_finding_id: int | None = None,
+) -> Finding | _ScannerFinding | None:
+    """Load from whichever register the id belongs to."""
+    if security_finding_id is not None:
+        return await _load_scanner_finding(db, security_finding_id)
+    if finding_id is not None:
+        return await db.get(Finding, finding_id)
+    return None
+
+
 async def generate_remediation_plan(
     db: AsyncSession,
     *,
-    finding_id: uuid.UUID,
+    finding_id: uuid.UUID | None = None,
+    security_finding_id: int | None = None,
     tenant_id: uuid.UUID,
 ) -> RemediationPlan:
     """Analyze a finding and generate a remediation plan.
@@ -119,9 +162,13 @@ async def generate_remediation_plan(
     includes the exact command. For cloud fixes, it generates the CLI command
     or terraform snippet.
     """
-    finding = await db.get(Finding, finding_id)
+    finding = await _load_finding(db, finding_id=finding_id, security_finding_id=security_finding_id)
     if finding is None:
-        raise ValueError(f"Finding {finding_id} not found")
+        raise ValueError(
+            f"Finding {security_finding_id if security_finding_id is not None else finding_id} not found"
+        )
+    # Only the governed register has a lifecycle to advance. Scanner rows keep their own vocabulary.
+    governed = isinstance(finding, Finding)
 
     # Determine remediation type based on finding source
     source = finding.source
@@ -276,6 +323,7 @@ async def generate_remediation_plan(
     plan = RemediationPlan(
         tenant_id=tenant_id,
         finding_id=finding_id,
+        security_finding_id=security_finding_id,
         remediation_type=remediation_type,
         fix_description=fix_description,
         fix_steps=fix_steps,
@@ -287,16 +335,17 @@ async def generate_remediation_plan(
 
     db.add(plan)
 
-    # Move finding to remediation_planned
-    validate_finding_transition(finding.status, FindingStatus.REMEDIATION_PLANNED.value)
-    finding.status = FindingStatus.REMEDIATION_PLANNED.value
+    # Move finding to remediation_planned — governed register only.
+    if governed:
+        validate_finding_transition(finding.status, FindingStatus.REMEDIATION_PLANNED.value)
+        finding.status = FindingStatus.REMEDIATION_PLANNED.value
 
     await db.commit()
     await db.refresh(plan)
 
     _logger.info(
         "remediation_plan_generated",
-        finding_id=str(finding_id),
+        finding_id=str(security_finding_id if security_finding_id is not None else finding_id),
         remediation_type=remediation_type,
         auto_fixable=auto_fixable,
     )
@@ -323,15 +372,19 @@ async def execute_remediation_plan(
     if plan is None:
         raise ValueError(f"RemediationPlan {plan_id} not found")
 
-    finding = await db.get(Finding, plan.finding_id)
+    finding = await _load_finding(
+        db, finding_id=plan.finding_id, security_finding_id=plan.security_finding_id
+    )
     if finding is None:
-        raise ValueError(f"Finding {plan.finding_id} not found")
+        raise ValueError(f"Finding for plan {plan.id} not found")
+    governed = isinstance(finding, Finding)
 
     result: dict[str, Any] = {"executed": False, "verification_needed": True}
 
-    # Move finding to remediation_in_progress
-    validate_finding_transition(finding.status, FindingStatus.REMEDIATION_IN_PROGRESS.value)
-    finding.status = FindingStatus.REMEDIATION_IN_PROGRESS.value
+    # Move finding to remediation_in_progress — governed register only.
+    if governed:
+        validate_finding_transition(finding.status, FindingStatus.REMEDIATION_IN_PROGRESS.value)
+        finding.status = FindingStatus.REMEDIATION_IN_PROGRESS.value
     plan.status = "in_progress"
     plan.executed_by = str(user_id)
     plan.executed_at = datetime.now(UTC)
@@ -367,9 +420,10 @@ async def execute_remediation_plan(
     plan.execution_result = result
 
     if result["executed"]:
-        # Move to awaiting_retest
-        validate_finding_transition(finding.status, FindingStatus.AWAITING_RETEST.value)
-        finding.status = FindingStatus.AWAITING_RETEST.value
+        # Move to awaiting_retest — governed register only.
+        if governed:
+            validate_finding_transition(finding.status, FindingStatus.AWAITING_RETEST.value)
+            finding.status = FindingStatus.AWAITING_RETEST.value
         plan.status = "awaiting_verification"
     else:
         plan.status = "in_progress"  # waiting for manual action
@@ -401,9 +455,12 @@ async def verify_remediation(
     if plan is None:
         raise ValueError(f"RemediationPlan {plan_id} not found")
 
-    finding = await db.get(Finding, plan.finding_id)
+    finding = await _load_finding(
+        db, finding_id=plan.finding_id, security_finding_id=plan.security_finding_id
+    )
     if finding is None:
-        raise ValueError(f"Finding {plan.finding_id} not found")
+        raise ValueError(f"Finding for plan {plan.id} not found")
+    governed = isinstance(finding, Finding)
 
     # Re-run the original check that found this finding
     verification_passed = False
@@ -466,12 +523,14 @@ async def verify_remediation(
     plan.verified_by = str(user_id)
 
     if verification_passed:
-        validate_finding_transition(finding.status, FindingStatus.REMEDIATED.value)
-        finding.status = FindingStatus.REMEDIATED.value
+        if governed:
+            validate_finding_transition(finding.status, FindingStatus.REMEDIATED.value)
+            finding.status = FindingStatus.REMEDIATED.value
         plan.status = "verified"
     else:
-        validate_finding_transition(finding.status, FindingStatus.RETEST_FAILED.value)
-        finding.status = FindingStatus.RETEST_FAILED.value
+        if governed:
+            validate_finding_transition(finding.status, FindingStatus.RETEST_FAILED.value)
+            finding.status = FindingStatus.RETEST_FAILED.value
         plan.status = "failed"
 
     await db.commit()
@@ -516,7 +575,22 @@ class RemediationPlanOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+def parse_finding_reference(raw: str) -> tuple[int | None, uuid.UUID | None]:
+    """Map a caller's finding id onto the register it belongs to.
+
+    The platform has two finding registers: security_findings (integer ids, the scanner register every finding in the
+    UI comes from) and findings (uuid ids, the governed register). Guessing is not allowed, so a value that is neither
+    raises instead of being coerced - which is exactly what uuid.UUID() did to real ids, turning every request into a
+    404 "badly formed hexadecimal UUID string".
+    """
+    value = (raw or "").strip()
+    if value.isdigit():
+        return int(value), None
+    return None, uuid.UUID(value)  # raises ValueError for anything that is not a uuid
+
+
 class GeneratePlanRequest(BaseModel):
+    # Either register: an integer id from security_findings (what the UI shows) or a uuid from findings.
     finding_id: str
 
 
@@ -536,9 +610,17 @@ async def api_generate_plan(
 ) -> RemediationPlan:
     """Generate a remediation plan for a finding."""
     try:
+        scanner_id, governed_id = parse_finding_reference(req.finding_id)
+    except ValueError:
+        raise HTTPException(
+            http_status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "finding_id must be an integer id from the scanner register or a uuid from the governed register",
+        )
+    try:
         plan = await generate_remediation_plan(
             db,
-            finding_id=uuid.UUID(req.finding_id),
+            finding_id=governed_id,
+            security_finding_id=scanner_id,
             tenant_id=current_user.tenant_id,
         )
         return plan
