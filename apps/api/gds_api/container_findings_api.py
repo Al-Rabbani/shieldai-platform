@@ -103,6 +103,22 @@ _SUMMARY_SQL = """
        AND source = :source
 """
 
+_IMAGES_SQL = """
+    SELECT raw_data->>'image' AS image,
+           count(*) AS total_findings,
+           count(*) FILTER (WHERE severity = 'critical') AS critical_count,
+           count(*) FILTER (WHERE severity = 'high') AS high_count,
+           count(*) FILTER (WHERE severity = 'medium') AS medium_count,
+           count(*) FILTER (WHERE severity = 'low') AS low_count,
+           max(created_at) AS last_seen
+      FROM findings
+     WHERE tenant_id = :tenant_id
+       AND source = :source
+       AND raw_data->>'image' IS NOT NULL
+     GROUP BY 1
+     ORDER BY 3 DESC, 2 DESC, 1
+"""
+
 _BY_IMAGE_SQL = """
     SELECT raw_data->>'image' AS image,
            count(*) AS total,
@@ -213,3 +229,26 @@ async def container_findings_summary(
         "newest": newest.isoformat() if isinstance(newest, datetime) else newest,
         "by_image": by_image,
     }
+
+@router.get("/images")
+async def container_images(
+    current_user: CurrentUser = Depends(require_permission("cloud:findings:read")),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """The scanned image estate, aggregated from the findings themselves - one row per image, not a page."""
+    params = {"tenant_id": current_user.tenant_id, "source": CONTAINER_SOURCE}
+    images = []
+    for r in await db.execute(text(_IMAGES_SQL), params):
+        m = r._mapping
+        last_seen = m["last_seen"]
+        images.append({
+            "id": m["image"],
+            "image": m["image"],
+            "total_findings": m["total_findings"],
+            "critical_count": m["critical_count"],
+            "high_count": m["high_count"],
+            "medium_count": m["medium_count"],
+            "low_count": m["low_count"],
+            "last_seen": last_seen.isoformat() if isinstance(last_seen, datetime) else last_seen,
+        })
+    return {"count": len(images), "images": images}

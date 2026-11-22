@@ -21,7 +21,10 @@ export default function ContainerSecurityPage() {
       base44.entities.ContainerFinding.list("-cvss_score", 200).catch(() => []),
       base44.entities.ContainerScan.list("-scanned_at", 20).catch(() => []),
     ]);
-    setFindings(f.filter(x => x.status === "open"));
+    /* The platform stores a newly detected finding as "observed"; nothing is stored as "open".
+       Active means any state before resolution, so resolved/accepted-risk/false-positive drop out. */
+    const ACTIVE = new Set(["observed", "open", "triaged", "in_progress", "investigating", "confirmed"]);
+    setFindings(f.filter((x) => ACTIVE.has(String(x.status || "").toLowerCase())));
     setScans(s);
     setLoading(false);
   }, []);

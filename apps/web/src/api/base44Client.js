@@ -61,6 +61,8 @@ const ENTITY_ROUTES = {
   CloudFinding: { path: '/cloud/findings' },
   /* 314 container CVEs exist in `findings` (source trivy_container); this is the route that serves them. */
   ContainerFinding: { path: '/containers/findings', summaryPath: '/containers/summary' },
+  /* The scanned image estate, aggregated from the container findings by image. */
+  ContainerScan: { path: '/containers/images' },
   CloudAccount: { path: '/cloud/connections' },
   Asset: { path: '/cloud/assets' },
   ASPMAsset: { path: '/cloud/assets' },
