@@ -130,7 +130,15 @@ export default function CommandCenter() {
   const cloudCritical = openCloud.filter(f => f.severity === "critical");
   const openTriaged = triagedFindings.filter(f => f.status === "open");
   const criticalTriaged = openTriaged.filter(f => f.normalized_severity === "critical" || f.severity === "critical");
-  const complianceAvg = frameworks.length ? Math.round(frameworks.reduce((s, f) => s + (f.score || 0), 0) / frameworks.length) : 0;
+  // One compliance number on this page. The tile used to read the platform's basis (103 of 126 assessed =
+  // 81.7%) while the feature row beside it averaged the per-framework pass rates (69%), so the same screen
+  // answered the same question twice with different numbers. The platform's stated basis wins; the unweighted
+  // mean is only a fallback, and null means "not measured" rather than zero.
+  const complianceAvg = complianceSummary
+    ? Math.round(complianceSummary.score_over_assessed)
+    : (frameworks.length
+        ? Math.round(frameworks.reduce((s, f) => s + (f.score || 0), 0) / frameworks.length)
+        : null);
   const openIncidents = incidents.filter(i => ["open", "investigating"].includes(i.status));
   const investigatingIncident = incidents.find(i => i.status === "investigating");
   const gdprIncident = incidents.find(i => i.status === "investigating" && i.title?.toLowerCase().includes("lockbit"));
@@ -209,7 +217,7 @@ export default function CommandCenter() {
       {/* Row 2 */}
       <div className="grid grid-cols-3 gap-4">
         <StatTile label="Active Incidents" value={openIncidents.length} danger={openIncidents.length > 0} pulse={openIncidents.length > 0} />
-        <StatTile label="Compliance Avg" value={complianceSummary ? `${complianceSummary.score_over_assessed}%` : "—"} subtext={`${complianceSummary?.frameworks?.length ?? frameworks.length} frameworks`} danger={(complianceSummary?.score_over_assessed ?? 100) < 50} />
+        <StatTile label="Compliance Avg" value={complianceAvg == null ? "—" : `${complianceAvg}%`} subtext={`${complianceSummary?.frameworks?.length ?? frameworks.length} frameworks`} danger={complianceAvg != null && complianceAvg < 50} />
         <StatTile label="KEV Unpatched" value={risk?.kev_unpatched ?? 0} danger />
       </div>
 
