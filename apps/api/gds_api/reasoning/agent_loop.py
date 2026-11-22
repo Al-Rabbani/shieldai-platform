@@ -96,7 +96,7 @@ class AgenticLoop:
     MODEL = "gpt-4.1"
     
     def __init__(self, agent_id: str, model: str = None, *, tenant_id=None, user_id=None,
-                 mission_id=None):
+                 mission_id=None, allow_writes: bool = True):
         self.agent_id = agent_id
         self.model = model or self.MODEL
         # Governed execution context, carried explicitly. The loop cannot invent a tenant, a user or a
@@ -108,6 +108,8 @@ class AgenticLoop:
         self.tool_registry = TOOL_REGISTRY
         self.execute_tool_fn = execute_tool
         self.get_prompt = get_agent_prompt
+        # A read-only mission is offered no mutating tool at all, so it cannot write to the estate by choosing one.
+        self.allow_writes = allow_writes
         self.get_tools = get_tool_definitions
         self.get_tool_names = get_tool_names
         
@@ -140,7 +142,10 @@ analyze them and decide the next step. When done, provide a summary.
         ]
         
         tools = self.get_tools(self.agent_id)
-        tool_names = self.get_tool_names(self.agent_id)
+        if not self.allow_writes:
+            from gds_api.reasoning.tool_definitions import read_only_tools
+            tools = read_only_tools(tools)
+        tool_names = [t["function"]["name"] for t in tools]
         
         logger.info(f"Agent {self.agent_id} starting: {goal[:100]}")
         logger.info(f"Available tools: {tool_names}")

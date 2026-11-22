@@ -40,6 +40,8 @@ class MissionRequest(BaseModel):
     goal: str
     agent_id: Optional[str] = None  # If null, auto-select
     context: Optional[dict] = None
+    # Read-only unless the caller asks otherwise: a page that explains a finding must not be able to write one.
+    allow_writes: bool = False
 
 
 def _uid(user: CurrentUser) -> str:
@@ -90,10 +92,12 @@ async def create_mission(req: MissionRequest, request: Request, user: CurrentUse
     try:
         if req.agent_id:
             result = await reasoning_bridge.execute_task(
-                req.agent_id, req.goal, req.context, tenant_id=tid, user_id=_uid(user))
+                req.agent_id, req.goal, req.context, tenant_id=tid, user_id=_uid(user),
+                allow_writes=req.allow_writes)
         else:
             result = await reasoning_bridge.run_with_auto_select(
-                req.goal, req.context, tenant_id=tid, user_id=_uid(user))
+                req.goal, req.context, tenant_id=tid, user_id=_uid(user),
+                allow_writes=req.allow_writes)
 
         return {
             "success": result.success,

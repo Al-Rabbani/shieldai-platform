@@ -45,6 +45,16 @@ def reachable_tool_names(agent_id: str) -> set[str]:
     return {reverse.get(tool, tool) for tool in canonical}
 
 
+# Tools that change the estate. A read-only mission must not be offered them: the model cannot choose a tool it was
+# never shown, which is stronger than asking it in a prompt to behave.
+WRITE_TOOL_NAMES = frozenset({"store_finding", "discover_cloud_environment"})
+
+
+def read_only_tools(tools: list[dict]) -> list[dict]:
+    """Drop the mutating tools from a tool list, leaving everything that only reads or scans."""
+    return [t for t in tools if t.get("function", {}).get("name") not in WRITE_TOOL_NAMES]
+
+
 def get_tool_definitions(agent_id: str = None) -> list[dict]:
     """Get tool definitions for an agent. If agent_id is provided,
     return only the tools that agent can actually execute."""

@@ -38,7 +38,8 @@ class ReasoningBridge:
         self.mission_tenants = {}
     
     async def execute_task(self, agent_id: str, goal: str, context: dict = None,
-                          tenant_id: str = None, user_id: str = None) -> AgentResult:
+                          tenant_id: str = None, user_id: str = None,
+                          allow_writes: bool = True) -> AgentResult:
         """Execute a task using the LLM reasoning loop.
         
         Args:
@@ -59,7 +60,7 @@ class ReasoningBridge:
                 tenant_id=tenant_id, user_id=user_id, goal=goal, agent_id=agent_id)
 
         loop = AgenticLoop(agent_id=agent_id, tenant_id=tenant_id, user_id=user_id,
-                           mission_id=mission_uuid)
+                           mission_id=mission_uuid, allow_writes=allow_writes)
         
         try:
             result = await loop.run(goal, context)
@@ -142,10 +143,12 @@ class ReasoningBridge:
         return agent_id
     
     async def run_with_auto_select(self, goal: str, context: dict = None,
-                                   tenant_id: str = None, user_id: str = None) -> AgentResult:
+                                   tenant_id: str = None, user_id: str = None,
+                                   allow_writes: bool = True) -> AgentResult:
         """Auto-select the best agent and execute the goal."""
         agent_id = await self.auto_select_agent(goal)
-        return await self.execute_task(agent_id, goal, context, tenant_id=tenant_id, user_id=user_id)
+        return await self.execute_task(agent_id, goal, context, tenant_id=tenant_id, user_id=user_id,
+                                       allow_writes=allow_writes)
     
     def get_mission_status(self, mission_id: str, tenant_id: str = None) -> dict:
         """Get status of a mission owned by tenant_id.
