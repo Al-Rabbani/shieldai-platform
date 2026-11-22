@@ -328,6 +328,35 @@ async def me(
         ),
     )
 
+@router.get("/mfa/status")
+async def mfa_status(
+    current_user=Depends(get_current_user), db: AsyncSession = Depends(get_db)
+) -> dict:
+    """Whether a second factor is on, and how many recovery codes are left.
+
+    The secret and the codes themselves are never returned here: the enrol response shows them once and this
+    route exists so a settings screen can say what is true without holding them.
+    """
+    uid, tid = current_user.user_id, current_user.tenant_id
+    await db.execute(text("SELECT set_config('gds.tenant_id', :t, false)"), {"t": str(tid)})
+    row = (await db.execute(
+        text("SELECT mfa_enabled, mfa_enrolled_at, mfa_secret IS NOT NULL FROM users WHERE id = :u"),
+        {"u": str(uid)},
+    )).first()
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Account not found")
+    remaining = (await db.execute(
+        text("SELECT count(*) FROM mfa_recovery_codes WHERE user_id = :u AND used_at IS NULL"),
+        {"u": str(uid)},
+    )).scalar()
+    return {
+        "mfa_enabled": bool(row[0]),
+        "enrolled_at": row[1].isoformat() if row[1] else None,
+        "enrolment_in_progress": bool(row[2]) and not bool(row[0]),
+        "recovery_codes_remaining": int(remaining or 0),
+    }
+
+
 @router.post("/mfa/enrol")
 async def mfa_enrol(
     current_user=Depends(get_current_user), db: AsyncSession = Depends(get_db)
