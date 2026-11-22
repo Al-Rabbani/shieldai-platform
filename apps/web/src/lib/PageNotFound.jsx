@@ -5,7 +5,7 @@ import { Shield } from "lucide-react";
 const GOLD = "#C9A84C";
 
 export default function PageNotFound() {
-  useEffect(() => { document.title = "ShieldAI | Page Not Found"; }, []);
+  useEffect(() => { document.title = "GDSA Radar — Page Not Found"; }, []);
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-8 text-center" style={{ background: "#0A0E1A" }}>
@@ -29,7 +29,7 @@ export default function PageNotFound() {
             style={{ borderColor: "#374151" }}>Go Back</button>
         </div>
       </div>
-      <div className="fu mt-12 text-[10px] text-slate-700" style={{ animationDelay: "200ms" }}>ShieldAI Sovereign Platform v2.0</div>
+      <div className="fu mt-12 text-[10px] text-slate-700" style={{ animationDelay: "200ms" }}>GDSA Radar — The Agentic AI Security Operating System</div>
     </div>
   );
 }

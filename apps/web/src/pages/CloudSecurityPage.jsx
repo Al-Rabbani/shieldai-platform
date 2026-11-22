@@ -27,16 +27,21 @@ export default function CloudSecurityPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [cloud, ciem, surface, acc] = await Promise.all([
+    const [cloud, ciem, surface, acc, summary] = await Promise.all([
       base44.entities.CloudFinding.list("-detected_at", 500).catch(() => []),
       base44.entities.CIEMFinding.list("-detected_at", 100).catch(() => []),
       base44.entities.AttackSurface.list("-last_seen", 20).catch(() => []),
       base44.entities.CloudAccount.list("-created_date", 10).catch(() => []),
+      base44.entities.AttackSurface.summary().catch(() => null),
     ]);
-    setCloudFindings(cloud.filter(f => f.status === "open"));
-    setCiemFindings(ciem.filter(f => f.status === "open"));
+    /* Nothing is ever stored as "open": a new finding is 'observed' and moves through triaged -> in_progress
+       -> resolved/accepted_risk/false_positive. Filtering on "open" turned three real cloud findings into zero. */
+    const ACTIVE = new Set(["observed", "open", "new", "triaged", "in_progress", "reopened"]);
+    setCloudFindings(cloud.filter(f => ACTIVE.has(String(f.status || "").toLowerCase())));
+    setCiemFindings(ciem.filter(f => ACTIVE.has(String(f.status || "").toLowerCase())));
     setAttackSurface(surface);
     setAccounts(acc);
+    setSurfaceSummary(summary);
     setLoading(false);
   }, []);
 
@@ -44,7 +49,10 @@ export default function CloudSecurityPage() {
 
   const critical = cloudFindings.filter(f => f.severity === "critical").length;
   const high = cloudFindings.filter(f => f.severity === "high").length;
-  const internetFacing = attackSurface.filter(a => a.is_internet_facing).length;
+  /* The grid shows 20 cards; the estate is 145 assets. Counting the page is how a tile reports 0 while 73
+     assets are measured internet-facing, so this reads /cloud/attack-surface/summary instead. */
+  const [surfaceSummary, setSurfaceSummary] = useState(null);
+  const internetFacing = surfaceSummary ? surfaceSummary.with_known_exposure : null;
 
   async function remediateFinding(f) {
     setModalTitle(`AWS CLI Remediation — ${f.title}`);
@@ -88,7 +96,7 @@ export default function CloudSecurityPage() {
           { label: "Critical", value: critical, color: "text-red-400" },
           { label: "High", value: high, color: "text-orange-400" },
           { label: "CIEM Findings", value: ciemFindings.length, color: "text-white" },
-          { label: "Internet-Facing Assets", value: internetFacing, color: internetFacing > 0 ? "text-red-400" : "text-emerald-400" },
+          { label: "Internet-Facing Assets", value: internetFacing === null ? "—" : internetFacing, color: internetFacing === null ? "text-slate-500" : internetFacing > 0 ? "text-red-400" : "text-emerald-400" },
         ].map((t, i) => (
           <div key={i} className="rounded-xl p-3 text-center" style={{ background: "#111827", border: "1px solid #1F2937" }}>
             <p className={`text-2xl font-bold ${t.color}`}>{t.value}</p>
