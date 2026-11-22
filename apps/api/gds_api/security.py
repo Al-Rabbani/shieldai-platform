@@ -172,6 +172,12 @@ async def authenticate_api_key(request: Request, db: AsyncSession) -> CurrentUse
         _sql("UPDATE api_keys SET last_used_at = now() WHERE id = :kid"), {"kid": str(key_id)}
     )
     await db.commit()
+    # The commit above ends this request's connection (NullPool), which discards every GUC set on it.
+    # Anything later in the same request - the audit row a permission denial writes, for one - would
+    # then run unbound and fail RLS. Re-bind the tenant so downstream statements stay scoped.
+    await db.execute(
+        _sql("SELECT set_config('gds.tenant_id', :tid, false)"), {"tid": str(tenant_id)}
+    )
 
     return CurrentUser(
         user_id=created_by if created_by is not None else key_id,
