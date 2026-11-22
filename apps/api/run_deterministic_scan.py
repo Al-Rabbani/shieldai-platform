@@ -27,7 +27,9 @@ from datetime import datetime, timezone
 TENANT_SQL = "SELECT id FROM tenants WHERE slug = 'gds'"
 
 TARGETS_HTTP = [
-    "https://api.globaldigitalsecurity.io",
+    # /health, not the host root: the root has no route and answers 404, which made every run record
+    # nothing for this host (30 of 30 runs in the rotated log). /health is public and always routable.
+    "https://api.globaldigitalsecurity.io/health",
     "https://app.globaldigitalsecurity.io",
 ]
 
