@@ -108,12 +108,18 @@ async def list_drift(
     db: AsyncSession = Depends(get_db),
 ) -> list[DriftOut]:
     """Drift rows, newest first. Filtering by status happens here so a caller does not page the whole table."""
+    # The predicate is assembled rather than written as ":status IS NULL OR status = :status": a parameter that only
+    # appears in a null test gives asyncpg nothing to type, and the route answered 500 before this was measured.
+    where = "tenant_id = :t"
+    params: dict = {"t": current_user.tenant_id, "limit": min(max(limit, 1), 1000)}
+    if status_filter:
+        where += " AND status = :status"
+        params["status"] = status_filter
     rows = (await db.execute(text(
         "SELECT id, asset, setting_key, drift_type, severity, expected_value, actual_value, status, "
         "auto_correctable, risk_score, detected_at, corrected_at FROM configuration_drift "
-        "WHERE tenant_id = :t AND (:status IS NULL OR status = :status) "
-        "ORDER BY detected_at DESC LIMIT :limit"
-    ), {"t": current_user.tenant_id, "status": status_filter, "limit": min(max(limit, 1), 1000)})).mappings().all()
+        f"WHERE {where} ORDER BY detected_at DESC LIMIT :limit"
+    ), params)).mappings().all()
     return [DriftOut(**dict(r)) for r in rows]
 
 
@@ -187,15 +193,16 @@ async def _save_drift_config(payload: DriftConfigIn, current_user, db: AsyncSess
     if row is None:
         await db.execute(text(
             "INSERT INTO drift_alert_configs (tenant_id, is_enabled, asset_types, severities, auto_fix_enabled, updated_by) "
-            "VALUES (:t, COALESCE(:enabled, true), COALESCE(:types, '{}'), COALESCE(:sevs, '{critical}'), "
-            "COALESCE(:auto, false), :by)"
+            "VALUES (:t, COALESCE(CAST(:enabled AS boolean), true), COALESCE(CAST(:types AS text[]), '{}'), "
+            "COALESCE(CAST(:sevs AS text[]), '{critical}'), COALESCE(CAST(:auto AS boolean), false), :by)"
         ), {"t": current_user.tenant_id, "enabled": values["is_enabled"], "types": values["asset_types"] or [],
             "sevs": values["severities"] or [], "auto": values["auto_fix_enabled"], "by": values["updated_by"]})
     else:
         await db.execute(text(
-            "UPDATE drift_alert_configs SET is_enabled = COALESCE(:enabled, is_enabled), "
-            "asset_types = COALESCE(:types, asset_types), severities = COALESCE(:sevs, severities), "
-            "auto_fix_enabled = COALESCE(:auto, auto_fix_enabled), updated_by = :by, updated_at = now() "
+            "UPDATE drift_alert_configs SET is_enabled = COALESCE(CAST(:enabled AS boolean), is_enabled), "
+            "asset_types = COALESCE(CAST(:types AS text[]), asset_types), "
+            "severities = COALESCE(CAST(:sevs AS text[]), severities), "
+            "auto_fix_enabled = COALESCE(CAST(:auto AS boolean), auto_fix_enabled), updated_by = :by, updated_at = now() "
             "WHERE tenant_id = :t AND id = :id"
         ), {"enabled": values["is_enabled"], "types": values["asset_types"], "sevs": values["severities"],
             "auto": values["auto_fix_enabled"], "by": values["updated_by"], "t": current_user.tenant_id,
@@ -239,7 +246,7 @@ async def list_runtime_posture(
         "SELECT id, container_name, posture_violations, mitre_technique, severity, container_id, host, image, state, "
         "privileged, host_network, host_pid, host_ipc, read_only_rootfs, user_account, caps_added, mounts_count, "
         "risk_score, collected_at FROM runtime_posture WHERE tenant_id = :t "
-        "AND (:only_violations = false OR jsonb_array_length(posture_violations) > 0) "
+        "AND (CAST(:only_violations AS boolean) = false OR jsonb_array_length(posture_violations) > 0) "
         "ORDER BY risk_score DESC, container_name LIMIT :limit"
     ), {"t": current_user.tenant_id, "only_violations": only_violations,
         "limit": min(max(limit, 1), 500)})).mappings().all()
