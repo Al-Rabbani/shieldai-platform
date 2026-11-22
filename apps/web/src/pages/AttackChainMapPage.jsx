@@ -71,6 +71,14 @@ export default function AttackChainMapPage() {
   }, [graph]);
 
   const exposure = useMemo(() => describeExposure(graph), [graph]);
+
+  /* Graph nodes are distinct asset names. When the inventory holds more rows than names, say so rather than letting
+   * 129 read as the size of the estate. */
+  const nodeBasis = useMemo(() => {
+    if (!assets.length) return null;
+    if (assets.length === exposure.totalCount) return null;
+    return `${exposure.totalCount} distinct asset names from ${assets.length} inventory rows`;
+  }, [assets, exposure]);
   const worst = chains[0] || null;
 
   if (loading) {
@@ -89,7 +97,8 @@ export default function AttackChainMapPage() {
           <div>
             <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-red-500/15 text-red-300 border border-red-500/30">ATK-009 | ATTACK CHAINS</span>
             <h1 className="text-xl font-bold text-white mt-1">Most exposed assets — attack chains</h1>
-            <p className="text-xs text-slate-500">Entry point → vulnerable asset → deepest reachable hop, ranked by worst open finding.</p>
+            <p className="text-xs text-slate-500">Entry point → vulnerable asset → deepest reachable hop, ranked by worst open finding.
+          {nodeBasis ? <span className="block mt-1 text-[11px] text-slate-500">{nodeBasis}</span> : null}</p>
           </div>
         </div>
         <Link to="/attack-simulator" className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold bg-blue-500/15 text-blue-300 border border-blue-500/30 hover:bg-blue-500/25 transition">
