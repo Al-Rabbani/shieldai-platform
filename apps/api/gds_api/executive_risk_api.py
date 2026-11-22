@@ -113,6 +113,8 @@ SELECT
                      AND detected_at < now() - make_interval(days => :stale_days)) AS stale,
   count(*) FILTER (WHERE detected_at >= now() - interval '7 days')               AS new_7d,
   count(*) FILTER (WHERE resolved_at >= now() - interval '7 days')               AS resolved_7d,
+  count(*) FILTER (WHERE status = 'accepted_risk')                                AS accepted_risk,
+  count(*) FILTER (WHERE status = 'accepted_risk' AND severity = 'critical')      AS accepted_critical,
   count(*)                                                                       AS total,
   round(avg(extract(epoch FROM now() - detected_at) / 86400.0)
           FILTER (WHERE status = 'open')::numeric, 1)                            AS mean_age_days
@@ -175,6 +177,16 @@ async def executive_risk_score(
         "definition": {
             "open": "security_findings.status = 'open', the same definition the alert job uses",
             "score": "100 minus the penalties below, plus a freshness bonus, floored at 0 and capped at 100",
+            "excluded_from_score": (
+                "Findings with status accepted_risk are counted in counts.accepted_risk and "
+                "counts.accepted_critical but do not affect the score, because they were accepted "
+                "deliberately. They are reported so the score cannot quietly hide them."
+            ),
+            "trend_caveat": (
+                "trend compares every finding detected in the last 7 days against every one resolved, "
+                "including re-detections by a scheduled rescan. A bulk rescan therefore reads as "
+                "worsening even when the estate did not change."
+            ),
         },
     }
 
