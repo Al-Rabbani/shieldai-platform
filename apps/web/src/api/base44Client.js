@@ -123,6 +123,41 @@ const ENTITY_ROUTES = {
 const FUNCTION_ROUTES = {
   // Linear is ported and proved against the live workspace; this is its sync action.
   gdsLinearSync: { path: '/integrations/linear', method: 'POST', body: { action: 'sync' } },
+  /* The Co-Pilot chat. POST /reasoning/mission runs the real reasoning loop and is guarded by ai_guard, so an injected
+   * instruction comes back 422 prompt_guard_refused instead of reaching a model. The engine returns summary, agent_id,
+   * tool_calls and duration_ms; the page renders response, agent_steps and agents_count, so the mapping is explicit here
+   * rather than invented in the component. */
+  gdsAgentOS: {
+    path: '/reasoning/mission',
+    method: 'POST',
+    mapPayload: (payload = {}) => {
+      const goal = payload.goal || payload.input || payload.task || '';
+      return {
+        goal,
+        ...(payload.agent_id ? { agent_id: payload.agent_id } : {}),
+        context: { command_type: payload.command_type || null, priority: payload.priority || null },
+      };
+    },
+    mapResponse: (data = {}) => ({
+      success: data.success,
+      response: data.summary || (data.error ? `Mission failed: ${data.error}` : ''),
+      agent_id: data.agent_id || null,
+      agents_used: data.agent_id ? [data.agent_id] : [],
+      agents_count: data.agent_id ? 1 : 0,
+      agent_steps: (data.tool_calls || []).map((call) => ({
+        agent: call.tool,
+        emoji: '🔧',
+        color: '#3b82f6',
+        duration_ms: call.duration_ms,
+        output: typeof call.result === 'string' ? call.result : JSON.stringify(call.result, null, 2),
+      })),
+      total_duration_ms: data.duration_ms,
+      iterations: data.iterations,
+      /* The engine returns no mission id, so none is claimed. */
+      mission_id: null,
+      error: data.error || null,
+    }),
+  },
   gdsKernelGateway: { path: '/kernel/processes', method: 'GET' },
   gdsRabbaniBridge: { path: '/bridge/health', method: 'GET' },
 };
@@ -510,10 +545,12 @@ export const base44 = {
         unmapped.add(`fn:${name}`);
         throw new NotOnThisPlatform(name, 'Function');
       }
-      return request(route.path, {
+      const outgoing = route.mapPayload ? route.mapPayload(payload) : (route.body || payload);
+      const data = await request(route.path, {
         method: route.method || 'POST',
-        body: route.method === 'GET' ? undefined : route.body || payload,
+        body: route.method === 'GET' ? undefined : outgoing,
       });
+      return route.mapResponse ? route.mapResponse(data) : data;
     },
   },
 

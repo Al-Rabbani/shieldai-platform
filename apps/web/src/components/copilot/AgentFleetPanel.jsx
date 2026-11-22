@@ -60,6 +60,7 @@ export default function AgentFleetPanel({ selectedAgent, onSelectAgent }) {
             <FleetAgentCard
               key={agent.stable_key || agent.name}
               agent={{
+                key: agent.stable_key,
                 name: agent.display_name || agent.name,
                 role: role?.capability_evidence || agent.team,
                 risk_level: agent.risk_ceiling,

@@ -57,11 +57,12 @@ export default function GDSCoPilotPage() {
 
     try {
       const result = await invokeAction("gdsAgentOS", {
-        action: commandType === "code_generation" ? "generate_code" : "command",
-        ...(commandType === "code_generation"
-          ? { task: userInput, code_type: "aws_cli" }
-          : { input: userInput, command_type: commandType, priority, agent_key: selectedAgent ? agentNameToKey(selectedAgent) : undefined }),
-      });
+      goal: userInput,
+      command_type: commandType,
+      priority,
+      /* The fleet panel selects by the registry's stable_key, which is the id the engine accepts. */
+      agent_id: selectedAgent || undefined,
+    });
 
       setMessages(prev => [...prev, {
         role: "assistant",
@@ -102,7 +103,7 @@ export default function GDSCoPilotPage() {
 
         <div className="flex-1 overflow-y-auto flex flex-col px-4 py-4">
           {messages.length === 0 ? (
-            <WelcomeState onSelect={(c) => sendMessage(c.label, c.command_type)} />
+            <WelcomeState onSelect={(c) => sendMessage(c.prompt || c.label, c.command_type)} />
           ) : (
             <>
               {messages.map((m, i) => (
@@ -122,7 +123,7 @@ export default function GDSCoPilotPage() {
           selectedAgent={selectedAgent}
           priority={priority}
           setPriority={setPriority}
-          onQuickAction={(a) => sendMessage(a.input, a.command_type)}
+          onQuickAction={(a) => sendMessage(a.prompt || a.input || a.label, a.command_type)}
         />
       </div>
 

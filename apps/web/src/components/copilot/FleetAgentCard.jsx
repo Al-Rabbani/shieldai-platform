@@ -17,7 +17,7 @@ export default function FleetAgentCard({ agent, selected, onSelect }) {
   const dot = HEARTBEAT_COLORS[agent.heartbeat_state] || HEARTBEAT_COLORS.never;
   return (
     <button
-      onClick={() => onSelect(agent.name)}
+      onClick={() => onSelect(agent.key || agent.name)}
       className="w-full flex items-center gap-2 p-2 rounded-lg text-left transition mb-1.5"
       style={{ background: selected ? "#1e3a5f" : "#0d1428", borderLeft: `3px solid ${color}` }}
     >
