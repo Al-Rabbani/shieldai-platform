@@ -110,7 +110,7 @@ SELECT
   count(*) FILTER (WHERE status = 'open' AND epss >= :high_epss)                 AS high_epss,
   count(*) FILTER (WHERE status = 'open' AND exposure ILIKE '%internet%')        AS internet_exposed,
   count(*) FILTER (WHERE status = 'open'
-                     AND detected_at < now() - (:stale_days || ' days')::interval) AS stale,
+                     AND detected_at < now() - make_interval(days => :stale_days)) AS stale,
   count(*) FILTER (WHERE detected_at >= now() - interval '7 days')               AS new_7d,
   count(*) FILTER (WHERE resolved_at >= now() - interval '7 days')               AS resolved_7d,
   count(*)                                                                       AS total,
