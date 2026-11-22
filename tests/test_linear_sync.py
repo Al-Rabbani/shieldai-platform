@@ -146,3 +146,17 @@ def test_no_key_means_no_request(monkeypatch):
     with pytest.raises(linear.LinearError) as excinfo:
         run(linear.gql("query { viewer { name } }"))
     assert excinfo.value.status_code == 409
+
+def test_gql_sends_an_api_key_raw_and_an_oauth_token_as_bearer():
+    """Measured against the live API: a key sent as Bearer is refused with a 400 naming the mistake."""
+    seen = {}
+
+    def handler(request):
+        seen["auth"] = request.headers.get("authorization")
+        return httpx.Response(200, json={"data": {"viewer": {"name": "x"}}})
+
+    run(linear.gql("query { viewer { name } }", token="lin_api_key123", transport=httpx.MockTransport(handler)))
+    assert seen["auth"] == "lin_api_key123"
+
+    run(linear.gql("query { viewer { name } }", token="oauth-token", transport=httpx.MockTransport(handler)))
+    assert seen["auth"] == "Bearer oauth-token"

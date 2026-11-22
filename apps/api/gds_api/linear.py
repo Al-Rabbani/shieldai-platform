@@ -51,6 +51,18 @@ class LinearError(Exception):
         self.status_code = status_code
 
 
+def authorization(token: str) -> str:
+    """The header Linear actually expects.
+
+    A workspace API key goes in raw; an OAuth access token goes in as Bearer. Measured against the
+    live API on 21 Nov 2026: the raw key returned the workspace, while the same key as Bearer was
+    refused with 400 "It looks like you're trying to use an API key as a Bearer token. Remove the
+    Bearer prefix from the Authorization header." Sending Bearer unconditionally would have failed
+    every call, which is why the prefix decides rather than a constant.
+    """
+    return token if token.startswith("lin_api_") else f"Bearer {token}"
+
+
 def api_token() -> str:
     """The workspace API key, or a refusal that names the missing setting."""
     token = os.getenv("LINEAR_API_KEY", "").strip()
@@ -73,7 +85,7 @@ async def gql(
             response = await client.post(
                 LINEAR_API,
                 json={"query": query, "variables": dict(variables or {})},
-                headers={"Authorization": f"Bearer {bearer}", "Content-Type": "application/json"},
+                headers={"Authorization": authorization(bearer), "Content-Type": "application/json"},
             )
     except httpx.HTTPError as exc:
         raise LinearError(f"Linear could not be reached: {exc}") from exc
