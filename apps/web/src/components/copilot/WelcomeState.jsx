@@ -13,7 +13,7 @@ export default function WelcomeState({ onSelect }) {
       <h1 className="text-xl font-black text-white mb-2">GDS Agent OS v2.0</h1>
       <p className="text-sm text-blue-400 font-semibold mb-1">Sovereign AI Security Operating System</p>
       <p className="text-xs text-slate-400 max-w-md mb-8">
-        19 specialist agents · GPT-4.1 parallel · GPT-5.5 synthesis · Codex automation<br />
+        Registered agents, declared tools and heartbeat evidence are read live from the platform<br />
         Live AWS · A2A messaging · MCP tools · Zero Trust gate
       </p>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 w-full max-w-2xl">
