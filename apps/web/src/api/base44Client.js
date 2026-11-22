@@ -95,7 +95,7 @@ const ENTITY_ROUTES = {
   VulnEscalationRule: { path: '/siem/correlation/rules' },
   ApprovalRequest: { path: '/approvals' },
   CodeRepository: { path: '/repositories' },
-  ScanJob: { path: '/missions' },
+  ScanJob: { path: '/scans/activity' },
   Alert: { path: '/alerts/events' },
   CIEMFinding: { path: '/ciem/findings' },
   EvidenceRecord: { path: '/evidence' },
@@ -176,7 +176,7 @@ function rows(payload) {
   if (payload && typeof payload === 'object') {
     /* 'customers' and 'services' are named here because those payloads carry a second array beside the
        collection (customers beside non_production), which the one-array heuristic below must not guess at. */
-    for (const key of ['items', 'results', 'rows', 'data', 'records', 'kpis', 'permissions', 'customers', 'services']) {
+    for (const key of ['items', 'results', 'rows', 'data', 'records', 'kpis', 'permissions', 'customers', 'services', 'schedules']) {
       if (Array.isArray(payload[key])) return payload[key];
     }
     /* A route that returns one collection beside its aggregates: /compliance/frameworks answers
@@ -505,6 +505,28 @@ export const base44 = {
   /* The provider surface. The overview is read whole rather than unwrapped to its customers array, because the
    * payload's counts and its exclusion reasons are the honest part: five tenants were three fixtures, the provider
    * and one real account. */
+  /* What scanning is actually doing. Six cron-driven schedules with a derived state; there is no job queue on this
+   * platform, and the payload says so in its own words rather than leaving a page to imply one. */
+  scans: {
+    async activity() {
+      return request('/scans/activity');
+    },
+  },
+
+  /* Only what the console can really start. Discovery is the cloud operation this platform has a route for; the
+   * environment id is required by the API and is never guessed. */
+  cloud: {
+    async environments() {
+      return request('/cloud/environments');
+    },
+    async startDiscovery(environmentId, categories = []) {
+      return request('/cloud/discovery-jobs', {
+        method: 'POST',
+        body: { environment_id: environmentId, discovery_categories: categories },
+      });
+    },
+  },
+
   mssp: {
     async overview() {
       return request('/mssp/customers');

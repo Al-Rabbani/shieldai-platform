@@ -55,7 +55,7 @@ export default function CommandCenter() {
   const [triagedFindings, setTriagedFindings] = useState([]);
   const [incidents, setIncidents] = useState([]);
   const [frameworks, setFrameworks] = useState([]);
-  const [scanJobs, setScanJobs] = useState([]);
+  const [scanActivity, setScanActivity] = useState(null);
   const [darkWebAlerts, setDarkWebAlerts] = useState([]);
   const [ciemFindings, setCiemFindings] = useState([]);
   const [msspCustomers, setMsspCustomers] = useState(0);
@@ -79,7 +79,7 @@ export default function CommandCenter() {
       base44.entities.TriagedFinding.filter({ status: "open" }, "-detected_at", 500).catch(() => []),
       base44.entities.Incident.list("-opened_at", 20).catch(() => []),
       base44.entities.ComplianceFramework.list("-created_date", 10).catch(() => []),
-      base44.entities.ScanJob.list("-created_date", 10).catch(() => []),
+      base44.scans.activity().catch(() => null),
       base44.entities.DarkWebAlert.list("-detected_at", 10).catch(() => []),
       base44.entities.CIEMFinding.list("-detected_at", 20).catch(() => []),
       base44.entities.CustomerTenant.list().catch(() => []),
@@ -99,7 +99,7 @@ export default function CommandCenter() {
     setTriagedFindings(triaged);
     setIncidents(inc);
     setFrameworks(comp);
-    setScanJobs(scans);
+    setScanActivity(scans);
     setDarkWebAlerts(dw);
     setCiemFindings(ciem);
     setMsspCustomers(tenants.filter(t => t.status === "active").length);
@@ -142,7 +142,11 @@ export default function CommandCenter() {
   const openIncidents = incidents.filter(i => ["open", "investigating"].includes(i.status));
   const investigatingIncident = incidents.find(i => i.status === "investigating");
   const gdprIncident = incidents.find(i => i.status === "investigating" && i.title?.toLowerCase().includes("lockbit"));
-  const stuckScan = scanJobs.find(s => s.status === "running" && s.started_at && (Date.now() - new Date(s.started_at).getTime()) > 24 * 60 * 60 * 1000);
+  /* A schedule that has passed its own next_run_at is the real "scan has stopped" signal. Derived by the route,
+   * so this page does not re-implement the rule. */
+  const overdueScan = scanActivity && scanActivity.schedules
+    ? scanActivity.schedules.find(s => s.state === "overdue") || null
+    : null;
 
   /* The estate counts come from the platform, not from the page of rows loaded above. A fetched page is a
    * sample: it is capped at 500 rows, so its length can never be presented as "how many are open". */
@@ -202,7 +206,7 @@ export default function CommandCenter() {
 
       <SecurityFeaturesRow stats={featureStats} />
 
-      <ScanJobStuckBanner scanJob={stuckScan} onReset={loadAll} />
+      <ScanJobStuckBanner schedule={overdueScan} />
       <CriticalAlertBanner incident={investigatingIncident} />
       <GdprCountdownCard incident={gdprIncident} />
 
@@ -221,7 +225,7 @@ export default function CommandCenter() {
         <StatTile label="KEV Unpatched" value={risk?.kev_unpatched ?? 0} danger />
       </div>
 
-      <ScanStatusBar scanJobs={scanJobs} />
+      <ScanStatusBar activity={scanActivity} />
       <NationalCampaignFeed />
       <IntelligenceFeedStrip feeds={intelFeeds} />
       <AgentActivityStrip agents={agents} />
@@ -246,7 +250,7 @@ export default function CommandCenter() {
       <TopCloudFindingsTable findings={topCloudFindings} />
 
       <div className="grid grid-cols-3 gap-4">
-        <CloudAndScansColumn criticalCloud={cloudCritical} scanJobs={scanJobs} />
+        <CloudAndScansColumn criticalCloud={cloudCritical} activity={scanActivity} />
         <ThreatAndIncidentsColumn criticalThreats={criticalTriaged} incidents={openIncidents} />
         <ComplianceAndCIEMColumn frameworks={frameworks} ciemFindings={ciemFindings} />
       </div>

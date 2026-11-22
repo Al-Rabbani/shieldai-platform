@@ -1,9 +1,32 @@
 import React from "react";
+import { formatDistanceToNow } from "date-fns";
+
+/* The "Active Scans" panel here read the same ten missions as the bar above and rendered `s.repo_name || s.scan_type`
+ * (blank on a mission) beside a status badge keyed on running/complete/queued/failed. 'completed' and 'cancelled'
+ * missed every key and fell back to the QUEUED colour, so finished work wore a queued badge in slate.
+ *
+ * It now reads GET /scans/activity. The heading is "Scan Schedule" because that is what the platform has: six
+ * cron-driven schedules, no job queue. Each row shows the schedule, when it last ran and when it runs next, and the
+ * derived state - so a schedule that has stopped running shows as overdue rather than as quiet green.
+ */
+
+const STATE_COLOR = {
+  scheduled: "bg-emerald-500/20 text-emerald-400",
+  overdue: "bg-amber-500/20 text-amber-400",
+  never_run: "bg-slate-500/20 text-slate-400",
+  disabled: "bg-slate-600/20 text-slate-500",
+};
 
 const SEV_COLOR = { critical: "bg-red-500/20 text-red-400", high: "bg-orange-500/20 text-orange-400", medium: "bg-yellow-500/20 text-yellow-400", low: "bg-blue-500/20 text-blue-400" };
-const STATUS_COLOR = { running: "bg-blue-500/20 text-blue-400", complete: "bg-emerald-500/20 text-emerald-400", queued: "bg-slate-500/20 text-slate-400", failed: "bg-red-500/20 text-red-400" };
 
-export default function CloudAndScansColumn({ criticalCloud, scanJobs }) {
+function when(value) {
+  return value ? formatDistanceToNow(new Date(value), { addSuffix: true }) : "never";
+}
+
+export default function CloudAndScansColumn({ criticalCloud, activity }) {
+  const schedules = (activity && activity.schedules) || [];
+  const queue = (activity && activity.queue) || {};
+
   return (
     <div className="space-y-4">
       <div className="rounded-2xl p-4" style={{ background: "#111827", border: "1px solid #1F2937" }}>
@@ -24,17 +47,27 @@ export default function CloudAndScansColumn({ criticalCloud, scanJobs }) {
       </div>
 
       <div className="rounded-2xl p-4" style={{ background: "#111827", border: "1px solid #1F2937" }}>
-        <p className="text-sm font-bold text-white mb-3">🔍 Active Scans</p>
-        {scanJobs.length === 0 ? <p className="text-xs text-slate-500">No scan jobs yet.</p> : (
+        <p className="text-sm font-bold text-white mb-3">🔍 Scan Schedule</p>
+        {schedules.length === 0 ? (
+          <p className="text-xs text-slate-500">No scan schedules are registered, so nothing is being scanned on a cadence.</p>
+        ) : (
           <div className="space-y-2">
-            {scanJobs.map((s, i) => (
-              <div key={i} className="flex items-center justify-between text-xs">
-                <span className="text-white truncate flex-1">{s.repo_name || s.scan_type}</span>
-                <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded ${STATUS_COLOR[s.status] || STATUS_COLOR.queued}`}>{s.status}</span>
+            {schedules.map((s) => (
+              <div key={s.id} className="flex items-center justify-between text-xs gap-2">
+                <span className="text-white truncate flex-1" title={s.name}>{s.name}</span>
+                <span className="text-[10px] text-slate-500 flex-shrink-0">{when(s.last_run_at)}</span>
+                <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded flex-shrink-0 ${STATE_COLOR[s.state] || STATE_COLOR.never_run}`}>
+                  {s.state}
+                </span>
               </div>
             ))}
           </div>
         )}
+        <p className="text-[10px] text-slate-600 mt-2">
+          {queue.exists === false
+            ? "Scans run on a schedule; this platform keeps no job queue, so nothing is ever queued between runs."
+            : "Next run times are the schedule's own."}
+        </p>
       </div>
     </div>
   );

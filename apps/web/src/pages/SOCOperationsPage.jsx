@@ -31,7 +31,9 @@ export default function SOCOperationsPage() {
 
   const openIncidents = incidents.filter(i => ["new", "investigating"].includes(i.status)).length;
   const criticalFindings = findings.filter(f => f.status === "open" && f.severity === "critical").length;
-  const runningScans = scanJobs.filter(s => s.status === "running").length;
+  /* Schedules that have passed their own next_run_at. There is no running/queued scan on this platform, so counting
+   * 'running' would read zero whether or not scanning had stopped - the failure mode this tile is meant to catch. */
+  const overdueScans = scanJobs.filter(s => s.state === "overdue").length;
   const unreadAlerts = notifications.filter(n => !n.is_read).length;
 
   async function respond(n) {
@@ -55,7 +57,7 @@ export default function SOCOperationsPage() {
             {[
               { label: "Open Incidents", value: openIncidents, color: openIncidents > 0 ? "text-red-400" : "text-white" },
               { label: "Critical Findings", value: criticalFindings, color: criticalFindings > 0 ? "text-red-400" : "text-white" },
-              { label: "Active Scans", value: runningScans, color: "text-blue-400" },
+              { label: "Overdue Scans", value: overdueScans, color: overdueScans > 0 ? "text-amber-400" : "text-white" },
               { label: "Unread Alerts", value: unreadAlerts, color: unreadAlerts > 0 ? "text-amber-400" : "text-white" },
             ].map((t, i) => (
               <div key={i} className="rounded-xl p-3 text-center" style={{ background: "#111827", border: "1px solid #1F2937" }}>

@@ -179,11 +179,12 @@ except Exception as e:
 # Released 17 Nov 2026: tools execute through the capability broker, and each reasoning agent acts
 # as its declared registered counterpart, so the catalogue can authorise by team. Proven live.
 app.include_router(reasoning_router)
-from gds_api import compliance_api, linear_api, mssp_api
+from gds_api import compliance_api, linear_api, mssp_api, scans_api
 
 app.include_router(compliance_api.router)
 app.include_router(linear_api.router)
 app.include_router(mssp_api.router)
+app.include_router(scans_api.router)
 app.include_router(auth.router)
 app.include_router(access_reviews_router)
 app.include_router(on_call_router)

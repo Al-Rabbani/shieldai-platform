@@ -91,12 +91,18 @@ def row_image(name: str) -> str:
     return name.split(": ", 1)[1] if ": " in name else name
 
 
-def stamp(where: str, tenant_id: str, ok: bool, error: str | None) -> list[str]:
+def stamp(where: str, tenant_id: str, ok: bool, error: str | None,
+          findings: int | None = None) -> list[str]:
     error_sql = "NULL" if ok else sql_str((error or "scan reported failure")[:400])
+    # A completed run is a run. A failed attempt is recorded in last_error and last_run_at but is not counted as a
+    # completed run, and a finding count the caller does not know is left alone rather than written as zero.
+    count_sql = "total_runs = total_runs + 1, " if ok else ""
+    findings_sql = f"last_run_findings = {int(findings)}, " if (ok and findings is not None) else ""
     sql = (
         "UPDATE scan_schedules SET "
         "last_run_at = now(), "
         "next_run_at = now() + (interval_minutes || ' minutes')::interval, "
+        f"{count_sql}{findings_sql}"
         f"last_error = {error_sql}, "
         "status = 'active' "
         f"WHERE tenant_id = {sql_str(tenant_id)} AND {where} "
@@ -121,6 +127,8 @@ def main() -> int:
     ap.add_argument("--ok", action="store_true", help="the scan completed")
     ap.add_argument("--fail", action="store_true", help="the scan failed")
     ap.add_argument("--error", default=None)
+    ap.add_argument("--findings", type=int, default=None,
+                    help="findings this run produced; recorded only when given, never defaulted to 0")
     args = ap.parse_args()
 
     if not args.tenant:
@@ -134,7 +142,7 @@ def main() -> int:
     ok = not args.fail
 
     if args.name:
-        stamped = stamp(f"name = {sql_str(args.name)}", args.tenant, ok, args.error)
+        stamped = stamp(f"name = {sql_str(args.name)}", args.tenant, ok, args.error, args.findings)
         if not stamped:
             print(f"WARN no schedule row named {args.name!r} for this tenant", file=sys.stderr)
         for line in stamped:
@@ -165,7 +173,7 @@ def main() -> int:
         if image not in refs and repo not in repos:
             print(f"skipped {name}: image {image!r} is not running", file=sys.stderr)
             continue
-        for line in stamp(f"name = {sql_str(name)}", args.tenant, ok, args.error):
+        for line in stamp(f"name = {sql_str(name)}", args.tenant, ok, args.error, args.findings):
             print(f"recorded {line}")
             stamped_any += 1
     if not stamped_any:
