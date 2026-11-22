@@ -81,6 +81,8 @@ const ENTITY_ROUTES = {
   ApiKey: { path: '/admin/api-keys' },
   /* Tenant is NOT mapped on purpose: see the module docstring. */
   Notification: { path: '/notifications' },
+  /* alert_rules holds the real rules; /alerts/rules returns them with the API's own column names. */
+  AlertRule: { path: '/alerts/rules' },
   ApprovalRequest: { path: '/approvals' },
   CodeRepository: { path: '/repositories' },
   ScanJob: { path: '/missions' },
@@ -221,6 +223,13 @@ const FIELD_MAPS = {
     normalized_severity: 'severity',
     asset_name: 'resource_name',
     detected_at: 'detected_at',
+  },
+  /* /v2/alerts renders a rule table under the builder's column names; the API uses the table's own. */
+  AlertRule: {
+    rule_name: 'name',
+    entity_name: 'entity_type',
+    notification_channels: 'channels',
+    trigger_count: 'fire_count',
   },
   ContainerFinding: {
     normalized_severity: 'severity',
