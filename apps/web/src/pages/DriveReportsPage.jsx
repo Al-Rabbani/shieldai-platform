@@ -108,11 +108,14 @@ export default function DriveReportsPage() {
         </div>
         <div className="rounded-xl p-3" style={{ background: "#111827", border: "1px solid #1F2937" }}>
           <p className="text-[10px] uppercase text-slate-500">Reports stored</p>
-          <p className="text-sm font-semibold text-white">{data?.files?.length ?? 0}</p>
+          {/* Zero here would be an absence dressed as a count: nothing was read, so nothing can be counted. */}
+          <p className="text-sm font-semibold text-white">{data?.error ? "not readable" : (data?.files?.length ?? 0)}</p>
         </div>
         <div className="rounded-xl p-3" style={{ background: "#111827", border: "1px solid #1F2937" }}>
           <p className="text-[10px] uppercase text-slate-500">Shared folder</p>
-          {data?.folder_url ? (
+          {data?.error ? (
+            <p className="text-sm text-slate-500">not readable</p>
+          ) : data?.folder_url ? (
             <a href={data.folder_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-sm font-semibold text-blue-400 hover:text-blue-300">
               Open in Drive <ExternalLink size={11} />
             </a>
