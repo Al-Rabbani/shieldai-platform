@@ -34,8 +34,8 @@ export default function FleetAgentCard({ agent, selected, onSelect }) {
       </div>
       <div className="min-w-0 flex-1">
         <p className="text-[11px] font-bold text-white truncate">{agent.name}</p>
-        <p className="text-[9px] truncate" style={{ color: dot }}>
-          {agent.role ? `${String(agent.role).replace(/_/g, " ")} · ` : ""}{heartbeatLabel(agent)}
+        <p className="text-[9px] truncate" style={{ color: dot }} title={agent.role || ""}>
+          {agent.role ? String(agent.role).replace(/_/g, " ") : heartbeatLabel(agent)}
         </p>
       </div>
     </button>
