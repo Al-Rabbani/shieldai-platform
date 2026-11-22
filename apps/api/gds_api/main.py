@@ -27,6 +27,7 @@ from gds_api import (
     engineering_api,
     evidence,
     executive_api,
+    executive_risk_api,
     findings,
     incidents,
     knowledge,
@@ -211,6 +212,7 @@ app.include_router(repository_api.router)
 app.include_router(engineering_api.router)
 app.include_router(mission_api.router)
 app.include_router(executive_api.router)
+app.include_router(executive_risk_api.router)
 app.include_router(commands_api.router)
 app.include_router(cloud_api.router)
 app.include_router(cloud_posture_api.router)
