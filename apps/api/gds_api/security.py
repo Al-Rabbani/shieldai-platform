@@ -96,9 +96,101 @@ class CurrentUser:
     permissions: list[str]
 
 
+# --- API key authentication ---------------------------------------------------------------------
+#
+# A key is presented as `Authorization: Bearer gds_...`. It is hashed with SHA-256 and matched against
+# api_keys.key_hash, which is the only form ever stored. The lookup runs BEFORE a tenant is known, so
+# it binds gds.api_key_hash and the api_keys policy exposes exactly the row whose hash matches.
+
+API_KEY_PREFIX = "gds_"
+
+
+def _extract_api_key(authorization: str | None) -> str | None:
+    """Return the presented key, or None if this request carries no key.
+
+    Pure and deliberately strict: only a Bearer credential that starts with the platform prefix is
+    treated as a key. Anything else returns None so the caller falls through to the normal 401 rather
+    than to a confusing "invalid key" for what was simply a malformed header.
+    """
+    if not authorization:
+        return None
+    parts = authorization.split()
+    if len(parts) != 2:
+        return None
+    scheme, credential = parts
+    if scheme.lower() != "bearer":
+        return None
+    if not credential.startswith(API_KEY_PREFIX):
+        return None
+    return credential
+
+
+def _hash_api_key(raw: str) -> str:
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+async def authenticate_api_key(request: Request, db: AsyncSession) -> CurrentUser | None:
+    """Resolve an API key to a principal. Returns None when no key was presented.
+
+    Raises 401 for a key that was presented but is unknown or revoked: silently falling back to
+    "not authenticated" would hide a revoked credential being used.
+    """
+    from sqlalchemy import text as _sql
+
+    raw = _extract_api_key(request.headers.get("authorization"))
+    if raw is None:
+        return None
+
+    key_hash = _hash_api_key(raw)
+    await db.execute(
+        _sql("SELECT set_config('gds.api_key_hash', :h, false)"), {"h": key_hash}
+    )
+    row = (
+        await db.execute(
+            _sql(
+                """
+                SELECT id, tenant_id, key_prefix, scopes, created_by, revoked_at
+                FROM api_keys WHERE key_hash = :h
+                """
+            ),
+            {"h": key_hash},
+        )
+    ).first()
+
+    if row is None:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Unknown API key")
+    key_id, tenant_id, key_prefix, scopes, created_by, revoked_at = row
+    if revoked_at is not None:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "API key revoked")
+
+    # Bind the tenant this key belongs to, exactly as a session would, so every FORCE-RLS table
+    # downstream filters to the right tenant.
+    await db.execute(
+        _sql("SELECT set_config('gds.tenant_id', :tid, false)"), {"tid": str(tenant_id)}
+    )
+    await db.execute(
+        _sql("UPDATE api_keys SET last_used_at = now() WHERE id = :kid"), {"kid": str(key_id)}
+    )
+    await db.commit()
+
+    return CurrentUser(
+        user_id=created_by if created_by is not None else key_id,
+        tenant_id=tenant_id,
+        email=f"api-key:{key_prefix}",
+        role_id=key_id,
+        role_name="api_key",
+        permissions=list(scopes or []),
+    )
+
+
 async def get_current_user(request: Request, db: AsyncSession = Depends(get_db)) -> CurrentUser:
     token = request.cookies.get(ACCESS_COOKIE_NAME)
     if not token:
+        # No session cookie: a machine caller may present an API key instead. The cookie always wins,
+        # so the browser path is unchanged.
+        api_key_user = await authenticate_api_key(request, db)
+        if api_key_user is not None:
+            return api_key_user
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Not authenticated")
     payload = decode_access_token(token)
 
