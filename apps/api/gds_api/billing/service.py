@@ -57,8 +57,8 @@ async def create_checkout_session(
         payment_method_types=["card"],
         line_items=[{"price": price_id, "quantity": 1}],
         mode="subscription",
-        success_url=f"{APP_DOMAIN}/billing?status=success&session_id={{CHECKOUT_SESSION_ID}}",
-        cancel_url=f"{APP_DOMAIN}/billing?status=cancelled",
+        success_url=f"{APP_DOMAIN}/v2/settings/billing?status=success&session_id={{CHECKOUT_SESSION_ID}}",
+        cancel_url=f"{APP_DOMAIN}/v2/settings/billing?status=cancelled",
         client_reference_id=str(user_id),
         metadata={
             "user_id": str(user_id),
@@ -67,17 +67,21 @@ async def create_checkout_session(
         },
     )
 
+    # Nothing has been paid at this point: a session was created and a card may never be entered. The row
+    # records the attempt as "incomplete", which is Stripe's own word for it, and the webhook promotes it to
+    # trialing or active when Stripe actually says so. Writing "trialing" here made an abandoned checkout
+    # indistinguishable from a real trial on every surface that reads this table.
     if existing:
         existing.stripe_customer_id = customer.id
         existing.plan_tier = plan_tier
-        existing.status = "trialing"
+        existing.status = "incomplete"
     else:
         sub = Subscription(
             user_id=user_id,
             tenant_id=tenant_id,
             stripe_customer_id=customer.id,
             plan_tier=plan_tier,
-            status="trialing",
+            status="incomplete",
             monthly_amount_gbp=PLAN_PRICES[plan_tier]["amount"],
         )
         db.add(sub)
