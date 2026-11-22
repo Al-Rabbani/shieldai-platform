@@ -100,6 +100,12 @@ def test_dast_detects_a_known_exposure(tmp_path):
     try:
         url = f"http://127.0.0.1:{server.server_port}"
         results = asyncio.run(nuclei_findings(url, templates="exposure", severity="critical,high,medium"))
+        if not results:
+            # One retry, not a weakened assertion. nuclei is an external process that takes ~25s here, and
+            # under load it occasionally exits 0 having written nothing; that made this gate report the suite
+            # red on a deploy that changed no scanner code, which is how a gate teaches people to bypass it.
+            # The exposure still has to be detected for this test to pass.
+            results = asyncio.run(nuclei_findings(url, templates="exposure", severity="critical,high,medium"))
     finally:
         server.shutdown()
         server.server_close()
