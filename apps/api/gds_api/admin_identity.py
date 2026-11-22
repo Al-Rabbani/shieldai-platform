@@ -21,12 +21,13 @@ one. Provisioning is implemented because it can bind the new tenant before it wr
 from __future__ import annotations
 
 import hashlib
+import json
 import secrets
 import uuid
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -86,9 +87,26 @@ class ApiKeyOut(BaseModel):
     id: uuid.UUID
     name: str
     key_prefix: str
+    # Selected from the table, never inferred: the page labels this column Permissions.
+    scopes: list[str] = Field(default_factory=list)
+    # Derived, not stored: a key is active while it has not been revoked.
+    is_active: bool = True
     created_at: datetime | None = None
     last_used_at: datetime | None = None
     revoked_at: datetime | None = None
+
+    @field_validator("scopes", mode="before")
+    @classmethod
+    def _scopes_from_jsonb(cls, value):
+        """asyncpg hands jsonb back as text here, so accept either shape."""
+        if value is None:
+            return []
+        if isinstance(value, str):
+            try:
+                return json.loads(value)
+            except ValueError:
+                return []
+        return value
 
 
 class ApiKeyCreate(BaseModel):
@@ -410,7 +428,8 @@ async def list_api_keys(
         await db.execute(
             text(
                 """
-                SELECT id, name, key_prefix, created_at, last_used_at, revoked_at
+                SELECT id, name, key_prefix, coalesce(scopes, '[]'::jsonb) AS scopes,
+                       created_at, last_used_at, revoked_at, (revoked_at IS NULL) AS is_active
                 FROM api_keys WHERE tenant_id = :tid ORDER BY created_at DESC
                 """
             ),
@@ -487,7 +506,8 @@ async def revoke_api_key(
         await db.execute(
             text(
                 """
-                SELECT id, name, key_prefix, created_at, last_used_at, revoked_at
+                SELECT id, name, key_prefix, coalesce(scopes, '[]'::jsonb) AS scopes,
+                       created_at, last_used_at, revoked_at, (revoked_at IS NULL) AS is_active
                 FROM api_keys WHERE tenant_id = :tid AND id = :kid
                 """
             ),
@@ -524,7 +544,8 @@ async def revoke_api_key(
         await db.execute(
             text(
                 """
-                SELECT id, name, key_prefix, created_at, last_used_at, revoked_at
+                SELECT id, name, key_prefix, coalesce(scopes, '[]'::jsonb) AS scopes,
+                       created_at, last_used_at, revoked_at, (revoked_at IS NULL) AS is_active
                 FROM api_keys WHERE tenant_id = :tid AND id = :kid
                 """
             ),
