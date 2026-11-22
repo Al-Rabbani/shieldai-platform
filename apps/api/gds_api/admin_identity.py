@@ -549,6 +549,10 @@ async def provision_tenant(
     """
     tenant_id = uuid.uuid4()
     await _bind(db, tenant_id)
+    # The tenants INSERT policy admits either a self-registration insert (a login email is bound) or
+    # owner-driven provisioning. This route is the only place that sets the provisioning setting, and
+    # it does so after the tenants:manage check above has already passed.
+    await db.execute(text("SELECT set_config('gds.provisioning', 'owner', false)"))
 
     clash = (
         await db.execute(
