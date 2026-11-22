@@ -54,6 +54,13 @@ async function authRequest(path, body) {
 const ENTITY_ROUTES = {
   /* Computed from security_findings, not a stored table: one object, so single: true. */
   GlobalRiskScore: { path: '/executive/risk-score', single: true },
+  /* The MSSP book: one real production customer, the provider excluded, and fixtures reported separately. */
+  CustomerTenant: { path: '/mssp/customers' },
+  /* What each customer is provisioned for. The platform holds no per-service telemetry, so those columns are
+     absent rather than zero. */
+  ManagedService: { path: '/mssp/services' },
+  /* One object of billing arithmetic with its basis stated, and nulls when no subscription row exists. */
+  RevenueReport: { path: '/mssp/revenue', single: true },
   KPI: { path: '/executive/kpis' },
   TriagedFinding: { path: '/findings', summaryPath: '/findings/summary' },
   Finding: { path: '/findings', summaryPath: '/findings/summary' },
@@ -167,7 +174,9 @@ async function request(path, { method = 'GET', body, query } = {}) {
 function rows(payload) {
   if (Array.isArray(payload)) return payload;
   if (payload && typeof payload === 'object') {
-    for (const key of ['items', 'results', 'rows', 'data', 'records', 'kpis', 'permissions']) {
+    /* 'customers' and 'services' are named here because those payloads carry a second array beside the
+       collection (customers beside non_production), which the one-array heuristic below must not guess at. */
+    for (const key of ['items', 'results', 'rows', 'data', 'records', 'kpis', 'permissions', 'customers', 'services']) {
       if (Array.isArray(payload[key])) return payload[key];
     }
     /* A route that returns one collection beside its aggregates: /compliance/frameworks answers
@@ -181,6 +190,9 @@ function rows(payload) {
 
 /* Platform column -> builder field. Only differences are listed; everything else passes through. */
 const FIELD_MAPS = {
+  /* The page calls the customer by its display name; the route calls that field display_name. plan_tier,
+     subscription_status, onboarding_status, findings, critical_findings and health are native names. */
+  CustomerTenant: { customer_name: 'display_name' },
   /* The route reports score_over_assessed (pass rate over controls actually assessed); the pages read score. */
   ComplianceFramework: { score: 'score_over_assessed', total_controls: 'official_control_count' },
   /* /compliance/controls rows carry control_ref and no id; the builder pages key on id, key and label. */
@@ -487,6 +499,21 @@ export const base44 = {
         method: route.method || 'POST',
         body: route.method === 'GET' ? undefined : route.body || payload,
       });
+    },
+  },
+
+  /* The provider surface. The overview is read whole rather than unwrapped to its customers array, because the
+   * payload's counts and its exclusion reasons are the honest part: five tenants were three fixtures, the provider
+   * and one real account. */
+  mssp: {
+    async overview() {
+      return request('/mssp/customers');
+    },
+    async services() {
+      return request('/mssp/services');
+    },
+    async revenue() {
+      return request('/mssp/revenue');
     },
   },
 

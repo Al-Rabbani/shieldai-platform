@@ -1,12 +1,17 @@
-"""MSSP provider surface: the customers this platform manages.
+"""Two reads the MSSP page needs and the platform could not answer.
 
-This router is cross-tenant by nature, so the guard is the point of the module rather than a detail.
-The customer list is visible only to an administrator of the provider tenant. Everyone else is refused
-outright instead of being quietly scoped to their own tenant, because a silently scoped list is
-indistinguishable from an empty one and hides the fact that the caller had no business asking.
+The page at /mssp rendered a revenue band and a managed-services table from three entity names with no resource
+behind them: RevenueReport, ManagedService and CustomerHealthScore. Measurement first (22 Nov 2026):
 
-The data comes from mssp_customer_overview(), a read-only SECURITY DEFINER function that returns
-aggregate counts. Row content stays behind RLS.
+  * billing_subscriptions exists and holds ZERO rows, so revenue is not measured rather than zero. The page
+    printed "$0K MRR" and "$0.00M ARR" from a null it had defaulted, which reads as a business fact.
+  * services_provisioned on each customer IS real (three services on the one production customer), but nothing
+    flattened it, so the managed-services table had nothing to list.
+  * health is already inside /mssp/customers per customer, with a reason when a customer has no telemetry. A
+    separate CustomerHealthScore read would have invented a score for a customer nothing has scanned.
+
+So this adds two reads and no store: /mssp/services flattens what is provisioned, /mssp/revenue reports the
+billing rows that exist and says so when there are none.
 """
 import os
 import uuid
@@ -19,6 +24,7 @@ from gds_api.db import get_db
 from gds_api.security import CurrentUser, get_current_user
 
 router = APIRouter(prefix="/mssp", tags=["mssp"])
+
 
 def provider_tenant_id() -> uuid.UUID:
     """Resolved per call rather than at import, so the module imports without the env present."""
@@ -58,11 +64,11 @@ def _shape(row) -> dict:
         "sla_tier": d["sla_tier"],
         "onboarding_status": d["onboarding_status"],
         "onboarded_at": d["onboarded_at"].isoformat() if d["onboarded_at"] else None,
-        "services_provisioned": d["services_provisioned"],
-        "active_users": int(d["active_users"]),
-        "findings": int(d["findings"]),
-        "critical_findings": int(d["critical_findings"]),
-        "missions": int(d["missions"]),
+        "services_provisioned": d["services_provisioned"] or [],
+        "active_users": int(d["active_users"] or 0),
+        "findings": int(d["findings"] or 0),
+        "critical_findings": int(d["critical_findings"] or 0),
+        "missions": int(d["missions"] or 0),
         "last_onboarding": d["last_onboarding"].isoformat() if d["last_onboarding"] else None,
         "environment": d["environment"],
         "health": _health(d),
@@ -121,3 +127,93 @@ async def customer_health(
     if not rows:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "no such customer")
     return _shape(rows[0])
+
+
+@router.get("/services")
+async def managed_services(
+    user: CurrentUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Every service each production customer is provisioned for, one row per customer per service.
+
+    This is the only per-service fact the platform holds. There is no service telemetry table, so events, alerts,
+    uptime, SLA attainment and automation rate are absent, and the response says so rather than returning zeroes
+    for six columns a reader would take as measured. The page renders "not measured" for each.
+    """
+    if not is_provider_admin(user):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "MSSP provider administrator access required")
+
+    provider_id = str(provider_tenant_id())
+    rows = (await db.execute(text("SELECT * FROM mssp_customer_overview()"))).mappings().all()
+
+    services = []
+    for row in rows:
+        shaped = _shape(row)
+        if shaped["environment"] != "production" or shaped["tenant_id"] == provider_id:
+            continue
+        for service in shaped["services_provisioned"]:
+            services.append({
+                "id": f"{shaped['slug']}:{service}",
+                "customer_name": shaped["display_name"],
+                "customer_slug": shaped["slug"],
+                "service_name": service,
+                "provisioned_at": shaped["onboarded_at"],
+                "plan_tier": shaped["plan_tier"],
+                "onboarding_status": shaped["onboarding_status"],
+            })
+
+    return {
+        "services": services,
+        "count": len(services),
+        "customers_covered": len({s["customer_slug"] for s in services}),
+        "not_measured": ["events_30d", "alerts_30d", "uptime_pct", "sla_met", "health_score",
+                         "automation_rate_pct"],
+        "note": ("the platform records which services a customer is provisioned for; it holds no per-service "
+                 "telemetry, so those six columns are absent rather than zero"),
+    }
+
+
+@router.get("/revenue")
+async def revenue(
+    user: CurrentUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """MRR and ARR from the billing rows that actually exist, with the basis stated.
+
+    Measured 22 Nov 2026: billing_subscriptions held zero rows, so the honest answer is that revenue is not
+    measured - not that MRR is zero. The page had been printing "$0K MRR" from a null it defaulted.
+
+    Scope is the calling tenant's own billing records, because billing_subscriptions is row-level secured and this
+    route does not widen that. MSSP-wide revenue would need a cross-tenant billing aggregate, which does not exist;
+    saying so is better than presenting one tenant's zero as the whole book.
+    """
+    if not is_provider_admin(user):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "MSSP provider administrator access required")
+
+    row = (await db.execute(text("""
+        SELECT count(*) AS total,
+               count(*) FILTER (WHERE status = 'active') AS active,
+               count(*) FILTER (WHERE status = 'trialing') AS trialing,
+               coalesce(sum(monthly_amount_gbp) FILTER (WHERE status = 'active'), 0) AS mrr_gbp
+        FROM billing_subscriptions
+    """))).mappings().one()
+
+    total = int(row["total"])
+    active = int(row["active"])
+    trialing = int(row["trialing"])
+    mrr = float(row["mrr_gbp"]) if active else None
+
+    return {
+        "currency": "GBP",
+        "mrr_gbp": mrr,
+        "arr_gbp": mrr * 12 if mrr is not None else None,
+        "nrr_pct": None,
+        "active_subscriptions": active,
+        "trialing_subscriptions": trialing,
+        "total_subscriptions": total,
+        "basis": "sum of billing_subscriptions.monthly_amount_gbp where status='active'",
+        "scope": "the calling tenant's billing records; no cross-tenant billing aggregate exists",
+        "note": (None if total else
+                 "no subscription row exists for this tenant, so revenue is not measured rather than zero"),
+        "nrr_note": "net revenue retention needs period-over-period movement, and no subscription has completed a period",
+    }
