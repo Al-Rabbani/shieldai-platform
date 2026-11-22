@@ -13,6 +13,7 @@ export default function AssignmentRulesPage() {
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(emptyRule);
   const [running, setRunning] = useState(false);
+  const [preview, setPreview] = useState(null);
   const [message, setMessage] = useState(null);
 
   const load = useCallback(async () => {
@@ -75,16 +76,25 @@ export default function AssignmentRulesPage() {
     setRules((prev) => prev.map((row) => (row.id === rule.id ? { ...row, is_active: !row.is_active } : row)));
   }
 
+  // Read-only: shows what the button would do before it is pressed, so the click is informed.
+  useEffect(() => {
+    base44.functions
+      .invoke("gdsAutoAssignFindings", { action: "escalate_stale", apply: false })
+      .then((response) => setPreview(response.data || null))
+      .catch(() => setPreview(null));
+  }, []);
+
   async function runEscalation() {
     setRunning(true);
     setMessage(null);
     try {
-      const response = await base44.functions.invoke("gdsAutoAssignFindings", { action: "escalate_stale" });
+      const response = await base44.functions.invoke("gdsAutoAssignFindings", { action: "escalate_stale", apply: true });
       const data = response.data || {};
       setMessage({
         type: "ok",
-        text: `${data.escalated || 0} finding(s) escalated past the 3-day triage limit (checked ${data.checked || 0}).${data.slack_delivered ? " Slack alert delivered." : ""}`,
+        text: `${data.escalated || 0} finding(s) escalated past the age policy for their severity (checked ${data.checked || 0}) · ${data.notifications_raised || 0} in-app notification(s) raised · ${data.delivery || "no Slack message is sent from here"}.`,
       });
+      setPreview(data);
       await load();
     } catch (error) {
       setMessage({ type: "err", text: error?.response?.data?.error || error.message });
@@ -99,7 +109,7 @@ export default function AssignmentRulesPage() {
           <UserCheck size={22} className="text-blue-400 mt-0.5" />
           <div>
             <h1 className="text-xl font-bold text-white">Finding assignment rules</h1>
-            <p className="text-xs text-slate-500">Route findings by asset type and team ownership, and escalate anything left in triage past 3 days.</p>
+            <p className="text-xs text-slate-500">Route findings by asset type and team ownership. Escalation follows the age policy for each severity, not a flat three days: critical 24h, high 7d, medium 30d, low 90d, info 180d.</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -115,6 +125,17 @@ export default function AssignmentRulesPage() {
           </button>
         </div>
       </div>
+
+      {preview && (
+        <p className="text-[11px] text-slate-500 leading-relaxed">
+          {preview.stale} of {preview.checked} open findings are past their severity age policy right now
+          {preview.by_band && Object.keys(preview.by_band).length > 0
+            ? ` (${Object.entries(preview.by_band).map(([band, n]) => `${n} at ${band} age`).join(", ")})`
+            : ""}
+          . Nothing is written until the button is pressed, and escalating raises an in-app notification, not a Slack
+          message.
+        </p>
+      )}
 
       {message && (
         <div className={`rounded-lg px-3 py-2 text-[11px] border ${message.type === "err" ? "bg-red-500/10 border-red-500/40 text-red-300" : "bg-emerald-500/10 border-emerald-500/40 text-emerald-300"}`}>

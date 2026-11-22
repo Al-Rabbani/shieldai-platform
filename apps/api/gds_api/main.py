@@ -226,6 +226,8 @@ from gds_api import container_findings_api as _container_findings  # noqa: E402
 app.include_router(_container_findings.router)
 from gds_api import host_vulnerabilities_api as _host_vulns  # noqa: E402
 app.include_router(_host_vulns.router)
+from gds_api import findings_escalation_api as _findings_escalation  # noqa: E402
+app.include_router(_findings_escalation.router)
 from gds_api.cloud import attack_surface_api as _attack_surface  # noqa: E402
 app.include_router(_attack_surface.router)
 app.include_router(monitoring.router)

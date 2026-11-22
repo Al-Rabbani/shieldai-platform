@@ -124,6 +124,21 @@ const ENTITY_ROUTES = {
 
 /* Backend functions the platform actually implements. Everything else throws. */
 const FUNCTION_ROUTES = {
+  /* AssignmentRulesPage's escalate button asked this name and nothing answered it, while the platform has run the
+   * age policy from scripts/ops/escalate_stale_findings.py by cron since step 14 - /executive/risk-score has been
+   * counting the stale findings all along. POST /findings/escalate-stale runs that same policy. The page's own
+   * click is the accountable act, so it passes apply; any other action stays refused. */
+  gdsAutoAssignFindings: {
+    path: '/findings/escalate-stale',
+    method: 'POST',
+    mapPayload: (payload = {}) => {
+      const action = payload.action || 'escalate_stale';
+      if (action !== 'escalate_stale') {
+        throw new NotOnThisPlatform(`gdsAutoAssignFindings.${action}`, 'Function');
+      }
+      return { apply: payload.apply === true };
+    },
+  },
   // Linear is ported and proved against the live workspace; this is its sync action.
   gdsLinearSync: { path: '/integrations/linear', method: 'POST', body: { action: 'sync' } },
   /* The shell asks for platform_intel on every page load; that function does not exist here, so the header showed

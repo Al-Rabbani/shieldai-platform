@@ -21,6 +21,10 @@ ROLE_PERMISSIONS: dict[str, list[str]] = {
         # which is what cloud_posture_api.py:529 actually checks - an earlier version of this comment named a
         # permission that no route uses, which made the suppression mechanism look missing when it was present.)
         "findings:accept_risk",
+        # Escalating past a severity age policy raises a notification a human must acknowledge, so it is an
+        # accountable act like accept_risk. Served by POST /findings/escalate-stale; granted to platform_owner by
+        # migration 059, and held by admin through the wildcard.
+        "findings:escalate",
         "incidents:read",
         # An incident could never be closed before this permission existed: GET was the only route on the
         # resource, so "open" was permanent. Closing is an accountable act with a recorded reason, so it sits
