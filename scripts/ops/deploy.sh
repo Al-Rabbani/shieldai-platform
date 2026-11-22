@@ -163,7 +163,9 @@ else
     fail "built index.html references no /v2/ bundle - the vite base is wrong"
     exit 14
   fi
-  if [ ! -s "$WEB/dist$WEB_BUNDLE" ]; then
+  # The /v2/ prefix is the URL base, not a directory: the bundle lives at dist/assets/, so strip the base
+  # before looking for it on disk. Without this the check failed on a perfectly good build.
+  if [ ! -s "$WEB/dist${WEB_BUNDLE#/v2}" ]; then
     fail "index.html references $WEB_BUNDLE but the build did not emit it"
     exit 15
   fi
