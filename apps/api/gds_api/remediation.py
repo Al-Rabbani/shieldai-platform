@@ -568,8 +568,16 @@ router = APIRouter(prefix="/remediation", tags=["remediation"])
 
 
 class RemediationPlanOut(BaseModel):
-    id: str
-    finding_id: str
+    """Declared from what a plan actually carries, not what looked tidy.
+
+    id is a UUID (serialised to a string in JSON); finding_id is null whenever the plan was generated from a scanner
+    finding, so it cannot be a required str; the two timestamps are real timestamps. Declaring these as str raised
+    ResponseValidationError and made the route answer 500 while the engine itself worked.
+    """
+
+    id: uuid.UUID
+    finding_id: uuid.UUID | None = None
+    security_finding_id: int | None = None
     remediation_type: str
     fix_description: str
     fix_steps: dict[str, Any]
@@ -579,8 +587,8 @@ class RemediationPlanOut(BaseModel):
     requires_approval: bool
     approved_by: str | None
     executed_by: str | None
-    executed_at: str | None
-    verified_at: str | None
+    executed_at: datetime | None
+    verified_at: datetime | None
     execution_result: dict[str, Any]
     verification_result: dict[str, Any]
 
