@@ -23,12 +23,24 @@ check() { # name probe_cmd restart_cmd [strikes]
   # enough. Measured 21 Nov 2026: the temporal probe failed twice 30 minutes apart while returning in 300ms on 8 of
   # 8 manual runs, i.e. a transient, and the second failure restarted the whole container for nothing.
   local name="$1" probe="$2" fix="$3" strikes="${4:-2}"
-  if eval "$probe" >/dev/null 2>&1; then
+  # The probe's own words are kept, not discarded. Measured 22 Nov 2026: the log recorded nine temporal failures in one
+  # evening as the bare line "FAIL temporal (consecutive 3)", so the reason was unknowable and the same fault was
+  # re-diagnosed from scratch. A watchdog that cannot say why it fired is only half a watchdog.
+  local out rc
+  out=$(eval "$probe" 2>&1); rc=$?
+  if [ "$rc" -eq 0 ]; then
     rm -f "$STATE/$name.fail" "$STATE/$name.restarts"; ok=$((ok+1)); return 0
+  fi
+  # Exit 2 is a probe saying "answered, but too slowly" - a load symptom, not an outage. Restarting a stateful container
+  # cancels in-flight activities, so slowness is recorded and does not count as a strike. Only a probe that signals this
+  # can reach this branch; the curl and supervisor probes exit 0 or 1.
+  if [ "$rc" -eq 2 ]; then
+    echo "[$(date -u +%FT%TZ)] SLOW $name (not a strike): ${out:-no output}" >> "$LOG"
+    ok=$((ok+1)); return 0
   fi
   local n=$(( $(cat "$STATE/$name.fail" 2>/dev/null || echo 0) + 1 ))
   echo "$n" > "$STATE/$name.fail"
-  echo "[$(date -u +%FT%TZ)] FAIL $name (consecutive $n)" >> "$LOG"
+  echo "[$(date -u +%FT%TZ)] FAIL $name (consecutive $n) rc=$rc reason=${out:-no output}" >> "$LOG"
   bad=$((bad+1))
   if [ "$n" -ge "$strikes" ]; then
     echo "[$(date -u +%FT%TZ)] RESTART $name via: $fix" >> "$LOG"
@@ -36,7 +48,7 @@ check() { # name probe_cmd restart_cmd [strikes]
     rm -f "$STATE/$name.fail"
     local r=$(( $(cat "$STATE/$name.restarts" 2>/dev/null || echo 0) + 1 ))
     echo "$r" > "$STATE/$name.restarts"
-    raise_alert high "$name probe failed $n times in a row; restarted via '$fix' (restart $r of this outage)"
+    raise_alert high "$name probe failed $n times in a row (rc=$rc ${out:-no output}); restarted via '$fix' (restart $r of this outage)"
     if [ "$r" -ge 2 ]; then
       # Two automatic repairs have not held, so this is not a transient blip and the fix is not working.
       raise_alert critical "$name still failing after $r restarts; the automatic repair is not holding"
