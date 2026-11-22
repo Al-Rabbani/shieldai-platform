@@ -191,7 +191,7 @@ async def create_user(
             """
             INSERT INTO audit_events (id, tenant_id, user_id, action, detail, created_at)
             VALUES (gen_random_uuid(), :tid, :actor, 'admin.user.created',
-                    jsonb_build_object('email', :email, 'role', :role), now())
+                    jsonb_build_object('email', cast(:email as text), 'role', cast(:role as text)), now())
             """
         ),
         {
@@ -262,7 +262,7 @@ async def patch_user(
             """
             INSERT INTO audit_events (id, tenant_id, user_id, action, detail, created_at)
             VALUES (gen_random_uuid(), :tid, :actor, 'admin.user.updated',
-                    jsonb_build_object('target', :target, 'role', :role, 'is_active', :active), now())
+                    jsonb_build_object('target', cast(:target as text), 'role', cast(:role as text), 'is_active', cast(:active as boolean)), now())
             """
         ),
         {
@@ -369,7 +369,7 @@ async def create_role(
             """
             INSERT INTO audit_events (id, tenant_id, user_id, action, detail, created_at)
             VALUES (gen_random_uuid(), :tid, :actor, 'admin.role.created',
-                    jsonb_build_object('name', :name, 'permission_count', :count), now())
+                    jsonb_build_object('name', cast(:name as text), 'permission_count', cast(:count as integer)), now())
             """
         ),
         {
@@ -451,7 +451,7 @@ async def issue_api_key(
             """
             INSERT INTO audit_events (id, tenant_id, user_id, action, detail, created_at)
             VALUES (gen_random_uuid(), :tid, :actor, 'admin.api_key.issued',
-                    jsonb_build_object('name', :name, 'prefix', :prefix), now())
+                    jsonb_build_object('name', cast(:name as text), 'prefix', cast(:prefix as text)), now())
             """
         ),
         {
@@ -508,7 +508,7 @@ async def revoke_api_key(
             """
             INSERT INTO audit_events (id, tenant_id, user_id, action, detail, created_at)
             VALUES (gen_random_uuid(), :tid, :actor, 'admin.api_key.revoked',
-                    jsonb_build_object('name', :name), now())
+                    jsonb_build_object('name', cast(:name as text)), now())
             """
         ),
         {
@@ -603,7 +603,7 @@ async def provision_tenant(
             """
             INSERT INTO audit_events (id, tenant_id, user_id, action, detail, created_at)
             VALUES (gen_random_uuid(), :tid, :actor, 'admin.tenant.provisioned',
-                    jsonb_build_object('tenant_id', :new_tid, 'slug', :slug, 'owner', :email), now())
+                    jsonb_build_object('tenant_id', cast(:new_tid as text), 'slug', cast(:slug as text), 'owner', cast(:email as text)), now())
             """
         ),
         {
