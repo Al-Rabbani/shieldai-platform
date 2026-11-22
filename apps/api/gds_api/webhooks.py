@@ -67,7 +67,7 @@ async def list_endpoints(
     rows = (await db.execute(text("""
         SELECT e.id, e.name, e.url, e.min_severity, e.is_active, e.created_at,
                e.last_delivery_at, e.consecutive_failures,
-               count(d.id) FILTER (WHERE d.status = 'delivered') AS delivery_count,
+               count(d.id) FILTER (WHERE d.delivered) AS delivery_count,
                count(d.id) AS delivery_attempts
           FROM webhook_endpoints e
           LEFT JOIN webhook_deliveries d ON d.endpoint_id = e.id
