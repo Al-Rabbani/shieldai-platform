@@ -60,7 +60,7 @@ export default function BlueTeamCommandPage() {
   return (
     <div className="min-h-screen p-4 space-y-4" style={{ background: "#0a0f1e" }}>
       <div className="flex items-center gap-3 flex-wrap">
-        <h1 className="text-xl font-bold text-white">\ud83d\udee1\ufe0f Blue Team Command</h1>
+        <h1 className="text-xl font-bold text-white">🛡️ Blue Team Command</h1>
         <span className="text-[10px] text-slate-500 uppercase tracking-widest">Defensive Operations — Containment · Self-Healing · Zero Trust</span>
       </div>
 
