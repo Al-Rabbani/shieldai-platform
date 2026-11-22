@@ -87,7 +87,6 @@ export default function EscalationSettingsPage() {
     setMembers((prev) => prev.map((member) => (member.id === id ? { ...member, ...patch } : member)));
   }
 
-  const withSlack = members.filter((member) => member.slack_user_id).length;
 
   return (
     <div className="space-y-4 p-1" style={{ background: "#0a0f1e", minHeight: "100vh" }}>
@@ -137,11 +136,11 @@ export default function EscalationSettingsPage() {
               <Users size={15} className="text-slate-400" />
               <h2 className="text-sm font-bold text-white">Security engineers</h2>
             </div>
-            <span className="text-[10px] text-slate-500">{withSlack} of {members.length} with a Slack ID</span>
+            <span className="text-[10px] text-slate-500">{members.length} team member(s) · no Slack identity is stored for any of them</span>
           </div>
           <EngineerSlackList members={members} onSave={saveMember} />
           <p className="text-[10px] text-slate-500 mt-2">
-            Slack member IDs start with U. Find one in Slack under the person&apos;s profile, then paste it here so alerts @-mention them.
+            Slack member IDs start with U. Nothing typed here is saved: there is no team member store on this platform, so no Slack identity is held for anyone and no alert can @-mention a person. Delivery uses a webhook.
           </p>
         </section>
 

@@ -5,6 +5,9 @@ export default function EngineerSlackList({ members, onSave }) {
   const [draft, setDraft] = useState({});
   const [savedId, setSavedId] = useState(null);
 
+  /* Every save here goes to TeamMember.update, which refuses: there is no team member store, so a Slack ID has nowhere
+   * to live. The note below says so rather than letting a green Save suggest otherwise. */
+
   function valueFor(member, field) {
     return draft[member.id]?.[field] ?? member[field] ?? "";
   }
@@ -41,7 +44,7 @@ export default function EngineerSlackList({ members, onSave }) {
           <input
             value={valueFor(member, "slack_user_id")}
             onChange={(e) => change(member, "slack_user_id", e.target.value)}
-            placeholder="Slack member ID (U0123ABC)"
+            placeholder="Slack member ID (U0123ABC)" title="Not saved: this platform holds no team member store"
             className="w-48 px-2 py-1 rounded text-[11px] bg-[#050e1f] border border-slate-700 text-white placeholder-slate-600 focus:border-blue-500 outline-none"
           />
           <label className="flex items-center gap-1.5 text-[10px] text-slate-400">

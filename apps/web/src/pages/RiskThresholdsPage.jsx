@@ -234,7 +234,7 @@ export default function RiskThresholdsPage() {
                   <option key={member.id} value={member.id}>{member.name}{member.role ? ` · ${member.role}` : ""}</option>
                 ))}
             </select>
-            <span className="block mt-1 text-[9px] normal-case text-slate-600">No head is notified today: a limit cannot be saved, so nothing can fire. The Slack member ID is stored on the team member record for when a limit store exists.</span>
+            <span className="block mt-1 text-[9px] normal-case text-slate-600">No head is notified today: a limit cannot be saved, so nothing can fire. No Slack member ID is stored for anyone on this platform, so even with a limit store no head could be @-mentioned; delivery here is a webhook, not a channel.</span>
           </div>
           <label className="block text-[10px] uppercase text-slate-500">
             Risk limit ({form.threshold})
