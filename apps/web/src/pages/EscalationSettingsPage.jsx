@@ -184,6 +184,20 @@ export default function EscalationSettingsPage() {
           <span className="text-[10px] text-slate-500">Fired from the Critical Vuln Engineer Escalation workflow</span>
         </div>
 
+        {/* The ten rules the platform writes on first read look identical to rules a person wrote, so the count,
+            the active count, how many have ever fired and how many are platform defaults are stated rather than
+            left for the reader to infer from the cards. */}
+        {!loading && rules.length > 0 && (
+          <p className="text-[10px] text-slate-500 mb-3">
+            {rules.length} rule{rules.length === 1 ? "" : "s"} ·{" "}
+            {rules.filter((rule) => rule.is_active).length} active ·{" "}
+            {rules.filter((rule) => Number(rule.fire_count || 0) > 0).length} ever fired
+            {rules.some((rule) => rule.origin === "seeded")
+              ? ` · ${rules.filter((rule) => rule.origin === "seeded").length} seeded by the platform, not configured here`
+              : ""}
+          </p>
+        )}
+
         {loading ? (
           <div className="w-6 h-6 border-2 border-t-blue-500 border-white/10 rounded-full animate-spin mx-auto my-6" />
         ) : rules.length === 0 ? (
@@ -205,6 +219,11 @@ export default function EscalationSettingsPage() {
                       {Number(rule.min_risk_score || 0) > 0 && (
                         <span className="text-[9px] font-bold px-1.5 py-0.5 rounded border border-amber-500/40 bg-amber-500/10 text-amber-300">
                           CVSS ≥ {rule.min_risk_score}
+                        </span>
+                      )}
+                      {rule.origin === "seeded" && (
+                        <span className="text-[9px] px-1.5 py-0.5 rounded bg-slate-500/20 text-slate-300 border border-slate-600" title="Written by the platform from its built-in rule set">
+                          default
                         </span>
                       )}
                       {!rule.is_active && <span className="text-[9px] px-1.5 py-0.5 rounded bg-slate-500/20 text-slate-400">paused</span>}

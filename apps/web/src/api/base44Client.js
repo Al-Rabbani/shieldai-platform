@@ -68,7 +68,6 @@ const ENTITY_ROUTES = {
   ASPMAsset: { path: '/cloud/assets' },
   /* 145 cloud assets with real linked-finding counts and stated nulls where nothing was measured. */
   AttackSurface: { path: '/cloud/attack-surface', summaryPath: '/cloud/attack-surface/summary' },
-  ComplianceChecklistItem: { path: '/compliance/controls' },
   ComplianceFramework: { path: '/compliance/frameworks', summaryPath: '/compliance/frameworks' },
   /* Control-level verdicts from the assessment engine: 297 controls, each carrying its own pass/fail. */
   ComplianceChecklistItem: { path: '/compliance/controls' },
@@ -85,6 +84,8 @@ const ENTITY_ROUTES = {
   Notification: { path: '/notifications' },
   /* alert_rules holds the real rules; /alerts/rules returns them with the API's own column names. */
   AlertRule: { path: '/alerts/rules' },
+  /* The escalation panel's rules are siem_correlation_rules: ten real rows, with PATCH and DELETE now served. */
+  VulnEscalationRule: { path: '/siem/correlation/rules' },
   ApprovalRequest: { path: '/approvals' },
   CodeRepository: { path: '/repositories' },
   ScanJob: { path: '/missions' },
@@ -105,6 +106,8 @@ const FUNCTION_ROUTES = {
 };
 
 const unmapped = new Set();
+
+export { REVERSE_FIELD_MAPS, AMBIGUOUS_REVERSE_FIELDS };
 
 export function unavailableEntities() {
   return Array.from(unmapped).sort();
@@ -235,6 +238,14 @@ const FIELD_MAPS = {
     notification_channels: 'channels',
     trigger_count: 'fire_count',
   },
+  /* The panel reads rule_name and severity_threshold; the correlation store calls them name and severity.
+     min_risk_score, slack_channel_*, engineer_ids and team_names are native names and need no translation.
+     The store has no CVSS floor for rules written before migration 054, so min_risk_score stays undefined and
+     the card hides its badge rather than printing "CVSS >= 0". */
+  VulnEscalationRule: {
+    rule_name: 'name',
+    severity_threshold: 'severity',
+  },
   ContainerFinding: {
     normalized_severity: 'severity',
     asset_name: 'image',
@@ -252,6 +263,54 @@ const FIELD_MAPS = {
     opened_at: 'opened_at',
   },
 };
+
+/* The inverse of FIELD_MAPS, built once. A write has to speak the platform's column names, so the same
+ * declaration drives both directions instead of a second map that can drift out of step. */
+const { REVERSE_FIELD_MAPS, AMBIGUOUS_REVERSE_FIELDS } = (() => {
+  const reverse = {};
+  /* entity -> platform field -> [builder fields]. Anything with more than one source is un-writable: a save
+     cannot know which name the page meant, so it is left untranslated and the page's own names go through. */
+  const ambiguous = {};
+  for (const [entity, map] of Object.entries(FIELD_MAPS)) {
+    const sources = {};
+    for (const [builderField, platformField] of Object.entries(map)) {
+      (sources[platformField] = sources[platformField] || []).push(builderField);
+    }
+    const byPlatformField = {};
+    for (const [platformField, builderFields] of Object.entries(sources)) {
+      if (builderFields.length > 1) {
+        (ambiguous[entity] = ambiguous[entity] || []).push(platformField);
+        continue;
+      }
+      const [only] = builderFields;
+      /* `id` is the route's primary key on every entity; it is never a writable alias for a column. */
+      if (only === 'id') {
+        (ambiguous[entity] = ambiguous[entity] || []).push(platformField);
+        continue;
+      }
+      byPlatformField[platformField] = only;
+    }
+    reverse[entity] = byPlatformField;
+  }
+  return { REVERSE_FIELD_MAPS: reverse, AMBIGUOUS_REVERSE_FIELDS: ambiguous };
+})();
+
+function toPlatformBody(name, data) {
+  const reverse = REVERSE_FIELD_MAPS[name];
+  if (!reverse || !data || typeof data !== 'object' || Array.isArray(data)) return data;
+  const body = { ...data };
+  /* reverse is { platformField: builderField }, so entries arrive column-first. Reading them the other way
+     looked for a body key named after the column, found none, and silently sent the body unchanged. */
+  for (const [platformField, builderField] of Object.entries(reverse)) {
+    if (!(builderField in body)) continue;
+    /* Leave an explicitly-sent platform field alone: a page that already speaks the API's names is not
+       wrong, and overwriting it would lose the value it chose. */
+    if (platformField in body && body[platformField] !== body[builderField]) continue;
+    body[platformField] = body[builderField];
+    delete body[builderField];
+  }
+  return body;
+}
 
 function applyFields(name, row) {
   /* CATALOGUE_PERMISSIONS is a list of strings; the pages read item.name. */
@@ -361,11 +420,14 @@ function entity(name) {
     },
     async create(data) {
       const { path } = guard('create');
-      return request(path, { method: 'POST', body: data });
+      return request(path, { method: 'POST', body: toPlatformBody(name, data) });
     },
     async update(id, data) {
       const { path } = guard('update');
-      return request(`${path}/${encodeURIComponent(id)}`, { method: 'PATCH', body: data });
+      return request(`${path}/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        body: toPlatformBody(name, data),
+      });
     },
     async delete(id) {
       const { path } = guard('delete');
@@ -373,11 +435,14 @@ function entity(name) {
     },
     async bulkCreate(items) {
       const { path } = guard('bulkCreate');
-      return request(path, { method: 'POST', body: { items } });
+      return request(path, { method: 'POST', body: { items: (items || []).map((i) => toPlatformBody(name, i)) } });
     },
     async bulkUpdate(items) {
       const { path } = guard('bulkUpdate');
-      return request(`${path}/bulk`, { method: 'PATCH', body: { items } });
+      return request(`${path}/bulk`, {
+        method: 'PATCH',
+        body: { items: (items || []).map((i) => toPlatformBody(name, i)) },
+      });
     },
     async count(query) {
       if (!route) {

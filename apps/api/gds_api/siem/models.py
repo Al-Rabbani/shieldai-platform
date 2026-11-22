@@ -52,6 +52,16 @@ class CorrelationRule(Base):
     is_active: Mapped[bool] = mapped_column(default=True)
     fire_count: Mapped[int] = mapped_column(default=0)
     last_fired: Mapped[datetime | None] = mapped_column(default=None)
+    # The escalation panel edits a notification target and a CVSS floor. Without these four columns the form
+    # submitted them, the API ignored them, and the value a user typed silently vanished on save.
+    min_risk_score: Mapped[float | None] = mapped_column(default=None)
+    slack_channel_id: Mapped[str | None] = mapped_column(String(64), default=None)
+    slack_channel_name: Mapped[str | None] = mapped_column(String(200), default=None)
+    engineer_ids: Mapped[list] = mapped_column(JSONB, default=list)
+    team_names: Mapped[list] = mapped_column(JSONB, default=list)
+    # 'seeded' means the platform wrote this row from PREBUILT_RULES on first read; 'tenant' means a person
+    # created it. The panel showed ten rules as if they were configured, so the distinction is now stored.
+    origin: Mapped[str] = mapped_column(String(16), default="tenant")
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
 

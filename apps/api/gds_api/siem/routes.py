@@ -40,6 +40,34 @@ class CorrelationRuleCreate(BaseModel):
     severity: str = "high"
     mitre_technique: str | None = None
     is_active: bool = True
+    min_risk_score: float | None = None
+    slack_channel_id: str | None = None
+    slack_channel_name: str | None = None
+    engineer_ids: list = Field(default_factory=list)
+    team_names: list = Field(default_factory=list)
+
+
+class CorrelationRuleUpdate(BaseModel):
+    """Every field optional, and only the fields actually sent are written.
+
+    exclude_unset is what makes a pause toggle a pause toggle: the panel sends {is_active: false} alone, and
+    a model_dump() without exclude_unset would blank the rule's name and conditions on the way past.
+    """
+
+    name: str | None = None
+    description: str | None = None
+    rule_type: str | None = None
+    conditions: dict | None = None
+    time_window_seconds: int | None = None
+    threshold: int | None = None
+    severity: str | None = None
+    mitre_technique: str | None = None
+    is_active: bool | None = None
+    min_risk_score: float | None = None
+    slack_channel_id: str | None = None
+    slack_channel_name: str | None = None
+    engineer_ids: list | None = None
+    team_names: list | None = None
 
 
 class IncidentResolveRequest(BaseModel):
@@ -177,6 +205,12 @@ async def create_correlation_rule(
         severity=body.severity,
         mitre_technique=body.mitre_technique,
         is_active=body.is_active,
+        min_risk_score=body.min_risk_score,
+        slack_channel_id=body.slack_channel_id,
+        slack_channel_name=body.slack_channel_name,
+        engineer_ids=body.engineer_ids,
+        team_names=body.team_names,
+        origin="tenant",
     )
     db.add(rule)
     await db.commit()
@@ -200,6 +234,48 @@ async def list_rules(
         rules = await seed_default_rules(db, current_user.tenant_id)
 
     return rules
+
+
+@router.patch("/correlation/rules/{rule_id}")
+async def update_correlation_rule(
+    rule_id: uuid.UUID,
+    body: CorrelationRuleUpdate,
+    current_user: CurrentUser = Depends(require_permission("siem:write")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Edit a rule, including pausing it. Only the fields sent are written."""
+    stmt = select(CorrelationRule).where(
+        CorrelationRule.id == rule_id, CorrelationRule.tenant_id == current_user.tenant_id
+    )
+    rule = (await db.execute(stmt)).scalar_one_or_none()
+    if not rule:
+        raise HTTPException(status_code=404, detail="Correlation rule not found")
+
+    changes = body.model_dump(exclude_unset=True)
+    for field, value in changes.items():
+        setattr(rule, field, value)
+    await db.commit()
+    await db.refresh(rule)
+    return rule
+
+
+@router.delete("/correlation/rules/{rule_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_correlation_rule(
+    rule_id: uuid.UUID,
+    current_user: CurrentUser = Depends(require_permission("siem:write")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete a rule. A rule in another tenant is not found, not deleted."""
+    stmt = select(CorrelationRule).where(
+        CorrelationRule.id == rule_id, CorrelationRule.tenant_id == current_user.tenant_id
+    )
+    rule = (await db.execute(stmt)).scalar_one_or_none()
+    if not rule:
+        raise HTTPException(status_code=404, detail="Correlation rule not found")
+
+    await db.delete(rule)
+    await db.commit()
+    return None
 
 
 @router.get("/correlation/incidents")

@@ -454,6 +454,7 @@ async def seed_default_rules(db: AsyncSession, tenant_id: uuid.UUID) -> list[Cor
             severity=p_rule["severity"],
             mitre_technique=p_rule["mitre_technique"],
             is_active=p_rule["is_active"],
+            origin="seeded",
         )
         db.add(r)
         rules.append(r)
