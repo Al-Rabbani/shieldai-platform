@@ -4,6 +4,8 @@
 Queries https://api.osv.dev/v1/querybatch with the exact installed versions, so the result
 reflects what is actually running, not what a manifest claims. No sampling, no estimates.
 """
+import sys
+import subprocess
 import json, subprocess, sys, urllib.request
 
 VENV = "/opt/gds-os/apps/api/venv/bin/pip"
@@ -54,6 +56,17 @@ def main() -> int:
         "total_advisories": total,
         "detail": sorted(affected, key=lambda a: -a["count"]),
     }, indent=2))
+
+    # Record the run. The OSV row was last stamped 2026-11-17 and nothing in cron ever ran this check,
+    # so it was permanently "silent"; a real query against OSV is what makes that row mean something.
+    try:
+        subprocess.run(
+            [sys.executable, "/opt/gds-os/scripts/ops/scan_schedule_record.py",
+             "--name", "Own dependency watch (OSV)", "--ok"],
+            capture_output=True, text=True, timeout=120, check=False,
+        )
+    except Exception as exc:  # recording must never fail the check itself
+        print("WARN could not record schedule: %s" % exc, file=sys.stderr)
     return 0
 
 if __name__ == "__main__":
