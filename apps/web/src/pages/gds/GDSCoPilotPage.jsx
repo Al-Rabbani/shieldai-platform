@@ -52,12 +52,8 @@ export default function GDSCoPilotPage() {
     setLoading(true);
     setMessages(prev => [...prev, { role: "user", content: userInput }]);
 
-    const expectedAgents = [
-      { emoji: "🚨", name: "AI SOC Director", detail: "Fetching live alerts..." },
-      { emoji: "🔍", name: "AI Threat Hunter", detail: "Scanning IOC feeds..." },
-      { emoji: "💰", name: "AI Risk Director", detail: "Quantifying exposure..." },
-    ];
-    setThinkingAgents(expectedAgents);
+    /* One request is in flight; naming three agents "fetching" and "scanning" was decoration, not a report. */
+    setThinkingAgents([{ emoji: "⏳", name: "Mission in flight", detail: "Reasoning over the request…" }]);
 
     try {
       const result = await invokeAction("gdsAgentOS", {

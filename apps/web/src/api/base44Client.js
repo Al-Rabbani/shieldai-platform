@@ -95,7 +95,7 @@ const ENTITY_ROUTES = {
   ComplianceChecklistItem: { path: '/compliance/controls' },
   ComplianceAssessment: { path: '/compliance/assessments' },
   PolicyViolation: { path: '/compliance/determinations' },
-  Agent: { path: '/agents' },
+  Agent: { path: '/agents', summaryPath: '/agents/fleet/status' },
   AuditLog: { path: '/audit' },
   /* Admin portal (step 10). Gated on users:manage, which is what these pages are for. */
   User: { path: '/admin/users' },
