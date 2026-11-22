@@ -686,7 +686,13 @@ async def api_generate_plan(
         )
         return plan
     except ValueError as exc:
-        raise HTTPException(http_status.HTTP_404_NOT_FOUND, str(exc))
+        if isinstance(exc, HTTPException):
+            raise
+        if not isinstance(exc, ValueError):
+            raise  # an unexpected failure is a 500, not a client error wearing a 404
+        # A refused lifecycle move is a conflict, not an absence. Measured: a governed finding at 'observed' answered
+        # 404 "cannot move from 'observed' to 'remediation_planned'", telling the client it did not exist.
+        raise HTTPException(http_status.HTTP_409_CONFLICT, str(exc))
 
 
 @router.get("/plans", response_model=list[RemediationPlanOut])
@@ -730,7 +736,13 @@ async def api_execute_plan(
         )
         return result
     except ValueError as exc:
-        raise HTTPException(http_status.HTTP_404_NOT_FOUND, str(exc))
+        if isinstance(exc, HTTPException):
+            raise
+        if not isinstance(exc, ValueError):
+            raise  # an unexpected failure is a 500, not a client error wearing a 404
+        # A refused lifecycle move is a conflict, not an absence. Measured: a governed finding at 'observed' answered
+        # 404 "cannot move from 'observed' to 'remediation_planned'", telling the client it did not exist.
+        raise HTTPException(http_status.HTTP_409_CONFLICT, str(exc))
 
 
 @router.post("/plans/verify", response_model=dict)
@@ -748,7 +760,13 @@ async def api_verify_plan(
         )
         return result
     except ValueError as exc:
-        raise HTTPException(http_status.HTTP_404_NOT_FOUND, str(exc))
+        if isinstance(exc, HTTPException):
+            raise
+        if not isinstance(exc, ValueError):
+            raise  # an unexpected failure is a 500, not a client error wearing a 404
+        # A refused lifecycle move is a conflict, not an absence. Measured: a governed finding at 'observed' answered
+        # 404 "cannot move from 'observed' to 'remediation_planned'", telling the client it did not exist.
+        raise HTTPException(http_status.HTTP_409_CONFLICT, str(exc))
 
 
 # ---------------------------------------------------------------------------
