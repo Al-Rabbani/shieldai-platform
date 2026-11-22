@@ -62,6 +62,11 @@ const ENTITY_ROUTES = {
   /* One object of billing arithmetic with its basis stated, and nulls when no subscription row exists. */
   RevenueReport: { path: '/mssp/revenue', single: true },
   KPI: { path: '/executive/kpis' },
+  // Item 7: stores that exist and hold rows but had no read route before 22 Nov 2026.
+  WebhookEndpoint: { path: '/webhooks' },
+  RemediationPlan: { path: '/remediation/plans' },
+  LinearIssueLink: { path: '/integrations/linear/links' },
+  AssetDependency: { path: '/cloud/relationships' },
   TriagedFinding: { path: '/findings', summaryPath: '/findings/summary' },
   Finding: { path: '/findings', summaryPath: '/findings/summary' },
   Incident: { path: '/incidents' },

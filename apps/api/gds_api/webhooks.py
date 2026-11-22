@@ -65,9 +65,18 @@ async def list_endpoints(
     db: AsyncSession = Depends(get_db),
 ) -> list[dict]:
     rows = (await db.execute(text("""
-        SELECT id, name, url, min_severity, is_active, created_at, last_delivery_at, consecutive_failures
-        FROM webhook_endpoints WHERE tenant_id = :t ORDER BY created_at DESC
+        SELECT e.id, e.name, e.url, e.min_severity, e.is_active, e.created_at,
+               e.last_delivery_at, e.consecutive_failures,
+               count(d.id) FILTER (WHERE d.status = 'delivered') AS delivery_count,
+               count(d.id) AS delivery_attempts
+          FROM webhook_endpoints e
+          LEFT JOIN webhook_deliveries d ON d.endpoint_id = e.id
+         WHERE e.tenant_id = :t
+         GROUP BY e.id, e.name, e.url, e.min_severity, e.is_active, e.created_at,
+                  e.last_delivery_at, e.consecutive_failures
+         ORDER BY e.created_at DESC
     """), {"t": str(current_user.tenant_id)})).mappings().all()
+    # delivery_count is counted, never defaulted: an endpoint with no deliveries reports 0 because the count is zero.
     return [dict(r) for r in rows]
 
 
