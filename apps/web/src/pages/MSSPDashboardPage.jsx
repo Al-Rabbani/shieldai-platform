@@ -55,7 +55,11 @@ export default function MSSPDashboardPage() {
   useEffect(() => { load(); }, [load]);
 
   const customers = overview?.customers || [];
-  const rows = customers.map((customer) => ({ customer }));
+  /* The overview is read whole rather than through the entity map, so the customer name arrives as display_name.
+     Normalised here, once, because two places read it: the card title and the briefing. */
+  const rows = customers.map((customer) => ({
+    customer: { ...customer, customer_name: customer.display_name || customer.customer_name },
+  }));
 
   function briefing(row) {
     const c = row.customer;
