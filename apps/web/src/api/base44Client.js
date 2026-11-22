@@ -550,7 +550,9 @@ export const base44 = {
         method: route.method || 'POST',
         body: route.method === 'GET' ? undefined : outgoing,
       });
-      return route.mapResponse ? route.mapResponse(data) : data;
+      /* The SDK contract is { data }. Every call site that reads a result reads r.data, so returning the payload bare
+       * made res.data undefined and threw on the first page that used it. */
+      return { data: route.mapResponse ? route.mapResponse(data) : data };
     },
   },
 
