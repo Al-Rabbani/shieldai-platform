@@ -123,6 +123,17 @@ const ENTITY_ROUTES = {
 };
 
 /* Backend functions the platform actually implements. Everything else throws. */
+/* Refusals that know why. Measured 22 Nov 2026 before writing this: the only Slack credential on the host is
+ * SLACK_WEBHOOK_URL (a webhook can post, it cannot enumerate channels - that needs a bot token), and there is no
+ * department or threshold table of any kind, so a risk-limit check has nothing to read. Escalation RULES are real and
+ * are served through VulnEscalationRule -> /siem/correlation/rules; it is only these two halves that are absent. */
+const REFUSAL_REASONS = {
+  gdsVulnEscalation:
+    'Escalation rules are served (they read and write the platform\'s own correlation rules), but two halves are not: ' +
+    'the Slack channel list, because this host holds only a webhook and enumerating channels needs a bot token, and ' +
+    'the department risk-limit check, because no threshold store exists here.',
+};
+
 const FUNCTION_ROUTES = {
   /* AssignmentRulesPage's escalate button asked this name and nothing answered it, while the platform has run the
    * age policy from scripts/ops/escalate_stale_findings.py by cron since step 14 - /executive/risk-score has been
@@ -204,11 +215,15 @@ export function unavailableEntities() {
 }
 
 class NotOnThisPlatform extends Error {
-  constructor(what, kind) {
-    super(`${kind} "${what}" is not served by the GDSA Radar API yet.`);
+  /* `detail` is optional and only used where the platform measured exactly what is missing. A page can then tell the
+   * operator which half of a feature is absent instead of "not served yet" for all of it. */
+  constructor(what, kind, detail) {
+    super(detail ? `${kind} "${what}" is not served by the GDSA Radar API yet. ${detail}`
+                 : `${kind} "${what}" is not served by the GDSA Radar API yet.`);
     this.name = 'NotOnThisPlatform';
     this.what = what;
     this.kind = kind;
+    this.detail = detail || null;
   }
 }
 
@@ -581,7 +596,7 @@ export const base44 = {
       const route = FUNCTION_ROUTES[name];
       if (!route) {
         unmapped.add(`fn:${name}`);
-        throw new NotOnThisPlatform(name, 'Function');
+        throw new NotOnThisPlatform(name, 'Function', REFUSAL_REASONS[name]);
       }
       const outgoing = route.mapPayload ? route.mapPayload(payload) : (route.body || payload);
       const data = await request(route.path, {

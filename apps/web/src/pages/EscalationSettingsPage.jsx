@@ -165,6 +165,12 @@ export default function EscalationSettingsPage() {
         </section>
       </div>
 
+      {channelError && (
+        <p className="text-[11px] leading-relaxed text-amber-300/80">
+          No Slack channel list to choose from. {channelError} A rule still saves with a channel ID typed by hand.
+        </p>
+      )}
+
       {editing && (
         <EscalationRuleForm
           initial={editing}

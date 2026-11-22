@@ -135,16 +135,31 @@ export default function PostureDropAlertCard() {
           </label>
           <label className="block col-span-2">
             <span className="text-[10px] text-slate-500 flex items-center gap-1"><Radio size={9} /> Slack channel</span>
-            <select
-              value={form.slack_channel_id}
-              onChange={(event) => update({ slack_channel_id: event.target.value })}
-              className={FIELD}
-            >
-              <option value="">No Slack channel</option>
-              {channels.map((channel) => (
-                <option key={channel.id} value={channel.id}>#{channel.name}</option>
-              ))}
-            </select>
+            {channels.length > 0 ? (
+              <select
+                value={form.slack_channel_id}
+                onChange={(event) => update({ slack_channel_id: event.target.value })}
+                className={FIELD}
+              >
+                <option value="">No Slack channel</option>
+                {channels.map((channel) => (
+                  <option key={channel.id} value={channel.id}>#{channel.name}</option>
+                ))}
+              </select>
+            ) : (
+              <input
+                value={form.slack_channel_id || ""}
+                onChange={(event) => update({ slack_channel_id: event.target.value })}
+                placeholder="Channel ID (C0123ABC)"
+                className={FIELD}
+              />
+            )}
+            {channels.length === 0 && (
+              <span className="block mt-1 text-[9px] text-amber-300/70">
+                No channel list to choose from: alert delivery here uses a webhook, and enumerating Slack channels needs
+                a bot token this platform does not hold. An ID typed here is saved as-is.
+              </span>
+            )}
           </label>
         </div>
       )}

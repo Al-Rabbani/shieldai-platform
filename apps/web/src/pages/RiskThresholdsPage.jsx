@@ -144,7 +144,7 @@ export default function RiskThresholdsPage() {
           <div>
             <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-300 border border-blue-500/30">RSK-012 | RISK LIMITS</span>
             <h1 className="text-xl font-bold text-white mt-1">Department risk thresholds</h1>
-            <p className="text-xs text-slate-500">Set a score limit per department; an asset above it alerts its Slack channel.</p>
+            <p className="text-xs text-slate-500">Department risk limits are not recorded on this platform: there is no department threshold store, so a limit cannot be saved or checked, and the Slack-channel alerting this page describes needs a channel list this host cannot read (delivery uses a webhook; enumerating channels needs a bot token).</p>
           </div>
         </div>
         <button onClick={checkNow} disabled={checking} className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold bg-red-500/15 text-red-300 border border-red-500/40 hover:bg-red-500/25 transition disabled:opacity-40">
