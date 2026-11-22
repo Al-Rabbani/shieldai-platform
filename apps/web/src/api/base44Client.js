@@ -133,6 +133,29 @@ const ENTITY_ROUTES = {
 const ABSENT = Symbol('absent');
 
 const REFUSAL_REASONS = {
+  /* Measured 22 Nov 2026 before writing these, so each one states a fact rather than a guess. */
+  gdsScheduledReports:
+    'Every action on this function reads or writes a Google Drive folder, and this host holds no Google service ' +
+    'account. The report content can be built from the platform, but it cannot be filed into Drive, so no folder can ' +
+    'be listed and no report can be saved here.',
+  saveReportToDrive:
+    'Saving a custom report to Google Drive needs a service account this host does not have. The report itself is ' +
+    'stored on the platform and can be exported as CSV or PDF from the page.',
+  gdsCompliancePortalSync:
+    'There is no external compliance portal configured on this host and no endpoint for one, so there is nothing to ' +
+    'sync with. Evidence and assessments are stored and scored locally.',
+  gdsApplyRiskScoring:
+    'Measured 22 Nov 2026: cloud_assets has no risk_score or base_risk_score column, 0 of 145 assets link to any ' +
+    'finding by name, and the seven weighted types (database, ai_model, api, storage, container, serverless, compute) ' +
+    'do not occur among the ten measured categories, which are subnet 56, network 17, security_group 17, region 17, ' +
+    'firewall 17 and similar. A score computed from those inputs would be invented, so nothing is applied.',
+  gdsDataFabric:
+    'There is no data fabric store on this platform: data_sources, data_catalog, data_lakes and data_quality_rules ' +
+    'do not exist as tables, so nothing can be registered, catalogued or scored for quality.',
+  gdsCleanup:
+    'There is no cleanup function on this platform and nothing for one to clean. The call was removed from the app ' +
+    'shell rather than left failing on every page load.',
+
   'gdsForensicChain:export_package':
     'Building the evidence package needs Google Drive, and this host holds no Google service account, so nothing can be ' +
     'uploaded or listed there. Integrity verification on the same page is real and reads the stored MinIO objects.',

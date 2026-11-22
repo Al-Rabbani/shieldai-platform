@@ -62,6 +62,10 @@ export default function DataFabricPage() {
 
   return (
     <div className="min-h-screen p-4 space-y-4" style={{ background: "#0a0f1e" }}>
+      {/* Stated on the page because its controls would otherwise look merely unsaved. */}
+      <p className="text-[11px] text-amber-300/90 rounded-lg px-3 py-2" style={{ background: "#111827", border: "1px solid #1F2937" }}>
+        No data fabric is configured on this platform, and none can be from here: there are no data source, catalog, lake or quality-rule tables, so the counts below are absences rather than measured zeros. Ingested security data lives in the platform tables the scanners write to, not in a fabric this page controls.
+      </p>
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">
           <Database size={24} className="text-cyan-400" />

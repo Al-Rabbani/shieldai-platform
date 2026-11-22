@@ -16,10 +16,11 @@ export function PlatformProvider({ children }) {
 
   useEffect(() => {
     // Run cleanup once on startup, then refresh intel
-    base44.functions.invoke("gdsCleanup", {}).catch(() => {}).finally(() => {
-      setCleanupDone(true);
-      refresh();
-    });
+    /* This called gdsCleanup on every page load and swallowed the failure. Measured 22 Nov 2026: there is no cleanup
+     * function on this platform and nothing for one to clean, so the call did nothing except put a name into the
+     * unserved list that the availability banner reads. The refresh it gated now runs directly. */
+    setCleanupDone(true);
+    refresh();
     const t = setInterval(refresh, 30000);
     return () => clearInterval(t);
   }, [refresh]);

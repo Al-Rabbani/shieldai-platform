@@ -101,6 +101,10 @@ export default function RiskScoringPage() {
 
   return (
     <div className="space-y-4" style={{ background: "#0a0f1e", minHeight: "100vh" }}>
+      {/* Stated on the page because the controls above would otherwise look merely unsaved. */}
+      <p className="text-[11px] text-amber-300/90 rounded-lg px-3 py-2" style={{ background: "#111827", border: "1px solid #1F2937" }}>
+        Nothing on this page can be applied, and that is measured rather than pending. cloud_assets carries no risk score to weight, 0 of 145 assets link to any finding by name, and the seven asset types weighted below do not occur among the ten categories the register actually holds (subnet, network, security_group, region, firewall and similar). There is also no scoring-config store here, so a saved model would have nowhere to live. Applying would produce invented numbers, which is why Save and Apply report this instead.
+      </p>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex items-start gap-3">
           <SlidersHorizontal size={22} className="text-blue-400 mt-0.5" />

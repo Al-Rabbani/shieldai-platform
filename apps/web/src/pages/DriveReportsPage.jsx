@@ -47,6 +47,10 @@ export default function DriveReportsPage() {
 
   return (
     <div className="space-y-4" style={{ background: "#0a0f1e", minHeight: "100vh" }}>
+      {/* Stated on the page because its controls would otherwise look merely unsaved. */}
+      <p className="text-[11px] text-amber-300/90 rounded-lg px-3 py-2" style={{ background: "#111827", border: "1px solid #1F2937" }}>
+        Google Drive is not connected on this host and no service account is installed, so no folder can be listed and no report can be filed. The platform can build the underlying report content, and the Compliance and Forensic pages can export PDF and CSV locally; only the Drive step is missing.
+      </p>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex items-start gap-3">
           <FolderDown size={22} className="text-blue-400 mt-0.5" />
