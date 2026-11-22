@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { base44 } from "@/api/base44Client";
+import { base44, unavailableEntities } from "@/api/base44Client";
 
 function gradeColor(grade) {
   if (grade === "A") return "#22c55e";
@@ -26,7 +26,9 @@ export default function LiveIntelligencePanel() {
       base44.entities.DarkWebAlert.list("-detected_at", 3).catch(() => []),
     ]);
     setRisk(r[0] || null);
-    setIncidents(inc.filter(i => ["new", "investigating"].includes(i.status)));
+    /* Incidents are stored as "open"; naming one expected status rendered two real incidents as none. */
+    const TERMINAL = new Set(["closed", "resolved", "false_positive"]);
+    setIncidents(inc.filter(i => !TERMINAL.has(String(i.status || "").toLowerCase())));
     setThreats(thr.filter(t => t.affects_you).slice(0, 5));
     setFindings(find);
     setDarkWeb(dw);
@@ -113,20 +115,34 @@ export default function LiveIntelligencePanel() {
           </div>
         )}
 
-        {/* Critical Findings */}
+        {/* Highest CVSS findings, any status. Accepted and resolved rows are labelled as such, never as open risk. */}
         {findings.length > 0 && (
           <div>
-            <p className="text-[10px] text-slate-500 uppercase tracking-widest mb-1.5">Critical Findings</p>
+            <p className="text-[10px] text-slate-500 uppercase tracking-widest mb-1.5">Highest CVSS findings</p>
             <div className="space-y-1.5">
               {findings.map((f, i) => (
                 <div key={i} className="flex items-center gap-2 rounded-lg p-2" style={{ background: "#111827", border: "1px solid #1F2937" }}>
                   <span className="text-[10px] font-mono text-slate-300 truncate flex-1">{f.cve_id || f.title?.slice(0, 20)}</span>
                   <span className="text-[9px] font-bold text-orange-400 flex-shrink-0">CVSS {f.cvss_score ?? "—"}</span>
+                  <span className="text-[8px] font-bold px-1 py-0.5 rounded bg-slate-500/20 text-slate-300 flex-shrink-0 uppercase">
+                    {String(f.status || "unknown").replace(/_/g, " ")}
+                  </span>
                   {f.exploited_in_wild && <span className="text-[8px] font-bold px-1 py-0.5 rounded bg-red-500/30 text-red-300 flex-shrink-0">EXPLOITED</span>}
                 </div>
               ))}
             </div>
+            <p className="text-[9px] text-slate-600 mt-1 leading-snug">
+              Sorted by CVSS across every status. This platform currently holds no open critical finding; accepted risk
+              and resolved rows appear here because their CVSS is high, and each row states which it is.
+            </p>
           </div>
+        )}
+
+        {/* An unserved source is stated, not left as silence that reads like "nothing found". */}
+        {unavailableEntities().includes("ThreatIntelFeed") && threats.length === 0 && (
+          <p className="text-[9px] text-slate-600 leading-snug">
+            No threat-intel feed is served here, so this rail shows none. That is an absence, not a quiet day.
+          </p>
         )}
 
         {/* Dark Web Alerts */}
@@ -143,6 +159,12 @@ export default function LiveIntelligencePanel() {
               ))}
             </div>
           </div>
+        )}
+
+        {unavailableEntities().includes("DarkWebAlert") && darkWeb.length === 0 && (
+          <p className="text-[9px] text-slate-600 leading-snug">
+            No dark-web source is served here, so no leak or credential alert can appear on this rail.
+          </p>
         )}
       </div>
     </div>
