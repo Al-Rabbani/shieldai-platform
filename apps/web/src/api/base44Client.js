@@ -63,7 +63,7 @@ const ENTITY_ROUTES = {
   Asset: { path: '/cloud/assets' },
   ASPMAsset: { path: '/cloud/assets' },
   ComplianceChecklistItem: { path: '/compliance/controls' },
-  ComplianceFramework: { path: '/compliance/frameworks' },
+  ComplianceFramework: { path: '/compliance/frameworks', summaryPath: '/compliance/frameworks' },
   PolicyViolation: { path: '/compliance/determinations' },
   Agent: { path: '/agents' },
   AuditLog: { path: '/audit' },
@@ -156,12 +156,19 @@ function rows(payload) {
     for (const key of ['items', 'results', 'rows', 'data', 'records', 'kpis', 'permissions']) {
       if (Array.isArray(payload[key])) return payload[key];
     }
+    /* A route that returns one collection beside its aggregates: /compliance/frameworks answers
+     * {score_over_assessed, total_assessed, ..., frameworks: [...]}. The key name is the route's own, so
+     * matching a fixed list of names turned a populated response into an empty page. */
+    const arrays = Object.values(payload).filter(Array.isArray);
+    if (arrays.length === 1) return arrays[0];
   }
   return [];
 }
 
 /* Platform column -> builder field. Only differences are listed; everything else passes through. */
 const FIELD_MAPS = {
+  /* The route reports score_over_assessed (pass rate over controls actually assessed); the pages read score. */
+  ComplianceFramework: { score: 'score_over_assessed', total_controls: 'official_control_count' },
   /* Builder rows carry created_date; the API carries created_at. */
   User: { created_date: 'created_at' },
   /* ApiKeysPage labels the scopes column Permissions. */

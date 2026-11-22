@@ -40,6 +40,7 @@ export default function CommandCenter() {
   const [dailySummary, setDailySummary] = useState("");
   const [summaryLoading, setSummaryLoading] = useState(true);
   const [estateSummary, setEstateSummary] = useState(null);
+  const [complianceSummary, setComplianceSummary] = useState(null);
 
   useEffect(() => {
     invokeAction("gdsAgentOS", {
@@ -115,6 +116,14 @@ export default function CommandCenter() {
     base44.entities.TriagedFinding.summary()
       .then(setEstateSummary)
       .catch(() => setEstateSummary(null));
+  }, []);
+
+  // The platform's compliance aggregate, not an average of per-framework pass rates. The tile said 0% and
+  // "0 frameworks" because the route's envelope key was not unwrapped; both are now read from the route.
+  useEffect(() => {
+    base44.entities.ComplianceFramework.summary()
+      .then(setComplianceSummary)
+      .catch(() => setComplianceSummary(null));
   }, []);
 
   const openCloud = cloudFindings.filter(f => f.status === "open");
@@ -200,7 +209,7 @@ export default function CommandCenter() {
       {/* Row 2 */}
       <div className="grid grid-cols-3 gap-4">
         <StatTile label="Active Incidents" value={openIncidents.length} danger={openIncidents.length > 0} pulse={openIncidents.length > 0} />
-        <StatTile label="Compliance Avg" value={`${complianceAvg}%`} subtext={`${frameworks.length} frameworks`} danger={complianceAvg < 50} />
+        <StatTile label="Compliance Avg" value={complianceSummary ? `${complianceSummary.score_over_assessed}%` : "—"} subtext={`${complianceSummary?.frameworks?.length ?? frameworks.length} frameworks`} danger={(complianceSummary?.score_over_assessed ?? 100) < 50} />
         <StatTile label="KEV Unpatched" value={risk?.kev_unpatched ?? 0} danger />
       </div>
 
