@@ -19,7 +19,9 @@ Endpoints:
   POST /reasoning/auto            — Auto-select agent and execute
 """
 import os, sys, json, logging
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
+
+from .. import ai_guard
 from pydantic import BaseModel
 from typing import Optional
 
@@ -56,10 +58,35 @@ def _tenant(user: CurrentUser) -> str:
     return str(tid)
 
 
+async def _guard_or_refuse(req: MissionRequest, tenant_id: str, actor_id: str, request: Request, route: str) -> dict:
+    """Inspect the submitted goal before it reaches the model.
+
+    A high-severity match refuses the request; a medium-severity match is recorded and allowed through. The refusal names
+    the rule that fired and states whether the attempt could actually be written down, because a claim that it was
+    recorded must be true.
+    """
+    verdict = ai_guard.scan(req.goal, ai_guard.context_text(req.context))
+    if not verdict.triggered:
+        return {}
+    client_ip = request.client.host if request and request.client else None
+    recorded = await ai_guard.record_attack(tenant_id, verdict, req.goal, route, actor_id, client_ip)
+    if verdict.blocked:
+        raise HTTPException(422, {
+            "error": "prompt_guard_refused",
+            "attack_type": verdict.attack_type,
+            "matched_rules": verdict.matched,
+            "severity": verdict.severity,
+            "recorded": recorded,
+            "note": "This request was not executed.",
+        })
+    return {"guard": {**verdict.as_dict(), "recorded": recorded}}
+
+
 @router.post("/mission")
-async def create_mission(req: MissionRequest, user: CurrentUser = Depends(get_current_user)):
+async def create_mission(req: MissionRequest, request: Request, user: CurrentUser = Depends(get_current_user)):
     """Create and execute a mission using the LLM reasoning loop."""
     tid = _tenant(user)
+    guard_note = await _guard_or_refuse(req, tid, _uid(user), request, "POST /reasoning/mission")
     try:
         if req.agent_id:
             result = await reasoning_bridge.execute_task(
@@ -114,7 +141,7 @@ async def get_agents(user: CurrentUser = Depends(get_current_user)):
 
 
 @router.post("/auto")
-async def auto_execute(req: MissionRequest, user: CurrentUser = Depends(get_current_user)):
+async def auto_execute(req: MissionRequest, request: Request, user: CurrentUser = Depends(get_current_user)):
     """Auto-select the best agent and execute the goal."""
     result = await reasoning_bridge.run_with_auto_select(
         req.goal, req.context, tenant_id=_tenant(user), user_id=_uid(user))
