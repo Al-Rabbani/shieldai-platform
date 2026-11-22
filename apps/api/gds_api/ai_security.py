@@ -133,3 +133,39 @@ async def ai_summary(
         },
         "basis": "counts cover every row recorded for this tenant, not a page of them",
     }
+
+@router.get("/ai/jailbreaks", response_model=list[PromptAttackOut])
+async def list_jailbreak_attempts(
+    limit: int = 100,
+    current_user=Depends(require_permission("findings:read")),
+    db: AsyncSession = Depends(get_db),
+) -> list[PromptAttackOut]:
+    """Jailbreak attempts are prompt_attacks with the role-play rule; this view exists so they are not counted twice."""
+    rows = (await db.execute(text(
+        "SELECT id, attack_type, severity, target_route, matched_rules, payload_preview, blocked, actor_id, "
+        "detected_at FROM prompt_attacks WHERE tenant_id = :t AND attack_type = 'jailbreak_roleplay' "
+        "ORDER BY detected_at DESC LIMIT :limit"
+    ), {"t": current_user.tenant_id, "limit": min(max(limit, 1), 500)})).mappings().all()
+    return [PromptAttackOut(**dict(r)) for r in rows]
+
+
+class AIPolicyOut(BaseModel):
+    id: str
+    policy_type: str
+    rule: str
+    severity: str
+    action_on_violation: str
+    is_active: bool
+
+
+@router.get("/ai/policies", response_model=list[AIPolicyOut])
+async def list_ai_policies(
+    current_user=Depends(require_permission("findings:read")),
+) -> list[AIPolicyOut]:
+    """The rules the guard actually enforces, read from the guard itself so the panel cannot drift from the code."""
+    return [
+        AIPolicyOut(id=name, policy_type="input_inspection", rule=why, severity=severity,
+                    action_on_violation="refuse with 422 and record" if severity == "high" else "record and allow",
+                    is_active=True)
+        for name, (_pattern, severity, why) in sorted(RULES.items())
+    ]

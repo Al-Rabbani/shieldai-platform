@@ -70,6 +70,11 @@ const ENTITY_ROUTES = {
   ConfigurationBaseline: { path: '/drift/baselines' },
   DriftAlertConfig: { path: '/drift/config', single: true },
   RuntimeThreat: { path: '/runtime/posture', summaryPath: '/runtime/summary' },
+  /* Item 10: the AI layer's own inventory, ledger and guard records. */
+  AIModel: { path: '/ai/models', summaryPath: '/ai/summary' },
+  PromptAttack: { path: '/ai/attacks' },
+  JailbreakAttempt: { path: '/ai/jailbreaks' },
+  AIPolicy: { path: '/ai/policies' },
   LinearIssueLink: { path: '/integrations/linear/links' },
   AssetDependency: { path: '/cloud/relationships' },
   TriagedFinding: { path: '/findings', summaryPath: '/findings/summary' },
