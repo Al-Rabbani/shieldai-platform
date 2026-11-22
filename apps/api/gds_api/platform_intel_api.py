@@ -39,11 +39,13 @@ SELECT
 FROM security_findings
 """
 
+# Verdicts live in compliance_assessments, not compliance_controls: compliance_controls holds the catalogue and has no
+# verdict_source column (measured after this route answered 500). Same predicates as GET /compliance/frameworks.
 _CONTROL_SQL = """
 SELECT
     count(*) FILTER (WHERE verdict_source = 'automated' AND lower(status) = 'pass') AS passing,
     count(*) FILTER (WHERE verdict_source = 'automated' AND lower(status) = 'fail') AS failing
-FROM compliance_controls
+FROM compliance_assessments
 """
 
 
@@ -74,9 +76,11 @@ async def platform_intel(
 
     return {
         "risk": {
-            "score": scored.get("score"),
+            # score_from_counts names it overall_score; the shell reads risk.score.
+            "score": scored.get("overall_score"),
             "grade": scored.get("grade"),
             "trend": scored.get("trend"),
+            "score_delta": scored.get("score_delta"),
         },
         "defensive": {
             "cloud_open": cloud_open,
