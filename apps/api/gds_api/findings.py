@@ -85,7 +85,14 @@ async def findings_summary(
                count(*) FILTER (WHERE status = 'open' AND kev_listed) AS kev,
                count(*) FILTER (WHERE status = 'accepted_risk') AS accepted,
                count(*) FILTER (WHERE status = 'accepted_risk' AND severity = 'critical') AS accepted_critical,
-               count(*) FILTER (WHERE status = 'accepted_risk' AND severity = 'high') AS accepted_high
+               count(*) FILTER (WHERE status = 'accepted_risk' AND severity = 'high') AS accepted_high,
+               -- Cloud posture findings are security_findings rows with source='cspm', written by the
+               -- posture evaluation. The console's Cloud tile counted a capped page of /cloud/findings
+               -- instead, so a truncated page and a clean account rendered identically.
+               count(*) FILTER (WHERE source = 'cspm') AS cspm_total,
+               count(*) FILTER (WHERE source = 'cspm' AND status = 'open') AS cspm_open,
+               count(*) FILTER (WHERE source = 'cspm' AND status = 'open' AND severity = 'critical')
+                   AS cspm_critical
         FROM security_findings WHERE tenant_id = :tid
     """), {"tid": str(current_user.tenant_id)})).mappings().first()
     return dict(row)

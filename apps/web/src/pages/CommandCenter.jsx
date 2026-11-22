@@ -39,6 +39,7 @@ import SecurityFeaturesRow from "@/components/home/SecurityFeaturesRow";
 export default function CommandCenter() {
   const [dailySummary, setDailySummary] = useState("");
   const [summaryLoading, setSummaryLoading] = useState(true);
+  const [estateSummary, setEstateSummary] = useState(null);
 
   useEffect(() => {
     invokeAction("gdsAgentOS", {
@@ -107,6 +108,14 @@ export default function CommandCenter() {
   }, []);
 
   useEffect(() => { loadAll(); }, [loadAll]);
+
+  // The estate's cloud count, from the platform's aggregate. The tile below used to render the length of a
+  // /cloud/findings page (capped at 200 server-side), so a truncated page read as a clean account.
+  useEffect(() => {
+    base44.entities.TriagedFinding.summary()
+      .then(setEstateSummary)
+      .catch(() => setEstateSummary(null));
+  }, []);
 
   const openCloud = cloudFindings.filter(f => f.status === "open");
   const cloudCritical = openCloud.filter(f => f.severity === "critical");
@@ -184,7 +193,7 @@ export default function CommandCenter() {
       <div className="grid grid-cols-4 gap-4">
         <RiskScoreTile risk={risk} />
         <StatTile label="Open Findings" value={openTotal == null ? "—" : openTotal} subtext={`${criticalTotal == null ? "—" : criticalTotal} critical`} subtextColor="text-red-400" danger={(criticalTotal ?? 0) > 0} />
-        <StatTile label="Cloud Findings" value={openCloud.length} subtext={`${cloudCritical.length} critical`} subtextColor="text-red-400" danger={cloudCritical.length > 0} />
+        <StatTile label="Cloud Findings" value={estateSummary ? estateSummary.cspm_open : "—"} subtext={`${estateSummary ? estateSummary.cspm_critical : "—"} critical`} subtextColor="text-red-400" danger={cloudCritical.length > 0} />
         <StatTile label="SLA Breached" value={risk?.sla_breached ?? 0} danger={(risk?.sla_breached ?? 0) > 0} />
       </div>
 

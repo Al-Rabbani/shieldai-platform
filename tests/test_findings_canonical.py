@@ -45,6 +45,21 @@ def test_paging_is_bounded():
 def test_summary_counts_in_sql_not_from_a_page():
     text = SRC.read_text(encoding="utf-8")
     start = text.index("async def findings_summary(")
-    body = text[start:start + 2000]
+    body = text[start:text.index("\n@router", start + 1)]
     assert "count(*) FILTER" in body, "counts must come from an aggregate, not from whatever page was fetched"
     assert "FROM security_findings" in body
+
+
+def test_summary_exposes_a_cloud_scoped_count():
+    """The console's Cloud Findings tile needs the cloud count over the whole set.
+
+    It rendered the length of a /cloud/findings page, and that route caps limit at 200, so the tile could only
+    ever describe the page it had fetched. A truncated page and a clean cloud account looked identical.
+    """
+    text = SRC.read_text(encoding="utf-8")
+    start = text.index("async def findings_summary(")
+    body = text[start:text.index("\n@router", start + 1)]
+    assert "AS cspm_total" in body
+    assert "AS cspm_open" in body
+    assert "AS cspm_critical" in body
+    assert body.count("FILTER (WHERE source = 'cspm'") >= 3, "the cloud count must be an aggregate, not a page"

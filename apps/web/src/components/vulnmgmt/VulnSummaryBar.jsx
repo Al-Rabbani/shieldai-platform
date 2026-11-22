@@ -1,12 +1,17 @@
-import React from "react";
-
-export default function VulnSummaryBar({ total, critical, high, exploited, slaBreached }) {
+export default function VulnSummaryBar({ total, critical, high, kev, accepted }) {
+  // Every figure here is the platform's own aggregate over the whole set, not the length of the page this tab
+  // fetched. `null` renders "—": an unknown total must not look like a clean zero.
+  //
+  // Two tiles were removed rather than restyled, because the data behind them could not support the claim:
+  // "Exploited in Wild" was fed by kev_listed (KEV-listed is weaker than exploited in the wild, so the tile now
+  // says KEV Listed), and "SLA Breached" was fed by a field security_findings does not have, so it was always 0.
+  const show = (value) => (value === null || value === undefined ? "—" : value);
   const items = [
-    { label: "Total", value: total, color: "text-white" },
-    { label: "Critical", value: critical, color: "text-red-400" },
-    { label: "High", value: high, color: "text-orange-400" },
-    { label: "Exploited in Wild", value: exploited, color: "text-red-400", pulse: exploited > 0 },
-    { label: "SLA Breached", value: slaBreached, color: "text-red-400" },
+    { label: "Open", value: show(total), color: "text-white" },
+    { label: "Critical", value: show(critical), color: "text-red-400" },
+    { label: "High", value: show(high), color: "text-orange-400" },
+    { label: "KEV Listed", value: show(kev), color: "text-red-400", pulse: (kev ?? 0) > 0 },
+    { label: "Accepted Risk", value: show(accepted), color: "text-amber-400" },
   ];
   return (
     <div className="grid grid-cols-5 gap-3">
