@@ -65,6 +65,11 @@ const ENTITY_ROUTES = {
   // Item 7: stores that exist and hold rows but had no read route before 22 Nov 2026.
   WebhookEndpoint: { path: '/webhooks' },
   RemediationPlan: { path: '/remediation/plans' },
+  /* Item 9: drift and runtime posture have stores and collectors behind them as of 22 Nov 2026. */
+  ConfigurationDrift: { path: '/drift/findings' },
+  ConfigurationBaseline: { path: '/drift/baselines' },
+  DriftAlertConfig: { path: '/drift/config', single: true },
+  RuntimeThreat: { path: '/runtime/posture', summaryPath: '/runtime/summary' },
   LinearIssueLink: { path: '/integrations/linear/links' },
   AssetDependency: { path: '/cloud/relationships' },
   TriagedFinding: { path: '/findings', summaryPath: '/findings/summary' },

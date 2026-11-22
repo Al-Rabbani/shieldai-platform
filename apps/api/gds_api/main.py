@@ -10,6 +10,7 @@ from prometheus_client import REGISTRY, make_asgi_app
 from gds_api import (
     monitoring,
     remediation,
+    drift,
     notification_dispatch,
     security_tools_api,
     ai_ml_api,
@@ -224,6 +225,7 @@ from gds_api.cloud import attack_surface_api as _attack_surface  # noqa: E402
 app.include_router(_attack_surface.router)
 app.include_router(monitoring.router)
 app.include_router(remediation.router)
+app.include_router(drift.router)
 app.include_router(security_tools_api.router)
 app.include_router(ai_ml_api.router)
 app.include_router(pentest_routes.router)

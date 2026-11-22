@@ -20,6 +20,7 @@ const FILTERS = [
 export default function ConfigurationDriftPage() {
   const focusId = useMemo(() => new URLSearchParams(window.location.search).get("drift"), []);
   const [drifts, setDrifts] = useState([]);
+  const [baseline, setBaseline] = useState(null);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState(focusId ? "all" : "open");
   const [view, setView] = useState("records");
@@ -33,7 +34,11 @@ export default function ConfigurationDriftPage() {
 
   async function load() {
     setLoading(true);
-    const rows = await base44.entities.ConfigurationDrift.list("-detected_at", 300).catch(() => []);
+    const [rows, baselines] = await Promise.all([
+      base44.entities.ConfigurationDrift.list("-detected_at", 300).catch(() => []),
+      base44.entities.ConfigurationBaseline.list("-captured_at", 1).catch(() => []),
+    ]);
+    setBaseline(baselines[0] || null);
     setDrifts(rows);
     setLoading(false);
   }
@@ -151,7 +156,15 @@ export default function ConfigurationDriftPage() {
           <p className="ml-auto text-[10px] text-slate-500">Alerted hourly</p>
         </div>
 
-        {loading ? (
+        <p className="text-[11px] text-slate-500 leading-relaxed">
+        {drifts.length} drift row{drifts.length === 1 ? "" : "s"} measured on this host against{" "}
+        {baseline
+          ? `an approved baseline captured ${new Date(baseline.captured_at).toLocaleString("en-GB")} holding ${baseline.settings_count} settings`
+          : "a baseline that has not been approved yet"}.
+        {" "}A row appears only when a measured value differs from that baseline; no drift is claimed while no baseline is approved.
+      </p>
+
+      {loading ? (
           <div className="w-6 h-6 border-2 border-t-amber-500 border-white/10 rounded-full animate-spin mx-auto my-10" />
         ) : visible.length === 0 ? (
           <div className="text-center py-10 px-4">
