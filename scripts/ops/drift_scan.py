@@ -46,6 +46,11 @@ SEVERITY = {
     "api.header.x_frame_options": "low",
     "api.header.x_content_type_options": "low",
     "api.header.referrer_policy": "low",
+    "edge.header.csp": "medium",
+    "edge.header.hsts": "medium",
+    "edge.header.x_frame_options": "low",
+    "edge.header.x_content_type_options": "low",
+    "edge.header.referrer_policy": "low",
     "listen.ports": "medium",
     "postgres.rls_forced_tables": "high",
 }
@@ -91,21 +96,37 @@ def _firewall_default() -> str:
     return "ufw active, default not reported"
 
 
-def _api_headers() -> dict[str, str]:
-    """Measured from the API's own health endpoint, so the value is what this platform actually sends."""
-    wanted = {
-        "Strict-Transport-Security": "api.header.hsts",
-        "Content-Security-Policy": "api.header.csp",
-        "X-Frame-Options": "api.header.x_frame_options",
-        "X-Content-Type-Options": "api.header.x_content_type_options",
-        "Referrer-Policy": "api.header.referrer_policy",
-    }
+# The same five headers, measured twice: what this API sends itself, and what the edge adds in front of it.
+SECURITY_HEADERS = {
+    "Strict-Transport-Security": "hsts",
+    "Content-Security-Policy": "csp",
+    "X-Frame-Options": "x_frame_options",
+    "X-Content-Type-Options": "x_content_type_options",
+    "Referrer-Policy": "referrer_policy",
+}
+ENDPOINTS = {
+    "api": "http://127.0.0.1:8000/health",
+    "edge": "https://app.globaldigitalsecurity.io/health",
+}
+
+
+def _headers_from(url: str) -> dict[str, str] | str:
     try:
-        with urllib.request.urlopen("http://127.0.0.1:8000/health", timeout=10) as resp:
-            headers = {k.lower(): v for k, v in resp.headers.items()}
-    except Exception as exc:  # noqa: BLE001 - an unreachable API is itself a measurement
-        return {key: f"unmeasured: {type(exc).__name__}" for key in wanted.values()}
-    return {key: ("present" if name.lower() in headers else "absent") for name, key in wanted.items()}
+        with urllib.request.urlopen(url, timeout=15) as resp:
+            return {k.lower(): v for k, v in resp.headers.items()}
+    except Exception as exc:  # noqa: BLE001 - an unreachable endpoint is itself a measurement
+        return f"unmeasured: {type(exc).__name__}"
+
+
+def _header_settings() -> dict[str, str]:
+    settings: dict[str, str] = {}
+    for prefix, url in ENDPOINTS.items():
+        headers = _headers_from(url)
+        for name, key in SECURITY_HEADERS.items():
+            settings[f"{prefix}.header.{key}"] = (
+                headers if isinstance(headers, str) else ("present" if name.lower() in headers else "absent")
+            )
+    return settings
 
 
 def _listening_ports() -> str:
@@ -135,7 +156,7 @@ async def collect(db) -> dict[str, str]:
         "listen.ports": _listening_ports(),
         "postgres.rls_forced_tables": await _rls_forced(db),
     }
-    settings.update(_api_headers())
+    settings.update(_header_settings())
     return settings
 
 
