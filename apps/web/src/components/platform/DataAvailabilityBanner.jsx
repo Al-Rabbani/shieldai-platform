@@ -13,6 +13,10 @@ import { unavailableEntities } from "@/api/base44Client";
  *
  * The adapter records every name it refused in unavailableEntities(). This banner reads that record
  * after the first render and states plainly how many panels are in that position, with the names.
+ *
+ * The record is session-wide, not per page: it fills with whatever mounted before, so the wording says "this
+ * app" rather than "this page". Measured on /v2/cloud, the page asks five names of which four are served, and
+ * the banner reported two - the other had been recorded on an earlier page.
  * It is deliberately not dismissible to a silent state: closing it keeps a marker in place.
  */
 export default function DataAvailabilityBanner() {
@@ -39,7 +43,7 @@ export default function DataAvailabilityBanner() {
         onClick={() => setHidden(false)}
         className="w-full text-[10px] py-1 px-3 text-left"
         style={{ background: "#2a1f00", color: "#eab308" }}
-        title="Some panels ask for data this platform does not serve"
+        title="Some panels in this app ask for data this platform does not serve"
       >
         {missing.length} data source{missing.length === 1 ? "" : "s"} unavailable on this platform · show
       </button>
@@ -52,7 +56,7 @@ export default function DataAvailabilityBanner() {
         <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" style={{ color: "#eab308" }} />
         <div className="flex-1">
           <span className="font-bold" style={{ color: "#eab308" }}>
-            {missing.length} data source{missing.length === 1 ? "" : "s"} on this page are not served by this platform.
+            {missing.length} data source{missing.length === 1 ? "" : "s"} requested by this app are not served by this platform.
           </span>{" "}
           <span className="text-slate-400">
             Their panels show nothing. That is an absence, not a measured zero.
