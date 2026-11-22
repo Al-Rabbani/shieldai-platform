@@ -72,9 +72,10 @@ export default function FrameworkTrackingPage() {
     const passing = rows.filter((i) => controlState(i) === "passing").length;
     const failing = rows.filter((i) => controlState(i) === "not_implemented").length;
     const untested = rows.filter((i) => controlState(i) === "needs_evidence").length;
-    const applicable = rows.filter((i) => controlState(i) !== "not_applicable").length;
+    const excluded = rows.filter((i) => controlState(i) === "not_applicable").length;
+    const applicable = rows.length - excluded;
     return {
-      rows, passing, failing, untested, total: rows.length,
+      rows, passing, failing, untested, excluded, applicable, total: rows.length,
       pct: applicable ? Math.round((passing / applicable) * 100) : 0,
     };
   };
@@ -156,7 +157,8 @@ export default function FrameworkTrackingPage() {
                 <div className="h-full rounded-full transition-all" style={{ width: `${progress.pct}%`, background: accent }} />
               </div>
               <p className="text-[11px] text-slate-400">
-                {progress.passing} of {progress.total} passing · {progress.untested} not tested · {progress.failing} failing
+                {progress.passing} of {progress.applicable ?? progress.total} applicable passing · {progress.untested} not tested ·{" "}
+                {progress.failing} failing{progress.excluded ? ` · ${progress.excluded} not applicable` : ""}
               </p>
             </button>
           );
