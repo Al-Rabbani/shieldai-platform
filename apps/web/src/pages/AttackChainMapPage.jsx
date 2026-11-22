@@ -18,24 +18,35 @@ export default function AttackChainMapPage() {
   const [assets, setAssets] = useState([]);
   const [dependencies, setDependencies] = useState([]);
   const [findings, setFindings] = useState([]);
+  const [kpis, setKpis] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState(null);
 
   useEffect(() => {
     (async () => {
-      const [assetRows, dependencyRows, findingRows] = await Promise.all([
+      const [assetRows, dependencyRows, findingRows, kpiRows] = await Promise.all([
         base44.entities.Asset.list("-risk_score", 300).catch(() => []),
         base44.entities.AssetDependency.list("-created_date", 300).catch(() => []),
         base44.entities.TriagedFinding.filter({ status: { $in: ["open", "in_remediation"] } }, "-cvss_score", 500).catch(() => []),
+        base44.entities.KPI.list("-last_updated", 100).catch(() => []),
       ]);
       setAssets(assetRows || []);
       setDependencies(dependencyRows || []);
       setFindings(findingRows || []);
+      setKpis(kpiRows || []);
       setLoading(false);
     })();
   }, []);
 
   const graph = useMemo(() => buildAttackGraph({ assets, dependencies, findings }), [assets, dependencies, findings]);
+
+  /* The estate count comes from the platform. graph.openFindingCount is the 500-row page the graph was drawn from,
+   * so it is never shown as a total. */
+  const platformOpen = useMemo(() => {
+    const row = kpis.find((k) => (k.key ?? k.name) === "open_findings");
+    const value = row?.value ?? row?.current_value;
+    return typeof value === "number" ? value : null;
+  }, [kpis]);
 
   const chains = useMemo(() => {
     const assetNodes = graph.nodes.filter((node) => node.id !== "internet");
@@ -90,7 +101,7 @@ export default function AttackChainMapPage() {
         {[
           { label: "Exposed assets", value: chains.length, color: "#ef4444" },
           { label: "Reachable of total", value: `${exposure.reachableCount}/${exposure.totalCount}`, color: "#3b82f6" },
-          { label: "Open findings", value: graph.openFindingCount, color: "#f59e0b" },
+          { label: "Open findings", value: platformOpen ?? "\u2014", color: "#f59e0b" },
           { label: "Inferred pivots", value: graph.inferredEdges, color: "#a855f7" },
         ].map((tile) => (
           <div key={tile.label} className="rounded-xl p-3" style={{ background: "#111827", border: "1px solid #1F2937", borderLeft: `3px solid ${tile.color}` }}>
