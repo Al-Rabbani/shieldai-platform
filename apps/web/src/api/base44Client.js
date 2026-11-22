@@ -79,6 +79,18 @@ const ENTITY_ROUTES = {
   AssetDependency: { path: '/cloud/relationships' },
   TriagedFinding: { path: '/findings', summaryPath: '/findings/summary' },
   Finding: { path: '/findings', summaryPath: '/findings/summary' },
+  /* Four routed pages ask for a TeamMember to fill assignment dropdowns (Assets, Risk Thresholds, Vulnerability
+   * Management, escalation settings). Measured 22 Nov 2026: there is no team_members table. GET /team/members serves the
+   * caller's own tenant users with their role name, and `name` is the email because this platform stores no display
+   * name. Reads are real; TeamMember.update has no store, so it refuses with a reason rather than pretending to save. */
+  TeamMember: {
+    path: "/team/members",
+    summaryPath: "/team/summary",
+    readOnly: true,
+    readOnlyReason:
+      'Team members are read from this tenant\'s own user roster at GET /team/members. There is no team member store, ' +
+      'so Slack linkage and per-member escalation settings cannot be saved here; people are managed under Administration.',
+  },
   Incident: { path: '/incidents' },
   CloudFinding: { path: '/cloud/findings' },
   /* 314 container CVEs exist in `findings` (source trivy_container); this is the route that serves them. */
@@ -133,6 +145,11 @@ const ENTITY_ROUTES = {
 const ABSENT = Symbol('absent');
 
 const REFUSAL_REASONS = {
+  TeamMember:
+    'Reading team members is served from this tenant\'s own user roster at GET /team/members. Writing one is not: there ' +
+    'is no team member store, so Slack linkage and per-member escalation settings have nowhere to be saved. People are ' +
+    'managed under Administration, not here.',
+
   /* Measured 22 Nov 2026 before writing these, so each one states a fact rather than a guess. */
   gdsScheduledReports:
     'Every action on this function reads or writes a Google Drive folder, and this host holds no Google service ' +
@@ -561,6 +578,11 @@ function entity(name) {
     if (!route) {
       unmapped.add(name);
       throw new NotOnThisPlatform(name, 'Entity');
+    }
+    /* Some resources are served for reading only. Without this, an update went to PATCH <path>/<id>, a route that does
+     * not exist, and the page reported whatever the 405 said. A read-only route now refuses in words. */
+    if (route.readOnly && method !== 'list' && method !== 'filter' && method !== 'get') {
+      throw new NotOnThisPlatform(name, `entity ${method}`, route.readOnlyReason || REFUSAL_REASONS[name]);
     }
     return route;
   };
