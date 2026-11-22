@@ -150,7 +150,7 @@ export default function SlackAlertSettingsCard() {
         <p className={`text-[11px] ${notice.type === "err" ? "text-red-400" : "text-emerald-400"}`}>{notice.text}</p>
       )}
       <p className="text-[10px] text-slate-600">
-        The filter applies to every Slack route: alert rules, Linear-style escalation and department risk-limit digests.
+        The filter applies to alert rules and Linear-style escalation. Department risk-limit digests do not exist here: no threshold store does, so nothing can be digested.
       </p>
     </section>
   );
