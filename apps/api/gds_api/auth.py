@@ -68,6 +68,15 @@ async def register(
     body: RegisterRequest, response: Response, db: AsyncSession = Depends(get_db)
 ) -> MeResponse:
     """Register a new organization and admin user."""
+    # Public sign-up is closed. Reaching this route used to create a tenant AND grant it
+    # platform_owner, so anyone who found the page became an owner. Accounts are now created by an
+    # owner through /admin/users, or a whole tenant through /admin/tenants.
+    if os.getenv("GDS_ALLOW_PUBLIC_SIGNUP", "false").strip().lower() not in ("1", "true", "yes"):
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "Public sign-up is closed on this platform. An owner must create your account.",
+        )
+
     import uuid
     from gds_api.seed_data import ROLE_PERMISSIONS
 
@@ -101,8 +110,8 @@ async def register(
     role = Role(
         id=uuid.uuid4(),
         tenant_id=tenant.id,
-        name="platform_owner",
-        permissions=ROLE_PERMISSIONS["platform_owner"],
+        name="analyst",
+        permissions=ROLE_PERMISSIONS["analyst"],
     )
     db.add(role)
     await db.flush()

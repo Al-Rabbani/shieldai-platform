@@ -418,8 +418,10 @@ app.include_router(cloud_onboarding_router)
 
 
 from gds_api.tenant_branding import router as tenant_branding_router  # noqa: E402
+from gds_api.admin_identity import router as admin_identity_router  # noqa: E402
 
 app.include_router(tenant_branding_router)
+app.include_router(admin_identity_router)
 
 # --- OpenAPI security declarations (P4 / B21) ------------------------------------------------
 # The API had no securitySchemes at all: 0 of 324 operations declared how they are authenticated,
