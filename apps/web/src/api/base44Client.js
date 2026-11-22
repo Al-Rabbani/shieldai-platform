@@ -59,6 +59,8 @@ const ENTITY_ROUTES = {
   Finding: { path: '/findings', summaryPath: '/findings/summary' },
   Incident: { path: '/incidents' },
   CloudFinding: { path: '/cloud/findings' },
+  /* 314 container CVEs exist in `findings` (source trivy_container); this is the route that serves them. */
+  ContainerFinding: { path: '/containers/findings', summaryPath: '/containers/summary' },
   CloudAccount: { path: '/cloud/connections' },
   Asset: { path: '/cloud/assets' },
   ASPMAsset: { path: '/cloud/assets' },
@@ -217,6 +219,12 @@ const FIELD_MAPS = {
     normalized_severity: 'severity',
     asset_name: 'resource_name',
     detected_at: 'detected_at',
+  },
+  ContainerFinding: {
+    normalized_severity: 'severity',
+    asset_name: 'image',
+    exploited_in_wild: 'kev_listed',
+    detected_at: 'created_at',
   },
   CIEMFinding: {
     normalized_severity: 'severity',

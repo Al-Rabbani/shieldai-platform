@@ -216,6 +216,8 @@ app.include_router(executive_risk_api.router)
 app.include_router(commands_api.router)
 app.include_router(cloud_api.router)
 app.include_router(cloud_posture_api.router)
+from gds_api import container_findings_api as _container_findings  # noqa: E402
+app.include_router(_container_findings.router)
 app.include_router(monitoring.router)
 app.include_router(remediation.router)
 app.include_router(security_tools_api.router)
