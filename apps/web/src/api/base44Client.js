@@ -83,6 +83,9 @@ const ENTITY_ROUTES = {
   CloudFinding: { path: '/cloud/findings' },
   /* 314 container CVEs exist in `findings` (source trivy_container); this is the route that serves them. */
   ContainerFinding: { path: '/containers/findings', summaryPath: '/containers/summary' },
+  /* 60 real OSV findings for the packages installed in the API virtualenv. There is no vm_findings or vm_scans
+     table on this platform, so VMScan stays deliberately refused rather than mapped to a guess. */
+  VMFinding: { path: '/host/vulnerabilities', summaryPath: '/host/summary' },
   /* The scanned image estate, aggregated from the container findings by image. */
   ContainerScan: { path: '/containers/images' },
   CloudAccount: { path: '/cloud/connections' },
@@ -322,6 +325,11 @@ const FIELD_MAPS = {
   VulnEscalationRule: {
     rule_name: 'name',
     severity_threshold: 'severity',
+  },
+  VMFinding: {
+    package_name: 'package',
+    exploited_in_wild: 'kev_listed',
+    normalized_severity: 'severity',
   },
   ContainerFinding: {
     normalized_severity: 'severity',
