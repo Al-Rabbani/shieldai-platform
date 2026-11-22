@@ -28,6 +28,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from gds_api.db import get_db
@@ -554,20 +555,21 @@ async def provision_tenant(
     # it does so after the tenants:manage check above has already passed.
     await db.execute(text("SELECT set_config('gds.provisioning', 'owner', false)"))
 
-    clash = (
+    # No pre-check for an existing slug: tenants is FORCE-RLS and this session is bound to the new
+    # tenant's id, so every other tenant is invisible and the check would always find nothing. The
+    # unique index is the only signal RLS cannot filter, so the violation is translated below.
+    try:
         await db.execute(
-            text("SELECT 1 FROM tenants WHERE slug = :slug"), {"slug": body.slug}
+            text(
+                "INSERT INTO tenants (id, name, slug, created_at) VALUES (:id, :name, :slug, now())"
+            ),
+            {"id": str(tenant_id), "name": body.name, "slug": body.slug},
         )
-    ).fetchone()
-    if clash:
-        raise HTTPException(status.HTTP_409_CONFLICT, "That slug is already in use.")
-
-    await db.execute(
-        text(
-            "INSERT INTO tenants (id, name, slug, created_at) VALUES (:id, :name, :slug, now())"
-        ),
-        {"id": str(tenant_id), "name": body.name, "slug": body.slug},
-    )
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, "That slug is already in use by another tenant."
+        ) from None
 
     role_id = uuid.uuid4()
     await db.execute(
