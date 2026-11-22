@@ -223,8 +223,10 @@ const FIELD_MAPS = {
   },
   CloudFinding: {
     normalized_severity: 'severity',
-    asset_name: 'resource_name',
-    detected_at: 'detected_at',
+    /* CloudFindingOut has created_at and no detected_at, so the old map translated nothing and the table's
+       DETECTED column read "—" beside a real timestamp. It has no resource_name either, so that mapping is gone
+       rather than left pointing at a field the API never sends. */
+    detected_at: 'created_at',
   },
   /* /v2/alerts renders a rule table under the builder's column names; the API uses the table's own. */
   AlertRule: {
