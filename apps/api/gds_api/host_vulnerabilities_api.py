@@ -3,7 +3,8 @@
 Measured on 22 Nov 2026, before writing this:
 
     information_schema.tables matching vm|endpoint|patch  ->  webhook_endpoints only
-    findings WHERE source='osv'                           ->  60 rows, 55 resolved, 5 open
+    security_findings WHERE source='osv'                  ->  60 rows, 55 resolved, 5 open
+    findings (the other store)                            ->  317 rows, no `target` column at all
     findings WHERE source='dependency_scan'               ->  14 rows (repository dependencies)
     scripts/ops/osv_check.py VENV                         ->  /opt/gds-os/apps/api/venv/bin/pip
 
@@ -14,11 +15,15 @@ estate, and it was readable by nothing: the builder's VM Security page asked for
 refused both, and the page printed "No VM findings found" - which reads as a clean estate rather than as an
 absence of the thing being asked for.
 
+Two stores exist and they are not interchangeable: `findings` holds the 317 governed rows (314 container + 3
+cloud), `security_findings` holds the 1,002 scanner rows and is where the OSV check writes. This module reads the
+scanner store, and `target` - the package name - exists only there.
+
 This module serves the estate that exists, and states the one that does not, so a page can be honest without
 inventing a zero. Nothing is inferred: a null cvss is returned as null, and `instances_scanned` is absent
 rather than 0.
 
-Tenant-scoped by explicit predicate (findings is FORCE RLS) and permission-gated on the same permission the
+Tenant-scoped by explicit predicate (security_findings is FORCE RLS) and permission-gated on the same permission the
 container route uses.
 """
 
@@ -64,7 +69,7 @@ _COLUMNS = """
 
 _LIST_SQL = f"""
     SELECT {_COLUMNS}
-      FROM findings
+      FROM security_findings
      WHERE tenant_id = :tenant_id
        AND source = :source
        AND (cast(:severity AS text) IS NULL OR severity = cast(:severity AS text))
@@ -77,7 +82,7 @@ _LIST_SQL = f"""
 
 _COUNT_SQL = """
     SELECT count(*) AS total
-      FROM findings
+      FROM security_findings
      WHERE tenant_id = :tenant_id
        AND source = :source
        AND (cast(:severity AS text) IS NULL OR severity = cast(:severity AS text))
@@ -98,7 +103,7 @@ _SUMMARY_SQL = """
            count(DISTINCT target) AS packages,
            max(detected_at) AS newest,
            min(detected_at) AS oldest
-      FROM findings
+      FROM security_findings
      WHERE tenant_id = :tenant_id
        AND source = :source
 """
