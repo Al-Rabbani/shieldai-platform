@@ -14,7 +14,7 @@ export default function WelcomeState({ onSelect }) {
       <p className="text-sm text-blue-400 font-semibold mb-1">Sovereign AI Security Operating System</p>
       <p className="text-xs text-slate-400 max-w-md mb-8">
         Registered agents, declared tools and heartbeat evidence are read live from the platform<br />
-        Live AWS · A2A messaging · MCP tools · Zero Trust gate
+        Live AWS discovery · governed capability receipts behind every tool call
       </p>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 w-full max-w-2xl">
         {QUICK_ACTIONS.map((c, i) => (
