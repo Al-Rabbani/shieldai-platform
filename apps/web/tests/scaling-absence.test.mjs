@@ -48,3 +48,17 @@ test('the controls that cannot work are disabled and say why', async () => {
   const disabled = page.match(/disabled\s*\n?\s*title=/g) || [];
   assert.equal(disabled.length, 2, 'both buttons must be disabled with a title explaining it');
 });
+
+test('no sentence describes a formula, a burst agent or a schedule that does not exist', async () => {
+  const page = await readFile(PAGE, 'utf8');
+  for (const claim of [
+    'Desired fleet = open tasks',
+    'One is added automatically',
+    'scheduled run fires every 15 minutes',
+  ]) {
+    assert.ok(!page.includes(claim), `still claims: ${claim}`);
+  }
+  assert.match(page, /No formula is evaluated anywhere/);
+  assert.match(page, /nothing on this platform creates one automatically/);
+  assert.match(page, /No scheduled scaling run exists/);
+});

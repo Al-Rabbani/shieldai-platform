@@ -202,7 +202,7 @@ export default function FleetScalingPage() {
                 </button>
               </div>
               <p className="text-[10px] text-slate-500 mt-2">
-                Desired fleet = open tasks ÷ tasks per agent, clamped to the minimum and maximum. Only burst agents are ever retired, so your named agents stay untouched.
+                No formula is evaluated anywhere: nothing divides open tasks by tasks per agent, and nothing retires a burst agent.
               </p>
             </div>
 
@@ -212,7 +212,7 @@ export default function FleetScalingPage() {
                 <p className="text-xs font-bold text-white">Burst agents ({burstAgents.filter((agent) => agent.status !== "archived").length} live)</p>
               </div>
               {burstAgents.length === 0 ? (
-                <p className="text-xs text-slate-500 text-center py-8">No burst agents yet. One is added automatically when the backlog needs more capacity.</p>
+                <p className="text-xs text-slate-500 text-center py-8">No burst agent has ever been created, and nothing on this platform creates one automatically.</p>
               ) : (
                 <div className="divide-y divide-slate-800">
                   {burstAgents.map((agent) => (
@@ -250,7 +250,7 @@ export default function FleetScalingPage() {
             {status?.last_reason && <p className="text-[10px] text-slate-400">{status.last_reason}</p>}
             {status?.last_run_at && <p className="text-[10px] text-slate-600">Run {new Date(status.last_run_at).toLocaleString("en-GB")}</p>}
             <p className="text-[10px] text-slate-500 pt-2 border-t border-slate-800">
-              The scheduled run fires every 15 minutes. Scaling changes the fleet registry and each agent's task limit; it does not start new worker processes.
+              No scheduled scaling run exists: there is no cron entry, worker or timer that evaluates a policy, so no task limit is changed and no worker process is started or retired.
             </p>
           </div>
         </div>
