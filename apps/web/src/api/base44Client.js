@@ -64,6 +64,9 @@ const ENTITY_ROUTES = {
   ASPMAsset: { path: '/cloud/assets' },
   ComplianceChecklistItem: { path: '/compliance/controls' },
   ComplianceFramework: { path: '/compliance/frameworks', summaryPath: '/compliance/frameworks' },
+  /* Control-level verdicts from the assessment engine: 297 controls, each carrying its own pass/fail. */
+  ComplianceChecklistItem: { path: '/compliance/controls' },
+  ComplianceAssessment: { path: '/compliance/assessments' },
   PolicyViolation: { path: '/compliance/determinations' },
   Agent: { path: '/agents' },
   AuditLog: { path: '/audit' },
@@ -169,6 +172,8 @@ function rows(payload) {
 const FIELD_MAPS = {
   /* The route reports score_over_assessed (pass rate over controls actually assessed); the pages read score. */
   ComplianceFramework: { score: 'score_over_assessed', total_controls: 'official_control_count' },
+  /* /compliance/controls rows carry control_ref and no id; the builder pages key on id, key and label. */
+  ComplianceChecklistItem: { id: 'control_ref', key: 'control_ref', label: 'title' },
   /* Builder rows carry created_date; the API carries created_at. */
   User: { created_date: 'created_at' },
   /* ApiKeysPage labels the scopes column Permissions. */
