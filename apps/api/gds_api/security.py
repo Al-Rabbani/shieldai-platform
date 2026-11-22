@@ -255,7 +255,12 @@ def require_permission(
         current_user: CurrentUser = Depends(get_current_user),
         db: AsyncSession = Depends(get_db),
     ) -> CurrentUser:
-        if permission not in current_user.permissions:
+        # A role holding the wildcard holds every permission. The check used to be literal, so the platform
+        # owner's role - which carries 75 permissions including "*" - was refused every gate naming a
+        # permission it did not also hold by name (users:manage and tenants:manage among them). Measured
+        # 22 Nov 2026: admin holds "*"; analyst, assessment_runner and platform_owner do not.
+        granted = permission in current_user.permissions or "*" in current_user.permissions
+        if not granted:
             from gds_api.audit import record_audit_event  # local import avoids a cycle
 
             await record_audit_event(
@@ -263,7 +268,8 @@ def require_permission(
                 tenant_id=current_user.tenant_id,
                 user_id=current_user.user_id,
                 action="rbac.permission_denied",
-                detail={"required_permission": permission},
+                detail={"required_permission": permission,
+                        "held_wildcard": "*" in current_user.permissions},
             )
             await db.commit()
             raise HTTPException(status.HTTP_403_FORBIDDEN, f"Missing permission: {permission}")
