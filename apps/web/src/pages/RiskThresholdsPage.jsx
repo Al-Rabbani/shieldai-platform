@@ -213,7 +213,7 @@ export default function RiskThresholdsPage() {
                 );
               })}
             </div>
-            <span className="block mt-1 text-[9px] normal-case text-slate-600">Pick database and ai_model to alert only when your crown-jewel data stores or models cross the line.</span>
+            <span className="block mt-1 text-[9px] normal-case text-slate-600">Pick database and ai_model to narrow which asset types a limit would cover. Nothing is alerted: a limit cannot be saved here.</span>
           </div>
           <div className="text-[10px] uppercase text-slate-500">
             Department head
@@ -234,7 +234,7 @@ export default function RiskThresholdsPage() {
                   <option key={member.id} value={member.id}>{member.name}{member.role ? ` · ${member.role}` : ""}</option>
                 ))}
             </select>
-            <span className="block mt-1 text-[9px] normal-case text-slate-600">Heads are @-mentioned when the limit fires; add their Slack member ID on the team member record.</span>
+            <span className="block mt-1 text-[9px] normal-case text-slate-600">No head is notified today: a limit cannot be saved, so nothing can fire. The Slack member ID is stored on the team member record for when a limit store exists.</span>
           </div>
           <label className="block text-[10px] uppercase text-slate-500">
             Risk limit ({form.threshold})
@@ -310,7 +310,7 @@ export default function RiskThresholdsPage() {
             </div>
           )}
           <p className="text-[10px] text-slate-500 px-3 py-2 border-t border-slate-800">
-            The hourly risk-limit check runs this same evaluation, so a breach alerts even when nobody has the page open.
+            There is no hourly risk-limit check on this platform: no schedule evaluates department limits, so no breach alert fires whether or not anyone has the page open.
           </p>
         </div>
       </div>
