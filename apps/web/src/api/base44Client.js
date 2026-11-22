@@ -225,6 +225,8 @@ const FIELD_MAPS = {
   ContainerFinding: {
     normalized_severity: 'severity',
     asset_name: 'image',
+    package_name: 'package',
+    package_version: 'installed_version',
     exploited_in_wild: 'kev_listed',
     detected_at: 'created_at',
   },
