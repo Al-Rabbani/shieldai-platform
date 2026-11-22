@@ -13,3 +13,5 @@ mission_state.json
 patches/
 RELEASE
 web/dist/
+apps/web/node_modules/
+apps/web/dist/

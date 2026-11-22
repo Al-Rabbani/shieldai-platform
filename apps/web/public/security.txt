@@ -1,0 +1,7 @@
+Contact: mailto:security@shieldai.dev
+Expires: 2027-06-16T00:00:00.000Z
+Acknowledgments: https://shieldai.dev/trust#hall-of-fame
+Preferred-Languages: en
+Canonical: https://shieldai.dev/.well-known/security.txt
+Policy: https://shieldai.dev/trust#responsible-disclosure
+Hiring: https://shieldai.dev/careers

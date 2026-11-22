@@ -5,6 +5,8 @@
 set -uo pipefail
 REPO=/opt/gds-os
 API=http://127.0.0.1:8000
+SITE=https://app.globaldigitalsecurity.io
+WEB_BUNDLE=
 REF="${1:-$(git -C "$REPO" rev-parse --abbrev-ref HEAD)}"
 cd "$REPO" || exit 2
 
@@ -100,19 +102,90 @@ echo "  installing web assets..."
 if [ -f web/gds_app.html ]; then
   echo "  building the client..."
   if ! apps/api/venv/bin/python scripts/ops/build_client.py; then
-    fail "client build failed"
+    # fail() only prints (no set -e), so without this exit the deploy carried on and installed whatever was
+    # already in web/dist, then migrated, restarted and printed DEPLOY OK.
+    fail "client build failed - aborting before anything is installed"
+    exit 8
   fi
   # Install the built artifact, never the source, and prove the bytes served are the bytes recorded.
   install -m 644 web/dist/gds_app.html /var/www/gds_app.html
   SERVED_SHA=$(sha256sum /var/www/gds_app.html | cut -d' ' -f1)
   MANIFEST_SHA=$(python3 -c "import json;print(json.load(open('web/dist/manifest.json'))['sha256'])")
   if [ "$SERVED_SHA" != "$MANIFEST_SHA" ]; then
-    fail "served client does not match its build manifest"
+    fail "served client does not match its build manifest - aborting"
+    exit 9
   fi
   echo "    client installed and verified ($(echo $SERVED_SHA | cut -c1-16))"
 else
   echo "  WARNING: web/gds_app.html missing, leaving the served file untouched"
 fi
+# ---- React app (apps/web) ------------------------------------------------------------------------------
+# Step 8. The app lives in the repo so this stage can see a frontend change. It is deliberately placed before
+# migrations and before the API restart: a broken frontend must not be able to take the platform down with it.
+echo "  building the React app (apps/web)..."
+WEB="$REPO/apps/web"
+if [ ! -f "$WEB/package.json" ]; then
+  echo "    WARNING: apps/web/package.json missing, leaving /var/www/app-v2 untouched"
+else
+  if [ ! -d "$WEB/node_modules" ] || [ "$WEB/package-lock.json" -nt "$WEB/node_modules/.package-lock.json" ]; then
+    echo "    installing web dependencies (lockfile newer than node_modules)"
+    if ! ( cd "$WEB" && npm ci --no-audit --no-fund >/tmp/deploy-web-npm.log 2>&1 ); then
+      tail -12 /tmp/deploy-web-npm.log
+      fail "web dependency install failed"
+      exit 10
+    fi
+  fi
+
+  # The adapter is the one file every page reads its data through, so its tests are the cheapest possible
+  # regression net: a wrong path, an invented row or a lost server message all fail here in about a second.
+  if ! ( cd "$WEB" && node --test tests/ >/tmp/deploy-web-tests.log 2>&1 ); then
+    echo "    adapter tests FAILED:"
+    grep -E "^not ok|^# fail" /tmp/deploy-web-tests.log | head -10
+    fail "web adapter tests failed - the live frontend was not touched"
+    exit 11
+  fi
+  echo "    adapter tests: $(grep -E '^# pass' /tmp/deploy-web-tests.log | head -1 | tr -s ' ')"
+
+  if ! ( cd "$WEB" && npm run build >/tmp/deploy-web-build.log 2>&1 ); then
+    tail -12 /tmp/deploy-web-build.log
+    fail "web build failed - the live frontend was not touched"
+    exit 12
+  fi
+
+  # A build that emits no index.html, or one with no mount point, is a blank page in production - and a blank
+  # page is what this frontend did for a whole session before anyone measured it.
+  if [ ! -s "$WEB/dist/index.html" ] || ! grep -q 'id="root"' "$WEB/dist/index.html"; then
+    fail "web build produced no mountable index.html"
+    exit 13
+  fi
+  WEB_BUNDLE=$(grep -oE '/v2/assets/index-[A-Za-z0-9_-]+\.js' "$WEB/dist/index.html" | head -1)
+  if [ -z "$WEB_BUNDLE" ]; then
+    fail "built index.html references no /v2/ bundle - the vite base is wrong"
+    exit 14
+  fi
+  if [ ! -s "$WEB/dist$WEB_BUNDLE" ]; then
+    fail "index.html references $WEB_BUNDLE but the build did not emit it"
+    exit 15
+  fi
+
+  # Keep the previous bundle. A frontend rollback should not require a rebuild of a commit that no longer exists.
+  rm -rf /var/www/app-v2.prev
+  if [ -d /var/www/app-v2 ]; then cp -a /var/www/app-v2 /var/www/app-v2.prev; fi
+  rsync -a --delete "$WEB/dist/" /var/www/app-v2/
+  chown -R www-data:www-data /var/www/app-v2
+
+  # Prove the bytes served are the bytes built, the same discipline the legacy client uses.
+  SERVED_WEB=$(sha256sum /var/www/app-v2/index.html | cut -d' ' -f1)
+  BUILT_WEB=$(sha256sum "$WEB/dist/index.html" | cut -d' ' -f1)
+  if [ "$SERVED_WEB" != "$BUILT_WEB" ]; then
+    fail "served frontend does not match the build"
+    exit 16
+  fi
+  printf '{"commit":"%s","bundle":"%s","built_at":"%s"}\n' "$(git rev-parse HEAD)" "$WEB_BUNDLE" \
+    "$(date -u +%FT%TZ)" > /var/www/app-v2/build-manifest.json
+  echo "    installed $WEB_BUNDLE ($(echo $SERVED_WEB | cut -c1-16))"
+fi
+
 NEW=$(git rev-parse HEAD)
 echo "  target commit: $NEW"
 
@@ -185,7 +258,13 @@ smoke() {
   if [ -z "$count" ] || [ "$count" -lt 1 ]; then
     echo "  findings read returned '$count' - data layer unreachable"; return 1
   fi
-  echo "  smoke ok: health 200, version $sha, findings $count"
+  # The frontend is part of the product, so a deploy that left an older bundle being served is not a success.
+  local served_bundle
+  served_bundle=$(curl -sS -m 5 "$SITE/v2/" 2>/dev/null | grep -oE '/v2/assets/index-[A-Za-z0-9_-]+\.js' | head -1)
+  if [ -n "$WEB_BUNDLE" ] && [ "$served_bundle" != "$WEB_BUNDLE" ]; then
+    echo "  /v2/ serves '${served_bundle:-nothing}' but this deploy built '$WEB_BUNDLE'"; return 1
+  fi
+  echo "  smoke ok: health 200, version $sha, findings $count, frontend $served_bundle"
   return 0
 }
 
