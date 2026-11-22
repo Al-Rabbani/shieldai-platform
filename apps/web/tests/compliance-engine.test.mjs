@@ -34,8 +34,8 @@ function stubFetch(payload, seen = []) {
 const CONTROLS = {
   count: 2,
   controls: [
-    { framework: 'iso27001', control_ref: 'A.5.1', title: 'Policies for information security', category: 'Organisational', severity: 'medium', check_key: 'policies', status: 'pass', collector: 'gds', observed: 'policy pack present', evidence_sha: 'ab12', assessed_at: '2026-11-20T04:10:00Z', verdict_source: 'engine' },
-    { framework: 'iso27001', control_ref: 'A.8.9', title: 'Configuration management', category: 'Technological', severity: 'high', check_key: 'config_baseline', status: 'not_tested', collector: null, observed: null, evidence_sha: null, assessed_at: null, verdict_source: null },
+    { framework: 'iso27001', control_ref: 'A.5.1', title: 'Policies for information security', category: 'Organisational', severity: 'medium', check_key: 'policies', verdict: 'pass', collector: 'gds', observed: 'policy pack present', evidence_sha: 'ab12', assessed_at: '2026-11-20T04:10:00Z', verdict_source: 'engine' },
+    { framework: 'iso27001', control_ref: 'A.8.9', title: 'Configuration management', category: 'Technological', severity: 'high', check_key: 'config_baseline', verdict: 'not_tested', collector: null, observed: null, evidence_sha: null, assessed_at: null, verdict_source: null },
   ],
 };
 
@@ -58,11 +58,11 @@ test('a control row carries id, key and label from its own fields', async () => 
   assert.equal(rows[0].label, 'Policies for information security');
 });
 
-test("the engine's verdict survives, and is never replaced by a default", async () => {
+test("the engine's verdict arrives as status, and is never replaced by a default", async () => {
   const { base44 } = await loadAdapter();
   stubFetch(CONTROLS);
   const rows = await base44.entities.ComplianceChecklistItem.list('-created_date', 300);
-  assert.equal(rows[0].status, 'pass');
+  assert.equal(rows[0].status, 'pass', 'the route calls it verdict; the pages read status');
   assert.equal(rows[1].status, 'not_tested', 'an unassessed control must stay not_tested, not become pass');
 });
 

@@ -173,7 +173,8 @@ const FIELD_MAPS = {
   /* The route reports score_over_assessed (pass rate over controls actually assessed); the pages read score. */
   ComplianceFramework: { score: 'score_over_assessed', total_controls: 'official_control_count' },
   /* /compliance/controls rows carry control_ref and no id; the builder pages key on id, key and label. */
-  ComplianceChecklistItem: { id: 'control_ref', key: 'control_ref', label: 'title' },
+  /* The route calls the engine verdict `verdict`; every builder page reads `status`. */
+  ComplianceChecklistItem: { id: 'control_ref', key: 'control_ref', label: 'title', status: 'verdict' },
   /* Builder rows carry created_date; the API carries created_at. */
   User: { created_date: 'created_at' },
   /* ApiKeysPage labels the scopes column Permissions. */
