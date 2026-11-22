@@ -4,7 +4,7 @@ import { invokeAction } from "@/lib/invokeAction";
 import { buildLiveDataOverride } from "@/lib/liveDataOverride";
 import VMFindingsTable from "@/components/vm/VMFindingsTable";
 import VMScanHistoryTable from "@/components/vm/VMScanHistoryTable";
-import AIResponseModal from "@/components/shared/AIResponseModal";
+import AIResponseModal, { NO_CODE_GENERATOR_NOTE } from "@/components/shared/AIResponseModal";
 
 export default function VMSecurityPage() {
   const [findings, setFindings] = useState([]);
@@ -104,7 +104,7 @@ export default function VMSecurityPage() {
       )}
 
       {modalTitle && (
-        <AIResponseModal title={modalTitle} loading={modalLoading} response={modalData?.response} codeOutput={modalData?.code_output} agentSteps={modalData?.agent_steps} onRegenerate={() => (lastFinding ? patch(lastFinding) : null)} onClose={() => setModalTitle(null)} />
+        <AIResponseModal title={modalTitle} loading={modalLoading} codeAbsentNote={NO_CODE_GENERATOR_NOTE} response={modalData?.response} codeOutput={modalData?.code_output} agentSteps={modalData?.agent_steps} onRegenerate={() => (lastFinding ? patch(lastFinding) : null)} onClose={() => setModalTitle(null)} />
       )}
     </div>
   );

@@ -6,7 +6,7 @@ import CloudFindingsTable from "@/components/cloud/CloudFindingsTable";
 import CIEMIdentityTable from "@/components/cloud/CIEMIdentityTable";
 import AttackSurfaceCards from "@/components/cloud/AttackSurfaceCards";
 import AttackSurfaceBasis from "@/components/cloud/AttackSurfaceBasis";
-import AIResponseModal from "@/components/shared/AIResponseModal";
+import AIResponseModal, { NO_CODE_GENERATOR_NOTE } from "@/components/shared/AIResponseModal";
 
 const TABS = [
   { key: "findings", label: "Cloud Findings" },
@@ -127,7 +127,7 @@ export default function CloudSecurityPage() {
       )}
 
       {modalTitle && (
-        <AIResponseModal title={modalTitle} loading={modalLoading} response={modalData?.response} codeOutput={modalData?.code_output} agentSteps={modalData?.agent_steps} onClose={() => setModalTitle(null)} />
+        <AIResponseModal title={modalTitle} loading={modalLoading} codeAbsentNote={NO_CODE_GENERATOR_NOTE} response={modalData?.response} codeOutput={modalData?.code_output} agentSteps={modalData?.agent_steps} onClose={() => setModalTitle(null)} />
       )}
     </div>
   );

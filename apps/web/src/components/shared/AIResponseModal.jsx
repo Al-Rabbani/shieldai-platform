@@ -3,7 +3,12 @@ import ReactMarkdown from "react-markdown";
 import { base44 } from "@/api/base44Client";
 import AgentStepCard from "@/components/copilot/AgentStepCard";
 
-export default function AIResponseModal({ title, loading, response, codeOutput, meta, actions, agentSteps, showDownload, onRegenerate, onClose }) {
+export const NO_CODE_GENERATOR_NOTE =
+  "This platform answers with agent reasoning, not generated code. There is no code-generation engine here, so no patch " +
+  "script is produced. Treat the analysis above as guidance and the remediation command recorded on the finding as the " +
+  "authoritative fix.";
+
+export default function AIResponseModal({ title, loading, response, codeOutput, codeAbsentNote, meta, actions, agentSteps, showDownload, onRegenerate, onClose }) {
   const [copied, setCopied] = useState(false);
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -85,6 +90,12 @@ export default function AIResponseModal({ title, loading, response, codeOutput, 
                   <button onClick={copyCode} className="text-[10px] font-medium text-blue-400 hover:text-blue-300">{copied ? "Copied!" : "Copy"}</button>
                 </div>
                 <pre className="text-xs text-slate-200 whitespace-pre-wrap overflow-x-auto">{codeOutput}</pre>
+              </div>
+            )}
+            {!codeOutput && codeAbsentNote && (
+              <div className="mt-4 rounded-lg p-3" style={{ background: "#0a0f1e", border: "1px solid #1F2937" }}>
+                <p className="text-[10px] text-slate-500">NO PATCH SCRIPT</p>
+                <p className="text-xs text-slate-400 mt-1 leading-relaxed">{codeAbsentNote}</p>
               </div>
             )}
             {meta && (

@@ -4,7 +4,7 @@ import { invokeAction } from "@/lib/invokeAction";
 import { buildLiveDataOverride } from "@/lib/liveDataOverride";
 import ContainerFindingsTable from "@/components/container/ContainerFindingsTable";
 import ContainerScanCard from "@/components/container/ContainerScanCard";
-import AIResponseModal from "@/components/shared/AIResponseModal";
+import AIResponseModal, { NO_CODE_GENERATOR_NOTE } from "@/components/shared/AIResponseModal";
 
 export default function ContainerSecurityPage() {
   const [findings, setFindings] = useState([]);
@@ -90,7 +90,7 @@ export default function ContainerSecurityPage() {
       )}
 
       {modalTitle && (
-        <AIResponseModal title={modalTitle} loading={modalLoading} response={modalData?.response} codeOutput={modalData?.code_output} agentSteps={modalData?.agent_steps} onRegenerate={() => lastFinding && fix(lastFinding)} onClose={() => setModalTitle(null)} />
+        <AIResponseModal title={modalTitle} loading={modalLoading} codeAbsentNote={NO_CODE_GENERATOR_NOTE} response={modalData?.response} codeOutput={modalData?.code_output} agentSteps={modalData?.agent_steps} onRegenerate={() => lastFinding && fix(lastFinding)} onClose={() => setModalTitle(null)} />
       )}
     </div>
   );

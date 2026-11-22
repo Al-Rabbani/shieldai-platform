@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 
-export default function VulnAIModal({ finding, response, codeOutput, loading, onClose }) {
+export default function VulnAIModal({ finding, response, codeOutput, codeAbsentNote, loading, onClose }) {
   const [copied, setCopied] = useState(false);
   if (!finding) return null;
 
@@ -30,6 +30,12 @@ export default function VulnAIModal({ finding, response, codeOutput, loading, on
                   <button onClick={copyCode} className="text-[10px] font-medium text-blue-400 hover:text-blue-300">{copied ? "Copied!" : "Copy"}</button>
                 </div>
                 <pre className="text-xs text-slate-200 whitespace-pre-wrap overflow-x-auto">{codeOutput}</pre>
+              </div>
+            )}
+            {!codeOutput && codeAbsentNote && (
+              <div className="mt-4 rounded-lg p-3" style={{ background: "#0a0f1e", border: "1px solid #1F2937" }}>
+                <p className="text-[10px] text-slate-500">NO PATCH SCRIPT</p>
+                <p className="text-xs text-slate-400 mt-1 leading-relaxed">{codeAbsentNote}</p>
               </div>
             )}
             {!codeOutput && response && (
