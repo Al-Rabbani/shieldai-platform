@@ -4,6 +4,13 @@ Why this file exists: EscalationSettingsPage edits a rule, pauses it and deletes
 existed on /siem/correlation/rules, so every one of those actions was a 405 the user could not act on, and the
 panel's ten real rows were read-only in the product.
 
+The route table is read from the application object, built in-process from the source that is about to be
+deployed, NOT from the running server. My first version curled the live /openapi.json, which made this file
+assert something no deploy could satisfy: the suite runs before the API restarts, so a route added by the very
+release being deployed could never be published yet, and the gate refused every deploy. The lesson is the one
+this repo keeps teaching - a check that cannot pass is a check that gets bypassed. Building the app here also
+proves registration, which a source grep does not.
+
 Two failure modes are worth a test rather than a comment:
 
   * An update that does not use exclude_unset writes every field it knows about. The pause button sends
@@ -14,25 +21,25 @@ Two failure modes are worth a test rather than a comment:
 """
 from __future__ import annotations
 
-import json
-import re
-import subprocess
 from pathlib import Path
 
 import pytest
 
-API = "http://127.0.0.1:8000"
 ROUTES_SOURCE = Path("/opt/gds-os/apps/api/gds_api/siem/routes.py")
 
 
-def live_paths() -> dict:
-    """The route table the running API publishes, not the one the source claims."""
-    result = subprocess.run(
-        ["curl", "-s", f"{API}/openapi.json"], capture_output=True, text=True, timeout=20, check=False
-    )
-    if result.returncode != 0 or not result.stdout.strip():
-        pytest.skip("live API did not answer; route table unavailable")
-    return json.loads(result.stdout)["paths"]
+def published_paths() -> dict:
+    """The route table of the app as built from this source tree.
+
+    In-process, so it describes the release being deployed rather than whatever the server happens to be
+    running. Importing the application registers every router; no database connection is opened.
+    """
+    import sys
+
+    sys.path.insert(0, "/opt/gds-os/apps/api")
+    from gds_api.main import app  # noqa: PLC0415 - deliberate: keeps the 10s import out of collection
+
+    return app.openapi()["paths"]
 
 
 def handler_source(path: str, method: str) -> str:
@@ -54,8 +61,8 @@ def handler_source(path: str, method: str) -> str:
 RULE_PATH = "/siem/correlation/rules/{rule_id}"
 
 
-def test_the_routes_the_panel_calls_are_published():
-    paths = live_paths()
+def test_the_routes_the_panel_calls_are_registered():
+    paths = published_paths()
     published = paths.get(RULE_PATH, {})
     assert "patch" in published, "the panel edits a rule with a PATCH"
     assert "delete" in published, "the panel deletes a rule with a DELETE"
