@@ -11,7 +11,7 @@ export default function HermesCapabilityTiles({ activeScans, pathsMapped, exploi
     { icon: Map, title: "Attack Path Discovery", desc: "Graph-based lateral movement analysis", stat: fmt(pathsMapped, "paths mapped"), cta: "View Paths →", to: "/red-team/attack-paths" },
     { icon: Target, title: "Exploit Validation", desc: "Safe CVE exploitation proof", stat: fmt(exploitsPending, "pending review"), cta: "View →", to: "/offensive/exploits" },
     { icon: Zap, title: "Adversary Simulation", desc: "LockBit · Scattered Spider · APT", stat: fmt(simsRun, "simulations"), cta: "Run New →", to: "/red-team/adversary-sim" },
-    { icon: Crosshair, title: "Kill Chain Analyzer", desc: "MITRE ATT&CK 14-tactic coverage", stat: "43% coverage", cta: "Improve →", to: "/red-team/kill-chain" },
+    { icon: Crosshair, title: "Kill Chain Analyzer", desc: "MITRE ATT&CK 14-tactic coverage", stat: "coverage not measured", cta: "Improve →", to: "/red-team/kill-chain" },
     { icon: Search, title: "Recon & OSINT", desc: "External exposure & attack surface", stat: "ASM live", cta: "Run Recon →", to: "/offensive/osint" },
   ];
 

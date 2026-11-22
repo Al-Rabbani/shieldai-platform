@@ -18,10 +18,12 @@ test('the metrics row carries no hardcoded coverage figure', async () => {
   assert.match(text, /=== null \|\| value === undefined \? "—"/, 'an absent metric must render as an em dash');
 });
 
-test('capability tiles read a null as an absence', async () => {
+test('capability tiles read a null as an absence and assert no coverage figure', async () => {
   const text = flat(await readFile(new URL('components/redteam/HermesCapabilityTiles.jsx', SRC), 'utf8'));
   assert.match(text, /not recorded here/);
   assert.ok(!text.includes('${pathsMapped} paths mapped'), 'a null must not interpolate as "null paths mapped"');
+  assert.ok(!text.includes('43%'), 'a second hardcoded coverage figure lived in the kill chain tile');
+  assert.match(text, /coverage not measured/);
 });
 
 test('the page passes real counts and nulls for absent stores', async () => {
