@@ -99,7 +99,9 @@ export default function ThreatIntelligencePage() {
       <div className="flex items-center gap-3 flex-wrap">
         <h1 className="text-xl font-bold text-white">🌐 Global Threat Intelligence Centre</h1>
         <span className="flex items-center gap-1.5 text-xs font-bold text-emerald-400">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> ● LIVE
+          {/* "LIVE" claimed a streaming feed. What is live is the register read behind this page, refreshed when you
+              load it; nothing here arrives in real time. */}
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> ● FROM THE REGISTER
         </span>
         <button onClick={runHunt} className="ml-auto px-4 py-2 rounded-lg text-xs font-bold bg-blue-500 text-white hover:bg-blue-600 transition">
           🎯 AI Threat Hunt
