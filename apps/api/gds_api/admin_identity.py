@@ -447,6 +447,24 @@ async def issue_api_key(
 ) -> ApiKeyIssued:
     await _bind(db, current_user.tenant_id)
 
+    # A key with no scopes is not "a key with default access": the principal's permissions ARE its scopes
+    # (security.py builds CurrentUser(permissions=list(scopes))), so an unscoped key authenticates and then 403s on
+    # every route. Refusing here is the difference between a credential that works and one that wastes an afternoon.
+    if not body.scopes:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "An API key needs at least one scope. A key with none authenticates but is authorised for nothing. "
+            "For read-only CI access, ask for \"findings:read\".",
+        )
+    unknown = sorted({scope for scope in body.scopes if scope not in CATALOGUE_PERMISSIONS})
+    if unknown:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            f"Unknown scope(s): {', '.join(unknown)}. These are not permissions this platform grants, so a key "
+            f"holding them would authorise nothing. GET /admin/permissions lists the {len(CATALOGUE_PERMISSIONS)} "
+            f"that exist.",
+        )
+
     raw = f"gds_{secrets.token_urlsafe(32)}"
     key_id = uuid.uuid4()
     await db.execute(
@@ -487,6 +505,9 @@ async def issue_api_key(
         id=key_id,
         name=body.name,
         key_prefix=raw[:12],
+        # Echoed from the request, which is what was written. Leaving this out made every issue call report
+        # "scopes": [] and led me to report a scope-enforcement defect that did not exist.
+        scopes=list(body.scopes),
         created_at=None,
         last_used_at=None,
         revoked_at=None,

@@ -87,10 +87,23 @@ Returns `201` with `key` — **shown once, never recoverable**:
 Proved: `GET /findings` with `Authorization: Bearer <key>` returned `200` and 0 rows — the key authenticates, binds
 the right tenant, and records `last_used_at`.
 
-**Two defects this step exposed, not yet fixed:**
-1. `scopes` came back `[]` although `["findings:read"]` was sent. The requested scopes are silently dropped.
-2. The key still read `/findings` with empty scopes, so scope is not what authorises the call. A key issued for
-   read-only use is not read-only by construction. Until this is fixed, treat every issued key as full-tenant.
+**Correction to the first version of this runbook, which accused the wrong thing.** It said scopes were dropped and
+not enforced. Both were wrong, and the measurement that settles it: a key issued with `["findings:read"]` is stored as
+`["findings:read"]`, and that key is refused with `403 Missing permission: users:manage` on `/admin/users` and on
+`POST /admin/api-keys`. Scopes are stored and enforced; the principal's permissions *are* its scopes
+(`security.py` builds `CurrentUser(permissions=list(scopes))`).
+
+The real defect was in the response: the issue endpoint built `ApiKeyIssued` without passing `scopes`, so every `201`
+reported `"scopes": []` whatever was granted, and that is what I misread as a storage failure. Fixed, along with two
+footguns the same run exposed:
+
+1. A key with **no scopes** was issued `201` and could then do nothing at all. Now refused: `400 An API key needs at
+   least one scope.`
+2. A key with a scope that **does not exist** (`total:nonsense`) was issued `201` and stored, authorising nothing.
+   Now refused: `400 Unknown scope(s): total:nonsense.`
+
+Scopes are not free text: `GET /admin/permissions` lists the catalogue. A key holding `findings:read` can read the
+finding register but is refused `cloud:findings:read` routes — different permission, so ask for what the job needs.
 
 ## 5. Billing
 
