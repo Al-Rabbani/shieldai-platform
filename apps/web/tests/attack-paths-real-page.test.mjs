@@ -13,6 +13,7 @@ test('the routed page (pages/redteam) no longer calls a refused function', async
   assert.match(flat(page), /CloudAttackPath\.list/);
   assert.match(flat(page), /CloudAttackPath\.summary\(\)/);
   assert.ok(!page.includes('No attack paths discovered yet'));
+  assert.ok(page.split('basis?.basis').length === 2, 'the basis must appear once, not twice');
 });
 
 test('the page leaves no promise unhandled', async () => {

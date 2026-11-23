@@ -46,14 +46,12 @@ export default function AttackPathsPage() {
     <div className="min-h-screen p-4 space-y-4" style={{ background: "#0a0f1e" }}>
       <h1 className="text-xl font-bold text-white">🗺️ Attack Path Discovery</h1>
 
-      {basis?.basis && <p className="text-[11px] text-slate-500 max-w-3xl">{basis.basis}</p>}
-
       {loading ? (
         <div className="w-8 h-8 border-4 border-t-red-500 border-white/10 rounded-full animate-spin mx-auto mt-20" />
       ) : paths.length === 0 ? (
-        <p className="text-sm text-slate-500">
-          No attack path is recorded or can be computed here. This is not a clean result: it is the absence of a path store
-          and of any relationship edges to walk.
+        <p className="text-sm text-slate-500 max-w-3xl">
+          {basis?.basis
+            || "No attack path is recorded or can be computed here. This is not a clean result: it is the absence of a path store and of any relationship edges to walk."}
         </p>
       ) : (
         <div className="space-y-3">
