@@ -1,0 +1,2833 @@
+{
+  "retired_on": "2026-11-23",
+  "release": "P0-6",
+  "why": "Unreachable from App.jsx and therefore never rendered, but still carrying fabricated fixtures that would reach a customer the moment a route was added. Moved to apps/web/src/_retired/pages.",
+  "count": 683,
+  "files": [
+    {
+      "file": "pages/AGIReadiness.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/AIAgentConsolePage.jsx",
+      "markers": {
+        "Math.random": 6,
+        "coming soon": 2
+      }
+    },
+    {
+      "file": "pages/AIEnginePage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/AIProtectionPage.jsx",
+      "markers": {
+        "coming soon": 1
+      }
+    },
+    {
+      "file": "pages/AISPMPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/ASPMDetailPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/ASPMPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/Academy.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/AgentOrchestration.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/AlertCenterPage.jsx",
+      "markers": {
+        "Math.random": 3,
+        "MOCK": 2
+      }
+    },
+    {
+      "file": "pages/ArtifactsEvidence.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/AttackForecast.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/AuditLogPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/AuditLogs.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/AutoAssignPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/AutoTriagePage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/AutonomousSocPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/BreachTimelinePage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/BreakingChangesPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/CICDSecurityPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/CIEMPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/ChangelogPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/CodeToCloudPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/Compliance.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/ComplianceAuditPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/ComplianceDashboard.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/ComplianceEvidencePage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/ComplianceLibraryPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/CustomRiskScoringPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/CustomRulesPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/CyberInsurancePage.jsx",
+      "markers": {
+        "coming soon": 1
+      }
+    },
+    {
+      "file": "pages/CyberRangePage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/DSPMPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/DarkWebMonitorPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/Dashboard.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/DashboardCinematic.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/DashboardNew.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/DeceptionPage.jsx",
+      "markers": {
+        "Math.random": 1,
+        "coming soon": 1
+      }
+    },
+    {
+      "file": "pages/DemoPage.jsx",
+      "markers": {
+        "Math.random": 2
+      }
+    },
+    {
+      "file": "pages/DeveloperScoresPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/DeviceAgentPortalPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/DocsPage.jsx",
+      "markers": {
+        "coming soon": 1
+      }
+    },
+    {
+      "file": "pages/EDRDeviceDetailPage.jsx",
+      "markers": {
+        "coming soon": 3
+      }
+    },
+    {
+      "file": "pages/EDRPage.jsx",
+      "markers": {
+        "Math.random": 2
+      }
+    },
+    {
+      "file": "pages/ExecutiveDashboard.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/Feed.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/FindingsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/GeoThreatMapPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/GlobalIntel.jsx",
+      "markers": {
+        "Math.random": 1
+      }
+    },
+    {
+      "file": "pages/GlobalRiskScorePage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/HardenedImagesPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/HardwareSecurityPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/IOCRadarPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/IdentityIntelligencePage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/InfinitePage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/IntegrationHub.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/Integrations.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/IntegrationsHub.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/IntegrationsHubPage.jsx",
+      "markers": {
+        "coming soon": 2
+      }
+    },
+    {
+      "file": "pages/IntelTriagePage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/LLMSecurityPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/LandingPage.jsx",
+      "markers": {
+        "Math.random": 6
+      }
+    },
+    {
+      "file": "pages/MCPSecurityPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/MSSPPage.jsx",
+      "markers": {
+        "Math.random": 1
+      }
+    },
+    {
+      "file": "pages/MSSPPortal.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/Marketplace.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/MaturityPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/Mfa.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/NotificationRulesPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/NotificationsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/OAuthConsent.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/OnboardingPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/OnboardingWizard.jsx",
+      "markers": {
+        "coming soon": 1
+      }
+    },
+    {
+      "file": "pages/PQCScannerPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/PenTesting.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/PentestOnDeployPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/PhishingMonitorPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/PlatformAnalyticsPage.jsx",
+      "markers": {
+        "Math.random": 1
+      }
+    },
+    {
+      "file": "pages/Pricing.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/PricingPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/PricingPublicPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/QuantumReadinessPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/RansomwareTrackerPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/ReachabilityPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/RegulatoryIntelPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/RegulatoryIntelligencePage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/ReportTemplatePage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/ReposPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/RiskForecastPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/RiskQuantificationPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/RoiDashboardPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/ScanHistoryPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/SecretsMonitorPage.jsx",
+      "markers": {
+        "Math.random": 1
+      }
+    },
+    {
+      "file": "pages/SecurityGraphPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/SecurityMaturityPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/SecurityReportingPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/SecurityTrendsDashboard.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/SettingsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/SettingsPageNew.jsx",
+      "markers": {
+        "coming soon": 3
+      }
+    },
+    {
+      "file": "pages/ShieldAIAnalystPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/ShieldEdge.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/ShieldGov.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/ShieldHome.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/StatusPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/SupportPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/ThreatActorsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/ThreatFeedPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/ThreatHuntingPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/ThreatIntelOverviewPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/ThreatIntelPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/ToolGatewayPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/TrustPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/VibeGuardPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/VulnManagement.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/Vulnerabilities.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/WeeklyEvidenceReportPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/WelcomePage.jsx",
+      "markers": {
+        "Math.random": 3
+      }
+    },
+    {
+      "file": "pages/WorkflowCanvasPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/WorkflowEngine.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/ZeroDayProtectionPage.jsx",
+      "markers": {
+        "Math.random": 1
+      }
+    },
+    {
+      "file": "pages/ai/AISPMOverviewPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/ai/LLMMonitorPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/ai/PromptSecurityPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/ai/ShadowAIPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/attack/APIFuzzerPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/attack/APISecurityPage.jsx",
+      "markers": {
+        "Math.random": 1
+      }
+    },
+    {
+      "file": "pages/attack/AgentArmyPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/attack/AttackDashboard.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/attack/AttackFindingsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/attack/AttackOverviewPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/attack/AttackSurfacePage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/attack/BlastRadiusPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/attack/BugBountyPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/attack/CampaignsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/attack/ContinuousPentestPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/attack/DASTPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/attack/DASTScanDetailPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/attack/DASTScansPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/attack/ExternalAssetsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/attack/PentestDetailPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/attack/PentestFindingDetail.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/attack/PentestJobsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/attack/PentestPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/attack/PentestReportPage.jsx",
+      "markers": {
+        "Math.random": 1
+      }
+    },
+    {
+      "file": "pages/attack/RedTeamPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/cloud/AttackPathsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/cloud/CIEMPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/cloud/CSPMFindingsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/cloud/CloudAccountsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/cloud/CloudDashboard.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/cloud/CloudFindingsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/cloud/CloudOverviewPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/cloud/CloudPosturePage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/cloud/CloudSearch.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/cloud/CodeToCloudPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/cloud/ContainersPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/cloud/DSPMPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/cloud/HardenedImagesPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/cloud/HardenedPage.jsx",
+      "markers": {
+        "Math.random": 4
+      }
+    },
+    {
+      "file": "pages/cloud/IAMRiskPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/cloud/IaCDriftPage.jsx",
+      "markers": {
+        "coming soon": 1
+      }
+    },
+    {
+      "file": "pages/cloud/K8sPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/cloud/K8sSecurityPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/cloud/MisconfigsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/cloud/VMDetailPage.jsx",
+      "markers": {
+        "coming soon": 1
+      }
+    },
+    {
+      "file": "pages/cloud/VMsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/code/AICodeAuditPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/code/AIGeneratedCode.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/code/AISASTPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/code/AutoFixPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/code/CICDGatePage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/code/CodeAuditPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/code/CodeDashboard.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/code/CodeFindingsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/code/CodeOverviewPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/code/CodeSecurityPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/code/DependenciesPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/code/LicensePage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/code/MalwarePage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/code/PackageHealthPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/code/ReachabilityPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/code/ReleaseGatingPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/code/RepoDetailPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/code/RepositoriesPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/code/SASTFindingsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/code/SASTPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/code/SBOMPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/code/SCAPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/code/SecretsIaCPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/code/SecretsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/code/SupplyChainPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSA2ANetworkPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSAICopilotPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSAISPMPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSAISecurityPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSAISecurityRedTeamPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSAITriagePage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSAPIFederationPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSAPISecurityPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSASMApisPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSASMAssetsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSASMCertificatesPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSASMCloudPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSASMCriticalPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSASMDashboardPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSASMDnsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSASMDomainsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSASMExposurePage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSASMJobsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSASMSubdomainsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSASShadowITPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSAccessControlPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSAgentCommandCenterPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSAgentCommsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSAgentFleetPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSAgentHealthPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSAgentRegistryPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSAgentRuntimePage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSAgentSessionsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSAlertRuleManagerPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSAlertRulesPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSAnalyticsStudioPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSApprovalAuditPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSApprovalEvidencePage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSApprovalPoliciesPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSApprovalQueuePage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSApprovalsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSAssetGraphPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSAttackGraphPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSAttackPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSAttackPathPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSAttackPathsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSAuditTrailPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSAuthFlowVisualizationPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSAuthorizationAuditPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSAutoDefensePage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSAutoDefensePlansPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSAutoRemediationPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSAutonomousIRPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSAzurePage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSBoardReportPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSCICDPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSCIPipelineSecurityPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSCertificationCenterPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSChaosEngineeringPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSCloudAssessmentsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSCloudCIEMPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSCloudCSPMPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSCloudCompliancePage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSCloudConnectPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSCloudCostRiskPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSCloudExecutivePage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSCloudInventoryPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSCloudPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSCloudRemediationPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSCloudRisksPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSCloudSecurityPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSCloudThreatsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSCoPilotAgentsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSCoPilotApprovalsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSCoPilotAuditPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSCoPilotCommandPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSCoPilotDependencyMapPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSCoPilotEvidencePage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSCoPilotExecutionsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSCoPilotPlatformPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSCoPilotReportsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSCoPilotSafetyPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSCodePage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSCommandCenter.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSComplianceAlertsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSComplianceAutoPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSComplianceMappingPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSCompliancePage.jsx",
+      "markers": {
+        "FALLBACK_": 5
+      }
+    },
+    {
+      "file": "pages/gds/GDSComplianceReportingPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSComplianceSchedulingPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSComplianceScoresPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSComplianceTaskManagementPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSComplianceTrendsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSConfidenceRiskPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSConnectorExecutionsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSConnectorRegistryPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSConnectorSDKPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSContainerImageSecurityPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSContainersPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSCriticalCompliancePage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSCriticalICSPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSCriticalIncidentsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSCriticalInfrastructurePage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSCriticalOTAssetsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSCriticalResiliencePage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSCriticalSCADAPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSCriticalThreatsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSCyberRangeChaosPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSCyberRangeEnvironmentsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSCyberRangeExercisesPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSCyberRangeForecastsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSCyberRangeMissionsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSCyberRangeModelsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSCyberRangePage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSCyberRangeSyncPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSCyberRangeTwinsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSCyberRiskPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSDFIRContainmentPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSDFIRCorrectivePage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSDFIREradicationPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSDFIRForensicsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSDFIRIncidentsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSDFIRPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSDFIRPirPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSDFIRRcaPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSDFIRRecoveryPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSDFIRRegulatoryPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSDSPMPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSDarkWebPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSDataCatalogPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSDataInsightsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSDataIntelligencePage.jsx",
+      "markers": {
+        "Math.random": 4
+      }
+    },
+    {
+      "file": "pages/gds/GDSDataLakePage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSDataLakesPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSDataMeshPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSDataMetricsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSDataQualityPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSDataStreamPage.jsx",
+      "markers": {
+        "Math.random": 1
+      }
+    },
+    {
+      "file": "pages/gds/GDSDependencySecurityPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSDevSecOpsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSDispatchLogPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSEDPStatusPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSEndpointHistoryPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSEntitlementsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSEscalationPoliciesPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSEvaluatePage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSEvidenceLibraryPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSEvidenceLockerPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSEvidenceMapPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSEvidenceVaultPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSExecutiveCommandPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSExecutiveInsightsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSExecutivePage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSExecutiveReportingPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSExecutiveRiskDashboard.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSExecutiveRiskOverviewPage.jsx",
+      "markers": {
+        "Math.random": 1
+      }
+    },
+    {
+      "file": "pages/gds/GDSFAIRRiskPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSFederatedIdentityPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSFinancialAMLPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSFinancialFraudPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSFinancialInstitutionsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSFinancialKYCPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSFinancialOverviewPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSFinancialPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSFinancialRiskPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSFinancialSanctionsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSFinancialTransactionsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSGASCIConsensusPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSGASCIGovernancePage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSGASCIKnowledgeGraphPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSGASCILearningPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSGASCIMemoryPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSGASCIModelsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSGASCIOrchestrationPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSGASCIPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSGASCIPromptsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSGASCIReasoningPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSGASCIWorkflowsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSGCPPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSGoalAnalyzerPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSGovernancePage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSHealthcareCompliancePage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSHealthcareDevicesPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSHealthcareHospitalsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSHealthcareIncidentsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSHealthcareNetworksPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSHealthcarePHIPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSHealthcarePage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSHealthcareThreatsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSHeatmapPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSIDEPluginPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSIaCSecurityCenterPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSIdentityADExplorerPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSIdentityAssessmentsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSIdentityAttackPathsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSIdentityCredentialsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSIdentityFindingsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSIdentityGroupsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSIdentityInsightsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSIdentityPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSIdentityProvidersPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSIdentityRemediationPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSIdentityRolesPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSIdentitySecurityPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSIdentityServicesPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSIdentitySessionsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSIdentityThreatsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSIdentityUsersPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSIdentityWeeklyReportsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSIndustrialAnalyticsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSIntegrationAnalyticsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSIntegrationGovernancePage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSIntegrationHubPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSIntegrationStudioPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSIntegrationsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSIntelligencePage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSK8sRBACAdmissionPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSKPIDashboardPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSKernelApprovalsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSKernelComparePage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSKernelMetricsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSKernelPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSKernelSessionPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSKernelToolsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSKnowledgeBasePage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSKnowledgeGraphPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSKubernetesExplorerPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSKubernetesPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSLeaderboardPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSLiveFeedPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSMCPHubPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSMSSPCustomersPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSMSSPHealthPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSMSSPOperationsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSMSSPPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSMSSPPartnersPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSMSSPPortalPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSMSSPRealPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSMSSPRevenuePage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSMSSPSLAPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSMSSPSOCPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSMSSPServicesPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSMarketplaceAgentsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSMarketplaceDashboardsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSMarketplaceIntegrationsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSMarketplacePage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSMarketplacePlaybooksPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSMarketplaceRevenuePage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSMarketplaceTemplatesPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSMarketplaceWorkflowsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSMemoryGovernancePage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSMemoryIntelligencePage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSMemoryNewPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSMemoryPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSMemoryPatternsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSMobileDashboardPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSNationalAgenciesPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSNationalCommandPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSNationalDirectivesPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSNationalIncidentsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSNationalInfrastructurePage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSNationalSOCsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSNationalSectorsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSNationalThreatsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSNotificationPreferencesPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSNotificationsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSPRReviewPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSPenReportPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSPentestPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSPlanningAuditPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSPlanningPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSPlaybookLibraryPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSPodSecurityPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSPolicyBuilderPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSPostureMLPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSPredictiveRiskPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSPurpleAttackGraphsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSPurpleControlsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSPurpleCoveragePage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSPurpleDetectionGapsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSPurpleDetectionsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSPurpleFindingsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSPurpleReportsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSPurpleScenariosPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSPurpleSimulationsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSPurpleTeamPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSQuantumSafePage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSRAGConsolePage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSReachabilityPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSReasoningViewerPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSRedTeamMissionControl.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSRegisterConnectorPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSRegulatoryIntelPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSRegulatoryPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSRemediationTemplatesPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSRemediationTrackingPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSRiskCorrelationPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSRiskForecastPage.jsx",
+      "markers": {
+        "Math.random": 1
+      }
+    },
+    {
+      "file": "pages/gds/GDSRiskHeatmapPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSRiskIntelligencePage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSRiskTrendsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSRolesPermissionsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSRuntimeProtectionCenterPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSRuntimeProtectionPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSRuntimeSecurityPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSSAASSecurityPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSSBOMExplorerPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSSBOMIntelligencePage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSSBOMPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSSLATemplatesPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSSLSAPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSSOARPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSSOCCorrelationPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSSOCExecutivePage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSSOCIncidentDetailPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSSOCIncidentsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSSOCInvestigationsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSSOCMetricsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSSOCPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSSOCPlaybooksPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSSOCQueuePage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSScorecardPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSSecretsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSSecurityMaturityPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSSecurityVelocityPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSSemanticSearchPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSSettingsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSSuperAgentsCollaboratePage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSSuperAgentsGovernancePage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSSuperAgentsMarketplacePage.jsx",
+      "markers": {
+        "Math.random": 3
+      }
+    },
+    {
+      "file": "pages/gds/GDSSuperAgentsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSSuperAgentsTelemetryPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSSupplyChainPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSTeamPerformancePage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSTelecom5GPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSTelecomAnalyticsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSTelecomBgpDnsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSTelecomFraudPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSTelecomIncidentsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSTelecomNetworkPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSTelecomPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSTelecomRisksPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSTelecomSubscribersPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSTenantAuditLogPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSTenantConfigurePage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSTenantExecutiveReportPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSTenantIsolationPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSTenantMigrationPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSTenantPredictiveGrowthPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSTenantResourceDashboardPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSTenantResourceHeatmapPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSTenantRiskHeatmapPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSTenantSubscriptionsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSTenantWorkspacesPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSTenantsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSThreatHuntingPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSThreatIntelActorsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSThreatIntelCampaignsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSThreatIntelDarkWebPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSThreatIntelFeedsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSThreatIntelGraphPage.jsx",
+      "markers": {
+        "Math.random": 2
+      }
+    },
+    {
+      "file": "pages/gds/GDSThreatIntelIOCsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSThreatIntelMalwarePage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSThreatIntelPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSThreatIntelPredictionsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSThreatIntelReportsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSThreatModelPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSThreatSimPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSToolAuditPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSToolExecutorPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSToolRegistryPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSToolRiskPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSToolsHealthPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSToolsLivePage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSToolsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSToolsPerformancePage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSUnifiedCompliancePage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSUserRolesSettings.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSVMsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSVulnerabilityAssignmentPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSWebhookManagerPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSWeeklyExecutiveReportPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSWeeklyReportPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSWorkflowAuditPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSWorkflowBuilderPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSWorkflowComparisonPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSWorkflowExecutionHistoryPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSWorkflowExecutivePage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSWorkflowRecoveryPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSWorkflowRunsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSWorkflowsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSZeroTrustAlertsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSZeroTrustDevicesPage.jsx",
+      "markers": {
+        "Math.random": 1
+      }
+    },
+    {
+      "file": "pages/gds/GDSZeroTrustEvaluatePage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSZeroTrustJITPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSZeroTrustPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSZeroTrustPlatformPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/gds/GDSZeroTrustPoliciesPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/governance/AccessControlPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/governance/AccessReviewPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/governance/AuditLogGovPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/governance/AuditLogPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/governance/AuditReportsPage.jsx",
+      "markers": {
+        "Math.random": 7
+      }
+    },
+    {
+      "file": "pages/governance/BoardReportsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/governance/ComplianceDashboard.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/governance/ComplianceDashboardPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/governance/CompliancePage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/governance/EvidencePage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/governance/EvidenceVaultPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/governance/FinancialRiskPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/governance/GovEvidencePage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/governance/GovernanceOverview.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/governance/GovernanceOverviewPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/governance/MonthlyReportPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/governance/PoliciesPage.jsx",
+      "markers": {
+        "Math.random": 1
+      }
+    },
+    {
+      "file": "pages/governance/PolicyViolationsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/governance/PublicReportPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/governance/ReportsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/governance/ReportsTrendsPage.jsx",
+      "markers": {
+        "MOCK": 3
+      }
+    },
+    {
+      "file": "pages/governance/SLATrackerPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/governance/ViolationsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/governance/WeeklyReportPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/guides/GuidesPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/integrations/AWSSecurityHubPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/integrations/AttackSurfaceIntelPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/integrations/BitbucketIntegrationPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/integrations/BitbucketPipelinesPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/integrations/ContainerScannersPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/integrations/GitHubActionsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/integrations/GitHubIntegrationPage.jsx",
+      "markers": {
+        "MOCK": 3
+      }
+    },
+    {
+      "file": "pages/integrations/GitLabCICDPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/integrations/GitLabIntegrationPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/integrations/IDEPluginsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/integrations/JetBrainsPluginPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/integrations/JiraIntegrationPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/integrations/LinearIntegrationPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/integrations/OpsGenieIntegrationPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/integrations/PagerDutyIntegrationPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/integrations/SIEMIntegrationPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/integrations/SemgrepIntegrationPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/integrations/ServiceNowIntegrationPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/integrations/SlackIntegrationPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/integrations/TeamsIntegrationPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/integrations/VSCodeExtensionPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/integrations/VirusTotalPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/integrations/VulnerabilityDatabasesPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/intel/APTTrackingPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/intel/CredentialLeaksPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/intel/DarkWebPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/intel/RansomwareTrackerPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/intel/ThreatIntelFeedPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/legal/DpaPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/legal/PrivacyPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/legal/TermsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/marketplace/AWSPage.jsx",
+      "markers": {
+        "coming soon": 2
+      }
+    },
+    {
+      "file": "pages/marketplace/AzurePage.jsx",
+      "markers": {
+        "coming soon": 3
+      }
+    },
+    {
+      "file": "pages/marketplace/GCPPage.jsx",
+      "markers": {
+        "coming soon": 3
+      }
+    },
+    {
+      "file": "pages/protect/BotProtectionPage.jsx",
+      "markers": {
+        "coming soon": 1
+      }
+    },
+    {
+      "file": "pages/protect/DeviceProtectionPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/protect/EDRAgentsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/protect/FirewallPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/protect/LLMMonitorPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/protect/ProtectOverview.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/protect/RuntimeProtectionPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/protect/SafeChainPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/protect/SupplyChainPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/protect/ThreatLogPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/protect/ZenFirewallDetailPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/protect/ZenFirewallPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/reports/PublicReportViewer.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/runtime/BotDetectionPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/runtime/EDRAgentsPage.jsx",
+      "markers": {
+        "Math.random": 1
+      }
+    },
+    {
+      "file": "pages/runtime/RiskReportsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/runtime/RuntimeMonitor.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/runtime/RuntimeThreatsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/runtime/SimulationsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/runtime/ThreatIntelPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/runtime/ZenFirewallPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/settings/AccessPage.jsx",
+      "markers": {
+        "Math.random": 1
+      }
+    },
+    {
+      "file": "pages/settings/AdminSettingsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/settings/ApiKeysPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/settings/ApiSettingsPage.jsx",
+      "markers": {
+        "Math.random": 1
+      }
+    },
+    {
+      "file": "pages/settings/BillingPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/settings/Credits.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/settings/IntegrationsPage.jsx",
+      "markers": {
+        "coming soon": 1
+      }
+    },
+    {
+      "file": "pages/settings/MSSPTenantsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/settings/NotificationsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/settings/NotificationsSettingsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/settings/OrgSettingsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/settings/ProfilePage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/settings/TeamPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/settings/TeamsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/settings/WebhooksPage.jsx",
+      "markers": {
+        "Math.random": 2
+      }
+    },
+    {
+      "file": "pages/supply/LicenseCompliancePage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/supply/SBOMPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/supply/SupplyChainEventsPage.jsx",
+      "markers": {}
+    },
+    {
+      "file": "pages/supply/SupplyChainOverviewPage.jsx",
+      "markers": {}
+    }
+  ]
+}

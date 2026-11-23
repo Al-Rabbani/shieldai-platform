@@ -13,10 +13,13 @@ test('CloudAttackPath maps to the measured route with a summary', async () => {
 });
 
 test('the attack path page offers no write and states the basis', async () => {
-  const page = strip(await readFile(new URL('pages/cloud/AttackPathsPage.jsx', SRC), 'utf8'));
+  // This used to read pages/cloud/AttackPathsPage.jsx, which App.jsx never imported: the route renders
+  // pages/redteam/AttackPathsPage.jsx, so the assertions protected a dead twin. P0-6 retired the twin.
+  const page = strip(await readFile(new URL('pages/redteam/AttackPathsPage.jsx', SRC), 'utf8'));
   assert.ok(!page.includes('CloudAttackPath.update'), 'there is nothing stored to mark mitigated');
   assert.ok(!page.includes('Mark as Mitigated'));
   assert.match(flat(page), /CloudAttackPath\.summary\(\)/);
+  assert.match(flat(page), /absence of a path store/, 'the empty state must name the absence, not read as clean');
 });
 
 test('the pentest page names both absences instead of counting them', async () => {
