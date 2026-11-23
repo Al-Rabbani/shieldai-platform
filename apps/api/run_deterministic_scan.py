@@ -18,6 +18,8 @@ Exit codes: 0 = ran (even if nothing new), 1 = fatal setup error.
 """
 
 import asyncio
+import datetime as _dt
+import json as _json
 import json
 import os
 import uuid
@@ -270,10 +272,12 @@ async def _execute_port_inventory(db, tid, uid, mission_id, host):
 
 
 async def main():
+    run_started = _dt.datetime.now(_dt.timezone.utc)
     from sqlalchemy import text
     from gds_api.db import async_session_factory
 
     totals = {"new": 0, "dupe": 0, "failed": 0}
+    targets_checked = 0
     async with async_session_factory() as db:
         # R2.1: tenants is FORCE-RLS protected, so a lookup by slug returns nothing until a
         # tenant is bound - and binding requires the id this query is trying to find. The
@@ -301,19 +305,77 @@ async def main():
 
         for url in TARGETS_HTTP:
             r = await check_headers(db, tenant_id, url)
+            targets_checked += 1
+            # r.get, not r[k]: a check reports the counters it has, and a missing key must not abort a scan that
+            # has already written findings.
             for k in totals:
-                totals[k] += r[k]
+                totals[k] += r.get(k, 0)
 
         # The scheduled scan measures the real internet-facing surface, not a loopback listener:
         # a private host is never an exposure and the scan deliberately files no finding for one.
         _port_host = os.environ.get("GDS_SCAN_PUBLIC_HOST", "www.globaldigitalsecurity.io").strip()
         r = await check_ports(db, tenant_id, host=_port_host)
+        targets_checked += 1
         for k in totals:
-            totals[k] += r[k]
+            totals[k] += r.get(k, 0)
 
         await db.execute(text("SELECT set_config('gds.tenant_id', :t, true)"),
                          {"t": str(tenant_id)})
         after = (await db.execute(text("SELECT count(*) FROM security_findings"))).scalar()
+
+    # Item 46: record this run and stamp its schedule. Before this, the only trace of a scan was a line in
+    # /var/log/gds-deterministic-scan.log, so a dead scanner and a quiet estate looked identical from inside the
+    # product. The insert is best-effort on purpose: a failure to record must not turn a completed scan into an
+    # error, but it must be visible in the log rather than swallowed.
+    try:
+        async with async_session_factory() as _db:
+            await _db.execute(text("SELECT set_config('gds.tenant_id', :t, false)"),
+                              {"t": str(tenant_id)})
+            await _db.execute(
+                text(
+                    "INSERT INTO scan_runs (tenant_id, scanner, started_at, duration_ms, targets, new_findings, "
+                    "duplicates, failed, register_before, register_after, outcome, detail) VALUES "
+                    "(:tid, :scanner, :started, :dur, :targets, :new, :dupe, :failed, :before, :after, :outcome, "
+                    "CAST(:detail AS jsonb))"
+                ),
+                {
+                    "tid": str(tenant_id),
+                    "scanner": "Deterministic estate scan (headers + ports)",
+                    "started": run_started,
+                    "dur": int((_dt.datetime.now(_dt.timezone.utc) - run_started).total_seconds() * 1000),
+                    "targets": targets_checked,
+                    "new": totals["new"],
+                    "dupe": totals["dupe"],
+                    "failed": totals["failed"],
+                    "before": before,
+                    "after": after,
+                    "outcome": "ok" if totals["failed"] == 0 else "partial",
+                    "detail": _json.dumps({"log": "/var/log/gds-deterministic-scan.log"}),
+                },
+            )
+            # make_interval, and a separate binding for each use of the timestamp. asyncpg deduced a single :now
+            # used both as a timestamptz and inside an interval expression as "inconsistent types for parameter $1"
+            # and rolled the whole block back - the same family of typing defect as the COALESCE/array casts.
+            await _db.execute(
+                text(
+                    "UPDATE scan_schedules SET last_run_at = CAST(:last AS timestamptz), "
+                    "next_run_at = CAST(:next AS timestamptz) + make_interval(mins => interval_minutes), "
+                    "last_run_findings = CAST(:new AS integer), total_runs = total_runs + 1, "
+                    "total_findings = total_findings + CAST(:new AS integer), last_error = NULL, "
+                    "updated_at = CAST(:touched AS timestamptz) "
+                    "WHERE tenant_id = CAST(:tid AS uuid) AND monitor_type = 'deterministic'"
+                ),
+                {
+                    "last": run_started,
+                    "next": run_started,
+                    "touched": run_started,
+                    "new": totals["new"],
+                    "tid": str(tenant_id),
+                },
+            )
+            await _db.commit()
+    except Exception as exc:  # noqa: BLE001 - recording must never fail the scan
+        log(f"WARN could not record this run: {exc}")
 
     log(f"DONE new={totals['new']} duplicate={totals['dupe']} failed={totals['failed']} "
         f"register {before} -> {after}")

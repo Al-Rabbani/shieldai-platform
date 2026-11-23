@@ -1151,3 +1151,10 @@ export const base44 = {
 };
 
 export default base44;
+
+/* Item 46. Scanner liveness: when each scheduled scan last ran, whether it wrote anything, and whether it is
+ * overdue or silent. Deliberately its own export rather than an entity name - it reads two tables and the register
+ * at once, and a collection shape would invite a page to count a page of results and call it the estate. */
+export async function scanHealth() {
+  return request('/scan/health');
+}

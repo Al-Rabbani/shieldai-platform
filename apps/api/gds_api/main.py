@@ -485,6 +485,9 @@ from gds_api.tenant_branding import router as tenant_branding_router  # noqa: E4
 from gds_api.admin_identity import router as admin_identity_router  # noqa: E402
 
 app.include_router(tenant_branding_router)
+from gds_api.scan_health_api import router as scan_health_router  # item 46
+app.include_router(scan_health_router)
+
 app.include_router(admin_identity_router)
 
 # --- OpenAPI security declarations (P4 / B21) ------------------------------------------------
