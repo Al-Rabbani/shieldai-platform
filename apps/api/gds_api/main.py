@@ -44,6 +44,7 @@ from gds_api import (
     fix_strategy_api,
     org_settings_api,
     assignment_api,
+    attack_paths_api,
     policy,
     redteam,
     repository_api,
@@ -216,6 +217,7 @@ app.include_router(fix_schedule_api.router)
 app.include_router(fix_strategy_api.router)
 app.include_router(org_settings_api.router)
 app.include_router(assignment_api.router)
+app.include_router(attack_paths_api.router)
 app.include_router(incidents.router)
 app.include_router(knowledge.router)
 app.include_router(workflow_runs.router)

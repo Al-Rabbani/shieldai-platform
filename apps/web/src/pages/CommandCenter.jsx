@@ -174,8 +174,10 @@ export default function CommandCenter() {
   }
 
   const featureStats = {
-    attackPaths: attackPaths.filter(p => p.status === "active" && p.severity === "critical").length,
-    runtimeThreats: runtimeThreats.filter(t => t.status === "active").length,
+    /* Null, not 0: no attack-path store exists, so a count here would read as a clean result. */
+    attackPaths: null,
+    /* Null for the same reason: no runtime-threat store exists (runtime_posture is a different measurement). */
+    runtimeThreats: null,
     openIncidents: openIncidents.length,
     darkWebAlerts: darkWebAlerts.length,
     complianceAvg,

@@ -29,11 +29,8 @@ export default function AttackPathsPage() {
   const qc = useQueryClient();
 
   const { data: paths = [] } = useQuery({ queryKey: ["attack-paths"], queryFn: () => base44.entities.CloudAttackPath.list("-created_date", 20) });
-
-  const mitigate = useMutation({
-    mutationFn: (id) => base44.entities.CloudAttackPath.update(id, { status: "mitigated" }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["attack-paths"] }); setSelected(null); },
-  });
+  /* The route states why there is nothing to show; this page must not imply the estate is clean. */
+  const { data: basis } = useQuery({ queryKey: ["attack-paths-basis"], queryFn: () => base44.entities.CloudAttackPath.summary() });
 
   const filtered = paths.filter(p => sevFilter === "all" || p.severity === sevFilter);
   const active = paths.filter(p => p.status === "active").length;
@@ -43,6 +40,7 @@ export default function AttackPathsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-[#e2e8f0]">Cloud Attack Paths</h1>
+          {basis?.basis && <p className="text-[11px] text-slate-500 mt-1 max-w-2xl">{basis.basis}</p>}
           <p className="text-sm text-[#64748b] mt-0.5">Powered by CSPMAgent-v1 · Automated attack path discovery and blast radius analysis</p>
         </div>
         <Button className="bg-[#C9A84C] hover:bg-[#C9A84C]/90 text-black font-semibold gap-2">
@@ -166,9 +164,9 @@ export default function AttackPathsPage() {
                 </div>
               </div>
               {selected.status === "active" && (
-                <Button onClick={() => mitigate.mutate(selected.id)} disabled={mitigate.isPending} className="w-full bg-[#C9A84C] hover:bg-[#C9A84C]/90 text-black font-semibold gap-2">
-                  <Shield className="w-4 h-4" /> {mitigate.isPending ? "Mitigating..." : "Mark as Mitigated"}
-                </Button>
+                <p className="text-[11px] text-slate-500">
+                  A path cannot be marked mitigated here: no path is stored, so there is nothing to update.
+                </p>
               )}
             </div>
           )}

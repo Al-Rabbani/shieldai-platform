@@ -89,6 +89,10 @@ const ENTITY_ROUTES = {
   /* Five sites saved assignment rules into a table that did not exist, above the promise "New findings matching it are
    * assigned on discovery", while nothing assigned anything. apply is a real POST that assigns unowned open findings. */
   AssignmentRule: { path: "/assignment-rules", actions: ["apply"] },
+  /* No attack-path store exists and cloud_asset_relationships holds 0 edges against 145 assets, so a path cannot be
+   * computed. The route answers with the measured state (assets, edges, why) instead of an empty list a page could read
+   * as "0 paths, you are clean". */
+  CloudAttackPath: { path: "/cloud/attack-paths", summaryPath: "/cloud/attack-paths" },
   /* The strategy library creates, edits and deletes; the triage queue reads published ones by times_reused and bumps the
    * counter when applied. No strategy table existed, so every write vanished and the library was always empty. */
   FixStrategy: { path: "/fix-strategies" },

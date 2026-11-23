@@ -4,8 +4,8 @@ import MagneticCard from "@/components/home/MagneticCard";
 
 export default function SecurityFeaturesRow({ stats }) {
   const tiles = [
-    { icon: "⚔️", label: "Red Team", path: "/red-team", stat: `${stats.attackPaths} critical attack paths` },
-    { icon: "🛡️", label: "Blue Team", path: "/blue-team", stat: `${stats.runtimeThreats} active runtime threats` },
+    { icon: "⚔️", label: "Red Team", path: "/red-team", stat: stats.attackPaths === null ? "attack paths not recorded" : `${stats.attackPaths} critical attack paths` },
+    { icon: "🛡️", label: "Blue Team", path: "/blue-team", stat: stats.runtimeThreats === null ? "runtime threats not recorded" : `${stats.runtimeThreats} active runtime threats` },
     { icon: "📡", label: "SOC", path: "/soc", stat: `${stats.openIncidents} open incidents` },
     { icon: "🔍", label: "Threat Intel", path: "/threat-intelligence", stat: `${stats.darkWebAlerts} dark web alerts` },
     { icon: "📋", label: "Compliance", path: "/compliance", stat: stats.complianceAvg == null ? "not measured" : `${stats.complianceAvg}% avg score` },
