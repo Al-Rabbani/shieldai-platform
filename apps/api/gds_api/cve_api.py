@@ -78,6 +78,8 @@ SELECT
     count(DISTINCT cve) FILTER (WHERE epss >= 0.1) AS high_epss_cves,
     count(DISTINCT cve) FILTER (WHERE lower(severity) = 'critical') AS critical_cves,
     count(DISTINCT cve) FILTER (WHERE lower(severity) = 'high') AS high_cves,
+    count(DISTINCT cve) FILTER (WHERE kev_ransomware_use IS TRUE) AS ransomware_cves,
+    count(DISTINCT cve) FILTER (WHERE kev_ransomware_use IS NOT NULL) AS ransomware_checked_cves,
     max(enrichment_checked_at) AS last_enriched
 FROM security_findings
 WHERE tenant_id = :tid AND cve IS NOT NULL
@@ -88,11 +90,10 @@ NOT_MEASURED = {
     "exploit_maturity": "No exploit-maturity source is collected on this host: no ExploitDB, Metasploit module index, "
     "Nuclei template count or public-exploit feed. The register holds no maturity value, so the tracker cannot rank "
     "a CVE as proof-of-concept or weaponized.",
-    "ransomware_use": "The CISA KEV catalogue this platform fetches DOES carry a per-CVE ransomware flag "
-    "(knownRansomwareCampaignUse: 361 of 1,790 entries marked Known in catalogVersion 2026.11.20), and this register "
-    "carries it as kev_ransomware_use. Item 36 wrongly stated the catalogue had no such flag; item 37 corrected that. "
-    "What stays unmeasured is everything beyond the flag: leak-site presence, victim counts and ransom demands are not "
-    "collected, and the catalogue names no gang.",
+    "ransomware_leak_sites": "The ransomware FLAG is measured: the CISA KEV catalogue's knownRansomwareCampaignUse "
+    "field is stored per finding as kev_ransomware_use and carried here as ransomware_known. What no source on this "
+    "host collects is everything past the flag: leak-site presence, victim counts, ransom demands and gang names. "
+    "The catalogue names no gang, so a CVE here can be called ransomware-used but never attributed.",
     "public_exploit_count": "No public-exploit count is stored. Nothing on this host enumerates exploit references "
     "against a CVE.",
     "affected_versions": "No affected-version range is stored. The finding's evidence carries the version installed at "
@@ -143,7 +144,9 @@ def _item(row: Any) -> dict[str, Any]:
         "nvd_url": f"https://nvd.nist.gov/vuln/detail/{cve_id}" if cve_id else None,
         # Present but empty so a page reading them cannot mistake absence for a stored false.
         "exploit_maturity": None,
-        "ransomware_use": None,
+        # The legacy key now carries the measured flag. It used to be None so an absent field could not read as a
+        # stored false; the field is real since item 37, so None here would be the lie.
+        "ransomware_use": row["ransomware_known"],
         "public_exploit_count": None,
     }
 
@@ -210,11 +213,17 @@ async def cve_records(
             "high_epss_cves": int(counts["high_epss_cves"] or 0),
             "critical_cves": int(counts["critical_cves"] or 0),
             "high_cves": int(counts["high_cves"] or 0),
+            "ransomware_cves": int(counts["ransomware_cves"] or 0),
+            "ransomware_checked_cves": int(counts["ransomware_checked_cves"] or 0),
             "returned": len(rows),
             "matched": matched,
         },
         "not_measured": NOT_MEASURED,
         "basis": {
+            "ransomware_flag": "ransomware_known comes from CISA KEV knownRansomwareCampaignUse. true = the catalogue "
+            "flags this CVE as used in ransomware campaigns, false = the catalogue was consulted and does not flag it, "
+            "null = no row of this CVE was ever checked. It is a flag about the CVE, not evidence that this estate was "
+            "attacked, and it names no gang.",
             "source": "Aggregated from this tenant's security_findings, one row per CVE. There is no CVE store on this "
             "platform; the register is the only source of a CVE's presence here.",
             "ranking": "CISA KEV first, then EPSS, then CVSS. Exploit maturity is not used because it is not measured.",

@@ -4,10 +4,11 @@ import { AlertTriangle, ArrowUpRight, ShieldOff, HelpCircle } from "lucide-react
 
 const SEV = { critical: "#ef4444", high: "#f97316", medium: "#eab308", low: "#3b82f6", info: "#64748b" };
 
-/* This panel used to label a CVE with an exploit-maturity badge ("Weaponized", "Proof of concept", "Unproven") and a
- * "Ransomware use" chip. No exploit-maturity source and no ransomware association is collected on this host, so those
- * badges were a fixed scale printed over a field that is always absent: "Unknown" for every CVE, and a chip that never
- * appeared. Both are now stated as not measured, with the reason, instead of being drawn. */
+/* This panel used to label a CVE with an exploit-maturity badge ("Weaponized", "Proof of concept", "Unproven") over a
+ * field that is always absent, so every CVE read "Unknown". That badge is gone and exploit maturity is named as not
+ * measured. The ransomware chip was removed with it on the same reasoning, and that part was WRONG: the CISA KEV
+ * catalogue this platform already fetches carries knownRansomwareCampaignUse, and item 37 stored it per finding. The
+ * chip is back, and it has three states because the flag does: flagged, checked and not flagged, never checked. */
 export default function CVEImpactPanel({ cve, affected, notMeasured = {} }) {
   if (!cve) {
     return (
@@ -55,6 +56,21 @@ export default function CVEImpactPanel({ cve, affected, notMeasured = {} }) {
             <AlertTriangle size={10} /> {cve.open_count} open finding{cve.open_count === 1 ? "" : "s"}
           </span>
         )}
+        {cve.ransomware_known === true && (
+          <span className="text-[10px] font-bold px-2 py-1 rounded bg-orange-500/15 text-orange-300 border border-orange-500/40">
+            CISA KEV: used in ransomware
+          </span>
+        )}
+        {cve.ransomware_known === false && (
+          <span className="text-[10px] font-bold px-2 py-1 rounded bg-slate-800 text-slate-400 border border-slate-700">
+            Not flagged as ransomware use
+          </span>
+        )}
+        {cve.ransomware_known == null && (
+          <span className="text-[10px] font-bold px-2 py-1 rounded bg-slate-800 text-slate-500 border border-slate-700">
+            Ransomware use not checked
+          </span>
+        )}
         {cve.package_name && (
           <span className="text-[10px] px-2 py-1 rounded bg-slate-800 text-slate-300 border border-slate-700 font-mono">
             {cve.package_name}
@@ -66,7 +82,7 @@ export default function CVEImpactPanel({ cve, affected, notMeasured = {} }) {
 
       <div className="rounded-lg p-2.5 space-y-1" style={{ background: "#0a0f1e", border: "1px solid #1F2937" }}>
         <p className="text-[9px] uppercase font-bold text-slate-500">Not measured for this CVE</p>
-        {["exploit_maturity", "ransomware_use", "public_exploit_count"].map((key) => (
+        {["exploit_maturity", "public_exploit_count", "ransomware_leak_sites"].map((key) => (
           <p key={key} className="text-[10px] text-slate-500">
             <span className="text-slate-400 font-bold">{key.replace(/_/g, " ")}</span>
             {" — "}

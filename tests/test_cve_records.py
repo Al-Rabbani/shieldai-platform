@@ -130,6 +130,8 @@ class _FakeDb:
             "high_epss_cves": 2,
             "critical_cves": 0,
             "high_cves": 330,
+            "ransomware_cves": 0,
+            "ransomware_checked_cves": 451,
             "last_enriched": None,
         }
 
@@ -231,8 +233,13 @@ def test_no_component_prints_a_ransomware_or_maturity_claim():
         assert "MATURITY[" not in text, f"{path.name} still maps exploit maturity to a badge"
         assert 'label: "Used by ransomware"' not in text, f"{path.name} still prints a ransomware count"
         assert "ransomware_use) score" not in text, f"{path.name} still scores ransomware use"
+    # Item 36 required the ransomware ABSENCE to be stated here. Item 37 measured the flag (CISA KEV
+    # knownRansomwareCampaignUse -> kev_ransomware_use), so the requirement inverted: read it, never score it.
     view = strip_comments(VIEW.read_text(encoding="utf-8"))
-    assert "not recorded on this platform" in view, "the ransomware absence must be stated, not implied"
+    panel = strip_comments(PANEL.read_text(encoding="utf-8"))
+    assert "Ransomware association is not recorded" not in view, "the flag is measured; this sentence is now false"
+    assert "counts.ransomware_cves" in view and "notMeasured.ransomware_leak_sites" in view
+    assert "ransomware_known" in panel, "the panel must render the three-state flag"
 
 
 def test_every_icon_used_is_imported_in_the_file_that_uses_it():
@@ -248,3 +255,26 @@ def test_every_icon_used_is_imported_in_the_file_that_uses_it():
         aliases = set(re.findall(r"\{\s*icon:\s*([A-Z][A-Za-z0-9]*)", text))
         missing = {name for name in used if name not in imported} - {"React"} - aliases
         assert not missing, f"{path.name} uses unimported icon(s): {sorted(missing)}"
+
+
+# ---------------------------------------------------------------- item 37: the flag is measured, so carry it
+def test_the_register_counts_the_ransomware_flag_over_its_own_cves():
+    """0 is a measurement here, not a placeholder: the catalogue flags 361 entries and none is in this register."""
+    payload = _call(_FakeDb())
+    assert payload["counts"]["ransomware_cves"] == 0
+    assert payload["counts"]["ransomware_checked_cves"] == 451
+    assert payload["basis"]["ransomware_flag"].startswith("ransomware_known comes from CISA KEV")
+
+
+def test_a_row_carries_the_three_state_flag_and_the_legacy_key_agrees():
+    item = _call(_FakeDb())["items"][0]
+    assert item["ransomware_known"] is None, "the fixture row was never checked, so unknown must stay None"
+    assert item["ransomware_use"] == item["ransomware_known"], "the legacy key must not disagree with the measured one"
+
+
+def test_ransomware_is_no_longer_listed_as_unmeasured():
+    """It sat under a NOT_MEASURED heading while being measured, which is the same class of lie it replaced."""
+    from gds_api import cve_api
+
+    assert "ransomware_use" not in cve_api.NOT_MEASURED
+    assert "ransomware_leak_sites" in cve_api.NOT_MEASURED, "what is still unmeasured must stay named"
