@@ -96,6 +96,10 @@ const ENTITY_ROUTES = {
   /* The strategy library creates, edits and deletes; the triage queue reads published ones by times_reused and bumps the
    * counter when applied. No strategy table existed, so every write vanished and the library was always empty. */
   FixStrategy: { path: "/fix-strategies" },
+  /* Item 26. CustomReportsPage runs real reports over six served sources; only the saved definition had no
+   * table, and the refused Drive function already told the user the report was stored on the platform. */
+  CustomReport: { path: "/custom-reports" },
+
   /* The settings page reads and saves org settings; both calls used to be swallowed, so nothing was ever written. The
    * store is one row per tenant, saved with PUT /settings/org, and the response states which fields are enforced. */
   OrgSettings: {
