@@ -44,7 +44,10 @@ class RemediationRecord(BaseModel):
     """What a fix page may record. `owner` is the assignment column added in item 23; the pages' own
     assigned_agent_id / assigned_to names do not exist on security_findings and are no longer sent."""
 
-    id: str
+    # The page sends the scanner register's id as a JSON number (1023), while the governed register uses a UUID string.
+    # Pydantic v2 does not coerce int to str, so a str-only field rejected the real call with a 422 the page could only
+    # render as "[object Object]". Both are accepted and compared as text against the column.
+    id: str | int
     remediation_notes: str | None = None
     remediation_started_at: datetime | None = None
     remediation_template_id: uuid.UUID | None = None
@@ -76,7 +79,7 @@ async def _apply(db: AsyncSession, tenant_id: Any, item: RemediationRecord) -> b
             text(_UPDATE_ONE),
             {
                 "tenant_id": tenant_id,
-                "id": item.id,
+                "id": str(item.id),
                 "remediation_notes": item.remediation_notes,
                 "remediation_started_at": item.remediation_started_at,
                 "remediation_template_id": item.remediation_template_id,
@@ -102,7 +105,7 @@ async def bulk_record_remediation(
         if await _apply(db, current_user.tenant_id, item):
             updated += 1
         else:
-            missing.append(item.id)
+            missing.append(str(item.id))
     await db.commit()
     return BulkResult(updated=updated, requested=len(body.items), missing=missing)
 
