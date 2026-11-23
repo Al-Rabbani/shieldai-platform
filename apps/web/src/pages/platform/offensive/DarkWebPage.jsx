@@ -17,8 +17,8 @@ export default function DarkWebPage() {
         {loading ? [...Array(4)].map((_, i) => <StatTileSkeleton key={i} />) : <>
           <StatTile label="Active Alerts" value={data?.active_alerts ?? 0} color={data?.active_alerts > 0 ? "text-orange-500" : "text-foreground"} />
           <StatTile label="Critical" value={data?.critical ?? 0} color={data?.critical > 0 ? "text-destructive" : "text-emerald-600"} />
-          <StatTile label="Credential Leaks" value={data?.credential_leaks ?? 0} color={data?.credential_leaks > 0 ? "text-destructive" : "text-foreground"} />
-          <StatTile label="Ransomware Groups" value={data?.ransomware_groups ?? 0} color="text-orange-500" />
+          <StatTile label="Credential Leaks" value={data?.credential_leaks_count ?? "—"} color="text-foreground" />
+          <StatTile label="Ransomware Groups" value={data?.ransomware_groups_count ?? "—"} color="text-orange-500" />
         </>}
       </div>
 

@@ -15,8 +15,8 @@ export default function OSINTPage() {
         {loading ? [...Array(4)].map((_, i) => <StatTileSkeleton key={i} />) : <>
           <StatTile label="Total Assets" value={data?.total_assets ?? 0} />
           <StatTile label="Internet Facing" value={data?.internet_facing ?? 0} color={data?.internet_facing > 10 ? "text-orange-500" : "text-foreground"} />
-          <StatTile label="Shadow IT" value={data?.shadow_it ?? 0} color={data?.shadow_it > 5 ? "text-amber-500" : "text-foreground"} />
-          <StatTile label="Expiring Certs" value={data?.expiring_certs ?? 0} color={data?.expiring_certs > 0 ? "text-destructive" : "text-emerald-600"} subtitle="Within 30 days" />
+          <StatTile label="Shadow IT" value={data?.shadow_it_count ?? "—"} color="text-foreground" subtitle="no shadow-IT detector exists" />
+          <StatTile label="Expiring Certs" value={data?.expiring_certs_count ?? "—"} color="text-foreground" subtitle="no certificate inventory exists" />
         </>}
       </div>
 

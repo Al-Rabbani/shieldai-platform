@@ -13,10 +13,10 @@ export default function ThreatHuntingPage() {
 
       <div className="grid grid-cols-4 gap-4 mb-6">
         {loading ? [...Array(4)].map((_, i) => <StatTileSkeleton key={i} />) : <>
-          <StatTile label="Active IOCs" value={data?.active_iocs ?? 0} color={data?.active_iocs > 10 ? "text-destructive" : "text-foreground"} />
+          <StatTile label="Active IOCs" value={data?.active_iocs_count ?? "—"} color="text-foreground" subtitle="no IOC feed is collected here" />
           <StatTile label="Critical Feeds" value={data?.critical_feeds ?? 0} color={data?.critical_feeds > 0 ? "text-destructive" : "text-emerald-600"} />
-          <StatTile label="Supply Chain Events" value={data?.supply_chain_events ?? 0} color={data?.supply_chain_events > 0 ? "text-amber-500" : "text-foreground"} />
-          <StatTile label="Dark Web Active" value={data?.dark_web_active ?? 0} color={data?.dark_web_active > 0 ? "text-orange-500" : "text-foreground"} />
+          <StatTile label="Supply Chain Events" value={data?.supply_chain_events_count ?? "—"} color="text-foreground" subtitle="no supply-chain store exists" />
+          <StatTile label="Dark Web Active" value={data?.dark_web_active_count ?? "—"} color="text-foreground" subtitle="no dark-web collector exists" />
         </>}
       </div>
 

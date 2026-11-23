@@ -186,7 +186,8 @@ async def task_exploits(db, tid: str) -> dict[str, Any]:
         "active_exploits": f["kev_open"],
         "high_epss": f["high_epss"],
         "high_epss_list": [dict(r) for r in rows],
-        "_absent": ["critical_paths"],
+        "_absent": ["critical_paths_count"],
+        "critical_paths": [],
         "_basis": "KEV and EPSS flags come from enrich_findings.py against the CISA catalogue and FIRST EPSS. "
                   "critical_paths is absent: the cloud graph holds no edges, so no path can be computed.",
     }
@@ -231,7 +232,10 @@ async def task_osint(db, tid: str) -> dict[str, Any]:
         "total_assets": assets["total"],
         "internet_facing": assets["internet_facing"],
         "internet_facing_list": [dict(r) for r in rows],
-        "_absent": ["shadow_it", "shadow_it_list", "expiring_certs"],
+        "_absent": ["shadow_it_count", "expiring_certs_count"],
+        "shadow_it": [],
+        "shadow_it_list": [],
+        "expiring_certs": [],
         "_basis": "Counts come from the cloud asset inventory. shadow_it and expiring_certs are absent: no shadow-IT "
                   "detector and no certificate inventory exist here.",
     }
@@ -243,7 +247,12 @@ async def task_threat_hunting(db, tid: str) -> dict[str, Any]:
         "headline": f"{f['kev_open']} open KEV findings; no IOC feed is collected here",
         "status": _status(f["open_critical"], f["kev_open"]),
         "critical_feeds": f["open_critical"],
-        "_absent": ["active_iocs", "ioc_types", "top_iocs", "supply_chain_events", "dark_web_active"],
+        "_absent": ["active_iocs_count", "dark_web_active_count", "supply_chain_events_count"],
+        "active_iocs": [],
+        "ioc_types": [],
+        "top_iocs": [],
+        "supply_chain_events": [],
+        "dark_web_active": [],
         "_basis": "No IOC store, no dark-web collector and no supply-chain event store exist on this platform, so those "
                   "five keys are named as absent rather than shown as zero. Hunting works from the findings register.",
     }
@@ -253,7 +262,10 @@ async def task_dark_web(db, tid: str) -> dict[str, Any]:
     return {
         "headline": "No dark-web collector exists on this platform, so nothing here is measured",
         "status": "NOT MEASURED",
-        "_absent": ["active_alerts", "credential_leaks", "ransomware_groups", "critical", "top_alerts"],
+        "_absent": ["active_alerts", "critical", "credential_leaks_count", "ransomware_groups_count"],
+        "credential_leaks": [],
+        "ransomware_groups": [],
+        "top_alerts": [],
         "_basis": "There is no dark-web monitor, no credential-leak corpus and no ransomware group tracker behind this "
                   "page. Every panel is empty because nothing collects that data, not because nothing was found.",
     }
