@@ -26,11 +26,15 @@ router = APIRouter(prefix="/fix-schedule", tags=["fix-schedule"])
 
 _COLUMNS = "id, finding_id, finding_title, week_key, week_number, created_at, updated_at"
 
-_SELECT = f"""
+# No bind parameter may be followed by a :: cast: SQLAlchemy's text() parser reads ":week_key::text" as a
+# broken parameter and Postgres answers "syntax error at or near ':'", so the week predicate is
+# appended in Python instead. Measured 23 Nov 2026: GET /fix-schedule 500'd on exactly this.
+_SELECT_BASE = f"""
 SELECT {_COLUMNS}
   FROM fix_schedule_items
  WHERE tenant_id = :tenant_id
-   AND (:week_key::text IS NULL OR week_key = :week_key::text)
+"""
+_SELECT_ORDER = """
  ORDER BY created_at DESC
  LIMIT :limit
 """
@@ -98,8 +102,13 @@ async def list_schedule(
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser = Depends(require_permission("findings:read")),
 ) -> dict:
-    params = {"tenant_id": str(current_user.tenant_id), "week_key": week_key, "limit": max(1, min(limit, 1000))}
-    rows = (await db.execute(text(_SELECT), params)).all()
+    params = {"tenant_id": str(current_user.tenant_id), "limit": max(1, min(limit, 1000))}
+    sql = _SELECT_BASE
+    if week_key:
+        sql += "   AND week_key = :week_key\n"
+        params["week_key"] = week_key
+    sql += _SELECT_ORDER
+    rows = (await db.execute(text(sql), params)).all()
     items = [_row(r) for r in rows]
     return {"items": items, "count": len(items), "tenant_scoped": True}
 

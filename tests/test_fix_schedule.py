@@ -77,6 +77,12 @@ def test_the_store_forces_rls_and_grants(migration):
     assert "UNIQUE (tenant_id, finding_id)" in migration, "one placement per finding per tenant"
 
 
+def test_no_bind_parameter_is_followed_by_a_cast(source):
+    """SQLAlchemy's text() parser breaks on ':param::type'; the predicate is built in Python instead."""
+    sql_only = "\n".join(line.split("#")[0] for line in source.splitlines())
+    assert not re.search(r":[a-z_]+::", sql_only), "a bind parameter followed by :: makes the statement unparseable"
+
+
 def test_no_derived_priority_is_stored(migration):
     # comments are prose: the migration's own note says these are NOT stored, so assert against the SQL only
     sql_only = "\n".join(line.split("--")[0] for line in migration.splitlines()).lower()
