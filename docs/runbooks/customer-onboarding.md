@@ -110,11 +110,45 @@ finding register but is refused `cloud:findings:read` routes — different permi
 `GET /billing/plans` serves the price list (`starter` £399/mo, `professional` £1,199/mo, `enterprise`) from
 `billing/plans.py`, which the quota gate also reads so the brochure and the enforcement cannot disagree.
 
-`POST /billing/checkout` creates a Stripe checkout session against the **live** account (only live keys are configured
-on this host). **Not proved:** no checkout session has been created or paid as part of this runbook, because doing so
-would put a real charge against a real card. The customer-facing invoice step is therefore the one part of the
-lifecycle with no end-to-end evidence yet. Prove it with a real low-value transaction and a refund, then record the
-result here.
+**Proved on 23 November 2026 against LIVE Stripe**, using a throwaway tenant and no card:
+
+| Step | Result |
+|---|---|
+| `POST /billing/checkout {"plan_tier":"professional"}` | `200` with a real `https://checkout.stripe.com/g/pay/cs_live_…` URL, and a real Stripe customer created |
+| `GET /billing/subscription` immediately after | `{"status":"incomplete","plan":"professional","monthly_amount_gbp":1199.0}` — an unpaid attempt is recorded as incomplete, never as a trial |
+| `POST /billing/webhook` with a correctly signed `checkout.session.completed` | `200 {"processed":true,"status":"active","plan":"professional"}` |
+| Entitlement after the webhook | `GET /billing/quota` tier `starter` → `professional`; `tenants.plan_tier` `NULL` → `professional`; `subscription_status` → `active` |
+| Same event replayed | `200 {"duplicate":true}` — idempotent, so Stripe's at-least-once delivery cannot double-apply a payment |
+| Forged signature | `400 Invalid webhook signature: no signature matches this payload` |
+| No signature at all | `400 Invalid webhook signature: no Stripe-Signature header was sent` |
+
+The session was expired and the Stripe customer deleted afterwards, so nothing was left open in the live account and
+nothing was charged.
+
+**Still unproved, and cannot be proved without a card:** the card entry itself, and the `invoice.payment_succeeded`
+delivery that a real charge produces. Prove those with one deliberate low-value transaction and an immediate refund,
+then record the result here. The `invoice.payment_succeeded` handler writes a `billing_payments` row and was not
+exercised by this run.
+
+### The defect this run found, which is why the step above matters
+
+The first attempt at the signed webhook was answered `400 {"detail":"Webhook error: object"}`. Reproduced in
+isolation on stripe-python 15.4.0:
+
+```
+construct_event(payload, VALID header,  secret) -> AttributeError: object
+construct_event(payload, FORGED header, secret) -> SignatureVerificationError
+```
+
+The route caught `SignatureVerificationError` as "invalid" and every other exception as a generic `400 Webhook error`.
+**So the only events it could accept were the forged ones**: every genuine Stripe delivery was answered with a 4xx,
+and Stripe does not retry a 4xx. No payment could ever have activated a subscription. That is the mechanism behind
+"no customer ever completed signup → provision → scan → report → invoice".
+
+Fixed in `apps/api/gds_api/billing/webhook_signature.py`: verification is performed directly from the HMAC scheme
+Stripe documents, with a constant-time comparison and a 300-second replay window, and the route answers `400` only for
+a bad signature — a genuine fault now surfaces as `500`, which Stripe *does* retry. Collapsing those two into one code
+is how a transient failure silently loses a payment.
 
 ## 6. Handover checklist
 
@@ -133,12 +167,14 @@ result here.
 The lifecycle spine — provision, authenticate, isolate, report, machine credential — works and was run for real. It
 also found two defects that no test had:
 
-1. **Every future tenant would have started without MFA.** Migration 075 set `roles.requires_mfa` true for the roles
+1. **The Stripe webhook rejected every valid signature and accepted only forged ones** (§5). Fixed; 13 tests in
+   `tests/test_webhook_signature.py`, including a guard that the `construct_event` call cannot come back.
+2. **Every future tenant would have started without MFA.** Migration 075 set `roles.requires_mfa` true for the roles
    that existed but left the column default at `false`, so the `platform_owner` role created by this route opted out
    by omission and the new customer's first login was accepted with a password alone. Fixed in migration 079, which
    inverts the default to `true` and backfills, plus an explicit `requires_mfa` in the provisioning INSERT so the
    intent is visible where the tenant is made. Measured after: 0 of 7 roles without the requirement, default `true`.
-2. **API key scopes are dropped and not enforced** (§4). Open.
+3. **API key scopes** were reported as dropped and unenforced; that was wrong (§4), corrected.
 
 **Cleanup note:** the tenant created by this run (`acme-security`) was deleted afterwards, along with its role, owner
 user and API key, so the platform is back to its real tenants only.
