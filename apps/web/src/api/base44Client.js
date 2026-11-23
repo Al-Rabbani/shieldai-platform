@@ -86,6 +86,13 @@ const ENTITY_ROUTES = {
    * its worst severity, highest CVSS and EPSS, the KEV flag, the finding and asset counts, and the scanners that saw it.
    * Exploit maturity and ransomware use are not measured here and the route names them rather than returning zero. */
   CVERecord: { path: '/cve/records', summaryPath: '/cve/records?limit=1' },
+  /* Item 37: the three intelligence pages had no store behind them. Each now reads a route that serves what is actually
+   * measured, or refuses in a form the page can render. Ransomware exposure is real (the KEV catalogue's own
+   * knownRansomwareCampaignUse flag crossed against this tenant's register); APT and dark web have no source at all, so
+   * those routes refuse and the pages state the absence instead of drawing zeroes or a hardcoded fallback list. */
+  RansomwareGroup: { path: '/intel/ransomware', summaryPath: '/intel/ransomware', readOnly: true },
+  APTActor: { path: '/intel/apt', summaryPath: '/intel/apt', readOnly: true },
+  DarkWebAlert: { path: '/intel/dark-web', summaryPath: '/intel/dark-web', readOnly: true },
   Finding: { path: '/findings', summaryPath: '/findings/summary' },
   /* The offensive side: real stores only. authorized_targets holds 2 rows and red_team_safety_state 1, so those are
    * served. /red-team/overview states the absent stores (attack paths, simulations, campaigns, attack findings) by name
@@ -208,9 +215,9 @@ const REFUSAL_REASONS = {
     'There is no per-secret access-policy store. Credential access is enforced by the API\'s own permission checks, '
     + 'not by policy records a page could list or edit.',
   DarkWebAlert:
-    'No dark-web collector exists on this platform and there is no alert store, so no leak, credential or chatter alert '
-    + 'is recorded. The dark-web routes serve on-demand email and domain lookups only, which return what a lookup found '
-    + 'at the moment you asked rather than a continuous feed.',
+    'Reading dark-web coverage is served from GET /intel/dark-web, which states that no collector, leak feed or breach '
+    + 'source is connected here. There is no alert store, so no alert can be recorded, and no continuous monitoring '
+    + 'runs. Credential posture that IS measured is served at GET /secrets/posture.',
   CVERecord:
     'Reading the CVE register is served from GET /cve/records, aggregated from this tenant\'s own findings. Writing a '
     + 'CVE is not: there is no CVE store here, so a hand-written record would vanish on reload.',

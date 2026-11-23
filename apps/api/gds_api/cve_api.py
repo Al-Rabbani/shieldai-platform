@@ -6,8 +6,9 @@ MEASURED 23 Nov 2026, before a line of this was written:
     That sentence is a claim about the estate, and it was false: the register holds 451 distinct CVEs across 899 findings,
     900 with a CVSS score and 899 with an EPSS score.
   * The page's second tab is worse than empty. ActiveExploitationView counts `cve.ransomware_use` and prints a "Used by
-    ransomware" tile, and CVEImpactPanel labels `cve.exploit_maturity`. This platform fetches no exploit-maturity source
-    and the CISA KEV catalogue it does fetch carries no ransomware flag, so both were zeros dressed as measurements.
+    ransomware" tile, and CVEImpactPanel labels `cve.exploit_maturity`. This platform fetches no exploit-maturity source,
+    so that was a zero dressed as a measurement. The ransomware flag was different: the KEV catalogue DOES carry
+    it, item 36 wrongly said it did not, and item 37 added kev_ransomware_use (migration 069) so it is now real.
   * What IS measured per CVE: severity, CVSS, EPSS, the KEV flag with its catalogue date, the number of findings, the
     number of distinct assets, the scanners that saw it, the package name from the finding's own evidence, and the first
     and last time it was detected. That is the whole row below.
@@ -42,6 +43,7 @@ WITH agg AS (
         max(cvss) AS cvss,
         max(epss) AS epss,
         bool_or(kev_listed) AS kev_listed,
+        bool_or(kev_ransomware_use) AS ransomware_known,
         min(kev_date_added) AS kev_date_added,
         min(kev_due_date) AS kev_due_date,
         count(*) AS finding_count,
@@ -86,8 +88,11 @@ NOT_MEASURED = {
     "exploit_maturity": "No exploit-maturity source is collected on this host: no ExploitDB, Metasploit module index, "
     "Nuclei template count or public-exploit feed. The register holds no maturity value, so the tracker cannot rank "
     "a CVE as proof-of-concept or weaponized.",
-    "ransomware_use": "No ransomware association is recorded. The CISA KEV catalogue this platform fetches carries no "
-    "ransomware flag, and no leak-site or ransomware tracker is collected here.",
+    "ransomware_use": "The CISA KEV catalogue this platform fetches DOES carry a per-CVE ransomware flag "
+    "(knownRansomwareCampaignUse: 361 of 1,790 entries marked Known in catalogVersion 2026.11.20), and this register "
+    "carries it as kev_ransomware_use. Item 36 wrongly stated the catalogue had no such flag; item 37 corrected that. "
+    "What stays unmeasured is everything beyond the flag: leak-site presence, victim counts and ransom demands are not "
+    "collected, and the catalogue names no gang.",
     "public_exploit_count": "No public-exploit count is stored. Nothing on this host enumerates exploit references "
     "against a CVE.",
     "affected_versions": "No affected-version range is stored. The finding's evidence carries the version installed at "
@@ -120,6 +125,9 @@ def _item(row: Any) -> dict[str, Any]:
         "kev_listed": row["kev_listed"],
         "kev_date_added": _iso(row["kev_date_added"]),
         "kev_due_date": _iso(row["kev_due_date"]),
+        # Three states again: true = the catalogue flags known ransomware use, false = checked and not flagged,
+        # None = the catalogue was never consulted for any row of this CVE.
+        "ransomware_known": row["ransomware_known"],
         "finding_count": int(row["finding_count"] or 0),
         "open_count": int(row["open_count"] or 0),
         "closed_count": int(row["closed_count"] or 0),

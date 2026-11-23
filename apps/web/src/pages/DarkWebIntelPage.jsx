@@ -1,105 +1,100 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useEffect, useState } from "react";
 import { base44 } from "@/api/base44Client";
-import { invokeAction } from "@/lib/invokeAction";
-import { buildLiveDataOverride } from "@/lib/liveDataOverride";
-import DarkWebAlertCard from "@/components/darkweb/DarkWebAlertCard";
-import CredentialLeaksTable from "@/components/darkweb/CredentialLeaksTable";
-import BreachRecordsTable from "@/components/darkweb/BreachRecordsTable";
-import AIResponseModal from "@/components/shared/AIResponseModal";
+import { AlertTriangle, Ban } from "lucide-react";
 
-const TABS = [
-  { key: "alerts", label: "Alerts Feed" },
-  { key: "leaks", label: "Credential Leaks" },
-  { key: "breaches", label: "Breach Records" },
-];
+/* Item 37, 23 Nov 2026. This page drew "● MONITORING" with a pulsing green dot, a "0 Live Alerts" chip and four tiles
+ * (Total Alerts / Critical / Credential Leaks / Ransomware Mentions) computed from empty arrays over three stores that
+ * do not exist - DarkWebAlert, CredentialLeak and BreachRecord. Zero alerts over a collector that does not run is not a
+ * clean result, it is an unmeasured one, and "MONITORING" described a process that was never started.
+ *
+ * It now reads GET /intel/dark-web, which refuses in a renderable form and points at what IS measured: the credential
+ * posture served by GET /secrets/posture. A leak corpus and a configured-credential list answer different questions and
+ * the page says so rather than merging them.
+ */
+
+const ABSENT_LABELS = {
+  alert_feed: "Alert feed",
+  credential_leaks: "Credential leaks",
+  breach_records: "Breach records",
+  monitoring: "Continuous monitoring",
+};
 
 export default function DarkWebIntelPage() {
-  const [alerts, setAlerts] = useState([]);
-  const [leaks, setLeaks] = useState([]);
-  const [breaches, setBreaches] = useState([]);
+  const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState("alerts");
-  const [modalTitle, setModalTitle] = useState(null);
-  const [modalData, setModalData] = useState(null);
-  const [modalLoading, setModalLoading] = useState(false);
-  const [lastAlert, setLastAlert] = useState(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    const [a, l, b] = await Promise.all([
-      base44.entities.DarkWebAlert.list("-detected_at", 50).catch(() => []),
-      base44.entities.CredentialLeak.list("-breach_date", 20).catch(() => []),
-      base44.entities.BreachRecord.list("-detected_at", 10).catch(() => []),
-    ]);
-    setAlerts(a); setLeaks(l); setBreaches(b);
-    setLoading(false);
+  useEffect(() => {
+    base44.entities.DarkWebAlert.summary()
+      .then((payload) => setData(payload || null))
+      .catch(() => setData(null))
+      .finally(() => setLoading(false));
   }, []);
-
-  useEffect(() => { load(); }, [load]);
-
-  const critical = alerts.filter(a => a.severity === "critical").length;
-  const credLeaks = alerts.filter(a => a.alert_type === "credential_leak").length;
-  const ransomware = alerts.filter(a => a.alert_type === "ransomware_mention").length;
-
-  async function investigate(alert) {
-    setLastAlert(alert);
-    setModalTitle(`AI Investigation — ${alert.title}`);
-    setModalLoading(true); setModalData(null);
-    const { liveDataOverride } = await buildLiveDataOverride().catch(() => ({ liveDataOverride: "" }));
-    const input = `Dark web investigation for: ${alert.title}. Type: ${alert.alert_type}. Target: ${alert.target_org}. Description: ${alert.description || ""}. Assess risk to GDS and MSSP customers. Recommend immediate actions.`;
-    const result = await invokeAction("gdsAgentOS", { action: "command", command_type: "threat_hunt", input, live_data_override: liveDataOverride }).catch(e => ({ response: `Error: ${e.message}` }));
-    setModalData(result);
-    setModalLoading(false);
-  }
 
   return (
     <div className="min-h-screen p-4 space-y-4" style={{ background: "#0a0f1e" }}>
       <div className="flex items-center gap-3 flex-wrap">
-        <h1 className="text-xl font-bold text-white">🕵️ Dark Web Intelligence Monitor</h1>
-        <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-blue-500/20 text-blue-400">{alerts.length} Live Alerts</span>
-        <span className="flex items-center gap-1.5 text-xs font-bold text-emerald-400">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> ● MONITORING
+        <h1 className="text-xl font-bold text-white">🕵️ Dark Web Intelligence</h1>
+        <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-slate-700/40 text-slate-300">
+          No collector connected
         </span>
-      </div>
-
-      <div className="grid grid-cols-4 gap-4">
-        {[
-          { label: "Total Alerts", value: alerts.length, color: "text-white" },
-          { label: "Critical", value: critical, color: "text-red-400" },
-          { label: "Credential Leaks", value: credLeaks, color: "text-orange-400" },
-          { label: "Ransomware Mentions", value: ransomware, color: "text-red-400" },
-        ].map((t, i) => (
-          <div key={i} className="rounded-xl p-3 text-center" style={{ background: "#111827", border: "1px solid #1F2937" }}>
-            <p className={`text-2xl font-bold ${t.color}`}>{t.value}</p>
-            <p className="text-[10px] text-slate-500 uppercase tracking-widest mt-1">{t.label}</p>
-          </div>
-        ))}
-      </div>
-
-      <div className="flex items-center gap-1 rounded-xl p-1 w-fit" style={{ background: "#111827", border: "1px solid #1F2937" }}>
-        {TABS.map(t => (
-          <button key={t.key} onClick={() => setTab(t.key)} className={`text-xs font-medium px-3 py-1.5 rounded-lg transition ${tab === t.key ? "bg-blue-500 text-white" : "text-slate-400 hover:bg-slate-800"}`}>{t.label}</button>
-        ))}
       </div>
 
       {loading ? (
         <div className="w-8 h-8 border-4 border-t-blue-500 border-white/10 rounded-full animate-spin mx-auto mt-20" />
       ) : (
         <>
-          {tab === "alerts" && (
-            alerts.length === 0 ? <p className="text-sm text-slate-500">No dark web alerts.</p> : (
-              <div className="grid grid-cols-2 gap-4">
-                {alerts.map(a => <DarkWebAlertCard key={a.id} alert={a} onInvestigate={investigate} />)}
-              </div>
-            )
-          )}
-          {tab === "leaks" && <CredentialLeaksTable leaks={leaks} />}
-          {tab === "breaches" && <BreachRecordsTable records={breaches} />}
-        </>
-      )}
+          <div className="rounded-xl p-4 bg-amber-500/5 border border-amber-500/30 flex items-start gap-3">
+            <Ban className="w-5 h-5 text-amber-400 mt-0.5 shrink-0" />
+            <div>
+              <p className="text-sm font-bold text-amber-400">
+                {data?.available === false
+                  ? "No dark-web collection is running on this platform."
+                  : "Dark-web coverage could not be read from the API."}
+              </p>
+              <p className="text-xs text-slate-400 mt-1">
+                {data?.reason ||
+                  "The API did not answer. Nothing is shown rather than zeroes, because zero alerts over a collector that does not run reads as a clean estate."}
+              </p>
+            </div>
+          </div>
 
-      {modalTitle && (
-        <AIResponseModal title={modalTitle} loading={modalLoading} response={modalData?.response} agentSteps={modalData?.agent_steps} onRegenerate={() => lastAlert && investigate(lastAlert)} onClose={() => setModalTitle(null)} />
+          {data?.absent ? (
+            <div className="rounded-xl p-4 space-y-2" style={{ background: "#111827", border: "1px solid #1F2937" }}>
+              <p className="text-xs font-bold text-slate-300 flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-slate-500" /> What is absent, and why
+              </p>
+              {Object.entries(data.absent).map(([key, reason]) => (
+                <div key={key} className="text-xs">
+                  <span className="text-slate-300 font-semibold">{ABSENT_LABELS[key] || key}: </span>
+                  <span className="text-slate-400">{reason}</span>
+                </div>
+              ))}
+            </div>
+          ) : null}
+
+          {data?.what_is_recorded?.note ? (
+            <div className="rounded-xl p-4" style={{ background: "#111827", border: "1px solid #1F2937" }}>
+              <p className="text-xs font-bold text-slate-300">What is measured instead</p>
+              <p className="text-xs text-slate-400 mt-1">{data.what_is_recorded.note}</p>
+              <a href="/v2/secrets" className="inline-block text-xs font-bold text-blue-400 hover:text-blue-300 mt-2">
+                Open Secrets &amp; Key Management →
+              </a>
+            </div>
+          ) : null}
+
+          {Array.isArray(data?.would_need) && data.would_need.length > 0 ? (
+            <div className="rounded-xl p-4 space-y-2" style={{ background: "#111827", border: "1px solid #1F2937" }}>
+              <p className="text-xs font-bold text-slate-300">What would have to exist first</p>
+              <ul className="list-disc list-inside space-y-1">
+                {data.would_need.map((need, index) => (
+                  <li key={index} className="text-xs text-slate-400">
+                    {need}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+        </>
       )}
     </div>
   );

@@ -42,7 +42,7 @@ def test_the_adapter_serves_the_feed_and_names_the_dark_web_absence():
     adapter = (WEB / "api" / "base44Client.js").read_text(encoding="utf-8")
     assert "ThreatIntelFeed: { path: '/threat-intel/feed'" in adapter
     assert "DarkWebAlert:" in adapter
-    assert "No dark-web collector exists on this platform" in adapter
+    assert "Reading dark-web coverage is served from GET /intel/dark-web" in adapter  # item 37 replaced the sentence
 
 
 def test_the_routed_page_does_not_carry_the_invented_numbers():

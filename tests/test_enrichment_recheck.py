@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import datetime
 import importlib.util
+import re
 import sys
 from pathlib import Path
 
@@ -25,6 +26,19 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "apps" / "api"))
 
 SRC = (ROOT / "apps" / "api" / "enrich_findings.py").read_text(encoding="utf-8")
+
+
+def _code(text: str) -> str:
+    """The module with its docstring and comments removed.
+
+    This file's own docstring QUOTES the old predicate to record the defect it fixed, so an assertion on raw text can
+    never pass. Assertions about what the job would execute must run on code.
+    """
+    text = re.sub(r'\A\s*""".*?"""', "", text, flags=re.S)
+    return re.sub(r"(?m)^\s*#.*$", "", text)
+
+
+CODE = _code(SRC)
 
 
 def _load():
@@ -65,13 +79,21 @@ def test_selection_is_by_staleness_not_by_null():
     """The regression this whole change exists for: selecting only NULLs converged to a permanent no-op."""
     assert "enrichment_checked_at IS NULL" in SRC
     assert "enrichment_checked_at < now() - make_interval(hours => :age)" in SRC
-    assert "kev_listed IS NULL" not in SRC, (
-        "the old predicate is back: a row that already holds false would never be re-examined"
+    # Target the WORK SELECTION, not the word. The run summary legitimately counts rows where kev_listed is still NULL
+    # (`COUNT(*) FILTER (WHERE kev_listed IS NULL) AS kev_null`); that is a report, not a predicate deciding what gets
+    # examined. Banning the string outright made this test fail on a correct module.
+    selection = re.search(r"SELECT id, title, details, cve, cvss FROM security_findings.*?LIMIT :n", CODE, re.S)
+    assert selection, "the work-selection statement is not recognisable; fix this test before trusting it"
+    assert "kev_listed" not in selection.group(0), (
+        "the old predicate is back in the selection: a row that already holds false would never be re-examined"
     )
 
 
 def test_the_old_predicate_is_gone_as_a_whole():
-    assert "(cve IS NULL OR epss IS NULL OR kev_listed IS NULL)" not in SRC
+    # The phrase survives in the module docstring, which records the defect it fixed. What must not survive is the
+    # predicate itself, in a form the job would execute.
+    assert "AND (cve IS NULL OR epss IS NULL OR kev_listed IS NULL)" not in CODE
+    assert "WHERE (cve IS NULL OR epss IS NULL OR kev_listed IS NULL)" not in CODE
 
 
 def test_a_job_with_nothing_stale_says_so_and_stops():

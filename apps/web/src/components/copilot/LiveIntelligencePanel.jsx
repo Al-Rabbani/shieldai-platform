@@ -16,6 +16,8 @@ export default function LiveIntelligencePanel() {
   const [threats, setThreats] = useState([]);
   const [findings, setFindings] = useState([]);
   const [darkWeb, setDarkWeb] = useState([]);
+  /* The route's own refusal. unavailableEntities() lists entities with no route, and DarkWebAlert now has one. */
+  const [darkWebCoverage, setDarkWebCoverage] = useState(null);
 
   const load = useCallback(async () => {
     const [r, inc, thr, find, dw] = await Promise.all([
@@ -32,6 +34,9 @@ export default function LiveIntelligencePanel() {
     setThreats(thr.filter(t => t.affects_you).slice(0, 5));
     setFindings(find);
     setDarkWeb(dw);
+    base44.entities.DarkWebAlert.summary()
+      .then((payload) => setDarkWebCoverage(payload || null))
+      .catch(() => setDarkWebCoverage(null));
   }, []);
 
   useEffect(() => {
@@ -161,7 +166,7 @@ export default function LiveIntelligencePanel() {
           </div>
         )}
 
-        {unavailableEntities().includes("DarkWebAlert") && darkWeb.length === 0 && (
+        {darkWebCoverage?.available === false && darkWeb.length === 0 && (
           <p className="text-[9px] text-slate-600 leading-snug">
             No dark-web source is served here, so no leak or credential alert can appear on this rail.
           </p>

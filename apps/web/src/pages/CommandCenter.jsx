@@ -241,7 +241,8 @@ export default function CommandCenter() {
     /* Null for the same reason: no runtime-threat store exists (runtime_posture is a different measurement). */
     runtimeThreats: null,
     openIncidents: openIncidents.length,
-    darkWebAlerts: darkWebAlerts.length,
+    /* Null, not 0: no dark-web collector runs here, so a count would read as a clean estate. */
+    darkWebAlerts: null,
     complianceAvg,
     riskGrade: risk?.grade ?? "—",
   };

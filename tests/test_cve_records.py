@@ -106,6 +106,8 @@ class _FakeDb:
             "kev_listed": None,  # never checked against the catalogue
             "kev_date_added": None,
             "kev_due_date": None,
+            # Item 37 added this to the aggregate; None here because kev_listed is None (never checked).
+            "ransomware_known": None,
             "finding_count": 13,
             "open_count": 13,
             "closed_count": 0,

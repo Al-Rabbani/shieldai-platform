@@ -145,6 +145,9 @@ def kev_index(payload: dict) -> dict[str, dict]:
             "vendor": v.get("vendorProject"),
             "product": v.get("product"),
             "name": v.get("vulnerabilityName"),
+            # Item 37: the catalogue states, per CVE, whether it is known to be used in ransomware campaigns
+            # ("Known"/"Unknown"). Discarding it at load time is why item 36 could say no such flag existed.
+            "ransomware": str(v.get("knownRansomwareCampaignUse", "")).lower() == "known",
         }
     return out
 
@@ -335,6 +338,7 @@ def build_updates(rows, kev: dict[str, dict], epss: dict[str, float], now: str, 
             "kev": cve in kev,
             "kev_date_added": as_date(entry.get("date_added")),
             "kev_due_date": as_date(entry.get("due_date")),
+            "kev_ransomware": bool(entry.get("ransomware")) if cve in kev else False,
             "raw": json.dumps({
                 "at": now,
                 "kev_source": kev_source,
@@ -399,6 +403,7 @@ async def main() -> int:
     print(f"rows_rechecked={len(rows)} with_cve={len(cve_updates)} without_cve={len(no_cve_updates)} "
           f"distinct_cves={len(cves)} kev_hits={len(kev_hits)} epss_known={len(epss)}")
     print(f"kev_source={kev_source} kev_size={len(kev)}")
+    print(f"kev_ransomware_flagged={sum(1 for u in cve_updates if u['kev_ransomware'])}")
     for u in kev_hits:
         print(f"  KEV {u['cve']} added={u['kev_date_added']} due={u['kev_due_date']}")
 
@@ -414,6 +419,7 @@ async def main() -> int:
                 "UPDATE security_findings SET cve = :cve, "
                 "cvss = COALESCE(:cvss, cvss), epss = COALESCE(:epss, epss), "
                 "kev_listed = :kev, kev_date_added = :kev_date_added, kev_due_date = :kev_due_date, "
+                "kev_ransomware_use = :kev_ransomware, "
                 "enrichment_checked_at = now(), "
                 "raw_data = jsonb_set(COALESCE(raw_data, '{}'::jsonb), '{enrichment}', CAST(:raw AS jsonb), true) "
                 "WHERE id = :id AND tenant_id = :t"), {**u, "t": tenant})

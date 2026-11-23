@@ -7,7 +7,7 @@ export default function SecurityFeaturesRow({ stats }) {
     { icon: "⚔️", label: "Red Team", path: "/red-team", stat: stats.attackPaths === null ? "attack paths not recorded" : `${stats.attackPaths} critical attack paths` },
     { icon: "🛡️", label: "Blue Team", path: "/blue-team", stat: stats.runtimeThreats === null ? "runtime threats not recorded" : `${stats.runtimeThreats} active runtime threats` },
     { icon: "📡", label: "SOC", path: "/soc", stat: `${stats.openIncidents} open incidents` },
-    { icon: "🔍", label: "Threat Intel", path: "/threat-intelligence", stat: `${stats.darkWebAlerts} dark web alerts` },
+    { icon: "🔍", label: "Threat Intel", path: "/threat-intelligence", stat: stats.darkWebAlerts == null ? "dark web not recorded" : `${stats.darkWebAlerts} dark web alerts` },
     { icon: "📋", label: "Compliance", path: "/compliance", stat: stats.complianceAvg == null ? "not measured" : `${stats.complianceAvg}% avg score` },
     { icon: "📊", label: "Executive", path: "/mssp", stat: `Risk grade ${stats.riskGrade}` },
   ];
