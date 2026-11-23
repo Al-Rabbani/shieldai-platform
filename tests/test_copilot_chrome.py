@@ -83,3 +83,11 @@ def test_the_routed_component_is_the_one_under_test():
     app = (WEB / "App.jsx").read_text(encoding="utf-8")
     assert 'path="/copilot" element={<GDSCoPilotPage />}' in app
     assert "import GDSCoPilotPage from '@/pages/gds/GDSCoPilotPage'" in app
+
+
+def test_the_sidebar_badge_is_the_deployed_release_not_a_typed_number():
+    """The same invented version claim sat in the sidebar on every page, as the literal "GDS OS v9.0"."""
+    sidebar = code(WEB / "components" / "platform" / "GlobalSidebar.jsx")
+    assert "GDS OS v9.0" not in sidebar
+    assert "base44.platform.version()" in sidebar
+    assert "GDS OS release unknown" in sidebar, "an unreadable release must say so, not invent a number"

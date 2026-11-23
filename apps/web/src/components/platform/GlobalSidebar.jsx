@@ -117,6 +117,18 @@ function gradeColor(grade) {
 }
 
 export default function GlobalSidebar() {
+  /* The release badge used to be the literal "GDS OS v9.0": a number that looked like a version and was typed in. The
+   * deployed commit is published at GET /health/version, so it is read once here. */
+  const [release, setRelease] = useState(null);
+  useEffect(() => {
+    let alive = true;
+    base44.platform.version()
+      .then((v) => { if (alive) setRelease(v || null); })
+      .catch(() => { if (alive) setRelease(null); });
+    return () => { alive = false; };
+  }, []);
+  const releaseLabel = release?.sha ? `GDS OS ${release.sha.slice(0, 7)}` : "GDS OS release unknown";
+
   const location = useLocation();
   const [risk, setRisk] = useState(null);
   const [notifications, setNotifications] = useState([]);
@@ -163,7 +175,7 @@ export default function GlobalSidebar() {
           <span className="text-lg font-bold truncate" style={{ color: brandAccent }}>{brandName}</span>
         </div>
         <p className="text-[10px] text-slate-500 mt-0.5 truncate">{brandOrg}</p>
-        <span className="inline-block mt-1.5 text-[9px] font-bold text-blue-400 px-1.5 py-0.5 rounded" style={{ textShadow: "0 0 8px rgba(59,130,246,0.8)" }}>GDS OS v9.0</span>
+        <span className="inline-block mt-1.5 text-[9px] font-bold text-blue-400 px-1.5 py-0.5 rounded" style={{ textShadow: "0 0 8px rgba(59,130,246,0.8)" }}>{releaseLabel}</span>
 
         <span className={`inline-flex items-center mt-3 text-[11px] font-semibold rounded-full border px-2.5 py-0.5 ${gradeColor(risk?.grade)}`}>
           {risk?.overall_score ?? "—"} {risk?.grade ?? "—"} {risk?.trend === "improving" ? "↗" : risk?.trend === "degrading" ? "↘" : "→"}
