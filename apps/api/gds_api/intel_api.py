@@ -104,7 +104,8 @@ async def ransomware_exposure(
     current_user: CurrentUser = Depends(require_permission("findings:read")),
 ):
     """This tenant's real ransomware exposure: CVEs the KEV catalogue flags as used in ransomware campaigns."""
-    tid = current_user.tenant_id
+    # asyncpg types this parameter as str: a raw UUID object raises DataError (expected str, got UUID).
+    tid = str(current_user.tenant_id)
     # security_findings is FORCE RLS: an unbound read returns nothing, which would read as "no exposure".
     await db.execute(text("SELECT set_config('gds.tenant_id', :tid, true)"), {"tid": tid})
 
@@ -217,7 +218,8 @@ async def apt_coverage(
     current_user: CurrentUser = Depends(require_permission("findings:read")),
 ):
     """No APT source exists here. This endpoint says so in a form a page can render, instead of an empty list."""
-    tid = current_user.tenant_id
+    # asyncpg types this parameter as str: a raw UUID object raises DataError (expected str, got UUID).
+    tid = str(current_user.tenant_id)
     await db.execute(text("SELECT set_config('gds.tenant_id', :tid, true)"), {"tid": tid})
     recorded = (
         await db.execute(
@@ -259,7 +261,8 @@ async def dark_web_coverage(
     current_user: CurrentUser = Depends(require_permission("findings:read")),
 ):
     """No dark-web collector exists here. Refused in a renderable form rather than as four zero tiles."""
-    tid = current_user.tenant_id
+    # asyncpg types this parameter as str: a raw UUID object raises DataError (expected str, got UUID).
+    tid = str(current_user.tenant_id)
     await db.execute(text("SELECT set_config('gds.tenant_id', :tid, true)"), {"tid": tid})
     return {
         "available": False,
