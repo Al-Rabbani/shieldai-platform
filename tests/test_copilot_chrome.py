@@ -91,3 +91,9 @@ def test_the_sidebar_badge_is_the_deployed_release_not_a_typed_number():
     assert "GDS OS v9.0" not in sidebar
     assert "base44.platform.version()" in sidebar
     assert "GDS OS release unknown" in sidebar, "an unreadable release must say so, not invent a number"
+
+
+def test_the_welcome_screen_does_not_repeat_the_invented_version():
+    welcome = code(WEB / "components" / "copilot" / "WelcomeState.jsx")
+    assert "v2.0" not in welcome, "the welcome title still prints the typed version number"
+    assert "GDS Agent OS" in welcome

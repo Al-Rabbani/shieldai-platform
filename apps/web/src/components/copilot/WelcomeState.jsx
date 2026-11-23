@@ -10,7 +10,9 @@ export default function WelcomeState({ onSelect }) {
       >
         🛡️
       </div>
-      <h1 className="text-xl font-black text-white mb-2">GDS Agent OS v2.0</h1>
+      {/* No version number here: "v2.0" was a typed literal on a platform whose deployed commit is published at
+        GET /health/version and shown in the header. A title does not need a release number it cannot know. */}
+      <h1 className="text-xl font-black text-white mb-2">GDS Agent OS</h1>
       <p className="text-sm text-blue-400 font-semibold mb-1">Sovereign AI Security Operating System</p>
       <p className="text-xs text-slate-400 max-w-md mb-8">
         Registered agents, declared tools and heartbeat evidence are read live from the platform<br />
