@@ -376,6 +376,21 @@ async def task_compliance(db, tid: str) -> dict[str, Any]:
 
 # The keys are the task strings the pages actually pass. Measured from every useAgentPage call site: the page sends its
 # own name, so a registry keyed on my guesses answered 404 and the page kept its "Could not load" banner.
+# Keys the pages treat as collections. An em dash in one of these is a string where the page calls .map(), which blanked
+# the whole page (measured on /offensive/dark-web). Scalars get the em dash; collections are simply left out.
+_LIST_KEYS = {
+    "top_alerts", "top_iocs", "top_ciem", "top_attacks", "recent_simulations",
+    "shadow_it_list", "internet_facing_list", "active_list",
+}
+
+
+def _split_absent(keys: list[str]) -> dict[str, list[str]]:
+    return {
+        "scalar": [k for k in keys if k not in _LIST_KEYS],
+        "list": [k for k in keys if k in _LIST_KEYS],
+    }
+
+
 TASKS: dict[str, Callable[[Any, str], Awaitable[dict[str, Any]]]] = {
     "exploit_analysis": task_exploits,
     "vulnerability_scan": task_vulnerabilities,
@@ -417,6 +432,8 @@ async def agent_page(
     tenant_id = str(current_user.tenant_id)
     await _bind(db, tenant_id)
     payload = await handler(db, tenant_id)
+    if isinstance(payload.get("_absent"), list):
+        payload["_absent"] = _split_absent(payload["_absent"])
     payload["_task"] = task
     payload["_agent"] = agent
     payload["_generated_at"] = datetime.now(timezone.utc).isoformat()

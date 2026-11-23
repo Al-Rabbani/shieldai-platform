@@ -88,7 +88,9 @@ export function useAgentPage(agentId, task) {
        * "measured, and none" - the exact fabrication these pages used to commit. An em dash cannot be mistaken for a
        * count, and StatTile prints it as-is. */
       const payload = { ...(d || {}) };
-      for (const key of payload._absent || []) {
+      /* Scalars the route could not measure become an em dash; collections are left out so the page's own
+       * `(data?.x || [])` default applies. Putting a dash into a collection made .map() throw and blanked the page. */
+      for (const key of payload._absent?.scalar || []) {
         if (payload[key] === undefined) payload[key] = "—";
       }
       setData(payload);
