@@ -65,9 +65,12 @@ export default function RemediationTemplatesPage() {
       await base44.entities.TriagedFinding.bulkUpdate(
         matched.map((finding) => ({
           id: finding.id,
-          status: "in_remediation",
+          /* No status is written: this estate's findings carry open, resolved or accepted_risk, and "in_remediation" is
+           * not one of them. Starting remediation is recorded as a timestamp plus notes, and "in remediation" is derived
+           * from that, so no open count or SLA band silently changes meaning. */
           remediation_notes: notes,
           remediation_started_at: finding.remediation_started_at || now,
+          remediation_template_id: template.id,
         }))
       );
       await pushLinearStates(matched.map((finding) => finding.id));
@@ -78,7 +81,7 @@ export default function RemediationTemplatesPage() {
       setFindings((prev) =>
         prev.map((finding) =>
           matched.some((item) => item.id === finding.id)
-            ? { ...finding, status: "in_remediation", remediation_notes: notes, remediation_started_at: finding.remediation_started_at || now }
+            ? { ...finding, remediation_notes: notes, remediation_started_at: finding.remediation_started_at || now, remediation_template_id: template.id }
             : finding
         )
       );

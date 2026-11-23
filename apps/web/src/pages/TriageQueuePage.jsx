@@ -126,9 +126,9 @@ export default function TriageQueuePage() {
           const finding = findings.find((f) => f.id === id);
           return {
             id,
-            assigned_agent_id: agent.id,
-            assigned_to: name,
-            status: finding?.status === "open" ? "in_remediation" : finding?.status,
+            /* security_findings has no assigned_agent_id or assigned_to column, and "in_remediation" is not one of its
+             * statuses. Assignment lands in owner (item 23) and remediation start is recorded as a timestamp. */
+            owner: name,
             remediation_started_at: finding?.remediation_started_at || now,
           };
         })
@@ -138,9 +138,7 @@ export default function TriageQueuePage() {
           selected.includes(finding.id)
             ? {
                 ...finding,
-                assigned_agent_id: agent.id,
-                assigned_to: name,
-                status: finding.status === "open" ? "in_remediation" : finding.status,
+                owner: name,
                 remediation_started_at: finding.remediation_started_at || now,
               }
             : finding
@@ -184,8 +182,10 @@ export default function TriageQueuePage() {
         const finding = findings.find((item) => item.id === id);
         return {
           id,
-          status: "in_remediation",
+          /* See RemediationTemplatesPage: "in_remediation" is not a status this estate uses, so remediation is recorded
+           * as notes plus a start time and the derived state is shown by the page, not written to the row. */
           remediation_notes: notes,
+          remediation_template_id: template.id,
           ...(finding?.remediation_started_at ? {} : { remediation_started_at: now }),
         };
       });
