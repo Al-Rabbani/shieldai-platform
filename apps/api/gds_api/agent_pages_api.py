@@ -371,22 +371,25 @@ async def task_compliance(db, tid: str) -> dict[str, Any]:
     }
 
 
+# The keys are the task strings the pages actually pass. Measured from every useAgentPage call site: the page sends its
+# own name, so a registry keyed on my guesses answered 404 and the page kept its "Could not load" banner.
 TASKS: dict[str, Callable[[Any, str], Awaitable[dict[str, Any]]]] = {
-    "exploits": task_exploits,
-    "vulnerabilities": task_vulnerabilities,
-    "pentest": task_pentest,
-    "redteam": task_pentest,
-    "simulation": task_pentest,
-    "osint": task_osint,
-    "threat_hunting": task_threat_hunting,
-    "dark_web": task_dark_web,
-    "incidents": task_incidents,
-    "soc": task_soc,
-    "cloud": task_cloud,
-    "ai_security": task_ai_security,
-    "identity": task_identity,
-    "risk": task_risk,
-    "compliance": task_compliance,
+    "exploit_analysis": task_exploits,
+    "vulnerability_scan": task_vulnerabilities,
+    "pentest_authorized": task_pentest,
+    "red_team_ops": task_pentest,
+    "attack_simulation": task_pentest,
+    "osint_recon": task_osint,
+    "threat_hunt": task_threat_hunting,
+    "threat_intel": task_threat_hunting,
+    "dark_web_scan": task_dark_web,
+    "incident_response": task_incidents,
+    "soc_summary": task_soc,
+    "cloud_review": task_cloud,
+    "ai_security_scan": task_ai_security,
+    "identity_analysis": task_identity,
+    "risk_assessment": task_risk,
+    "compliance_check": task_compliance,
 }
 
 
