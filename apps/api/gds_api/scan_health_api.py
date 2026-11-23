@@ -120,8 +120,13 @@ async def scan_health(
             "run_history": recorded,
         })
 
+    # critical_open is computed here rather than by a page counting a 500-row sample of the register: a page
+    # length read as a total is how this platform has reported 487 where the truth was 849.
     register = (await db.execute(text(
-        "SELECT count(*) AS total, count(*) FILTER (WHERE status = 'open') AS open FROM security_findings"
+        "SELECT count(*) AS total, "
+        "count(*) FILTER (WHERE status = 'open') AS open, "
+        "count(*) FILTER (WHERE status = 'open' AND severity = 'critical') AS critical_open "
+        "FROM security_findings"
     ))).mappings().first()
 
     newest_finding = (await db.execute(text(
@@ -155,6 +160,7 @@ async def scan_health(
         "register": {
             "total": register["total"] if register else None,
             "open": register["open"] if register else None,
+            "critical_open": register["critical_open"] if register else None,
             "newest_finding": newest_finding.isoformat() if newest_finding else None,
         },
         "thresholds": {

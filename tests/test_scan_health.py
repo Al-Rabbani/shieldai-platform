@@ -121,7 +121,7 @@ def _run(**kw):
 
 
 def _call(schedules, runs, register=None, newest=NOW - timedelta(days=4)):
-    db = _FakeDB(schedules, runs, register or {"total": 1002, "open": 849}, newest)
+    db = _FakeDB(schedules, runs, register or {"total": 1002, "open": 849, "critical_open": 0}, newest)
     out = asyncio.run(scan_health(current_user=_User(), db=db))
     return out, db
 
@@ -135,7 +135,8 @@ def test_a_live_scanner_reports_alive_with_its_evidence():
     assert scanner["run_history"]["runs_recorded"] == 1
     assert scanner["run_history"]["last_new_findings"] == 0
     assert out["register"] == {
-        "total": 1002, "open": 849, "newest_finding": (NOW - timedelta(days=4)).isoformat()
+        "total": 1002, "open": 849, "critical_open": 0,
+        "newest_finding": (NOW - timedelta(days=4)).isoformat(),
     }
     # the tenant must be bound before any RLS-protected read
     assert any("set_config" in s for s in db.seen)

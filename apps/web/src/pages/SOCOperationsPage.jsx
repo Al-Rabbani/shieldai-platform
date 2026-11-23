@@ -31,12 +31,18 @@ export default function SOCOperationsPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  const openIncidents = incidents.filter(i => ["new", "investigating"].includes(i.status)).length;
-  const criticalFindings = findings.filter(f => f.status === "open" && f.severity === "critical").length;
-  /* Schedules that have passed their own next_run_at. There is no running/queued scan on this platform, so counting
-   * 'running' would read zero whether or not scanning had stopped - the failure mode this tile is meant to catch. */
-  const overdueScans = scanJobs.filter(s => s.state === "overdue").length;
-  const unreadAlerts = notifications.filter(n => !n.is_read).length;
+  /* Item 46. Four tiles on this page read zero for reasons that had nothing to do with the estate.
+   * (1) Incidents are stored with status 'open'; filtering for ["new","investigating"] reported 0 while two incidents
+   *     were open on the home page. Count what is NOT terminal - the fifth occurrence of this trap in this repo.
+   * (2) Critical findings were counted over a 500-row page of the register and called a total.
+   * (3) Overdue scans were counted from ScanJob, which has no store here, so the tile could never move.
+   * (4) Unread alerts tested is_read, but notifications record read_at.
+   * Each now either reads the platform aggregate or renders an em dash rather than a number it cannot measure. */
+  const TERMINAL_INCIDENT = ["closed", "resolved", "false_positive", "contained"];
+  const openIncidents = incidents.filter(i => !TERMINAL_INCIDENT.includes(i.status)).length;
+  const criticalFindings = scans?.register?.critical_open ?? null;
+  const overdueScans = scans ? scans.overdue.length : null;
+  const unreadAlerts = notifications.filter(n => !n.read_at).length;
 
   async function respond(n) {
     setModalTitle(`AI SOC Response — ${n.title}`);
@@ -58,8 +64,8 @@ export default function SOCOperationsPage() {
           <div className="grid grid-cols-4 gap-4">
             {[
               { label: "Open Incidents", value: openIncidents, color: openIncidents > 0 ? "text-red-400" : "text-white" },
-              { label: "Critical Findings", value: criticalFindings, color: criticalFindings > 0 ? "text-red-400" : "text-white" },
-              { label: "Overdue Scans", value: overdueScans, color: overdueScans > 0 ? "text-amber-400" : "text-white" },
+              { label: "Critical Findings", value: criticalFindings ?? "—", color: criticalFindings > 0 ? "text-red-400" : "text-white" },
+              { label: "Overdue Scans", value: overdueScans ?? "—", color: overdueScans > 0 ? "text-amber-400" : "text-white" },
               { label: "Unread Alerts", value: unreadAlerts, color: unreadAlerts > 0 ? "text-amber-400" : "text-white" },
             ].map((t, i) => (
               <div key={i} className="rounded-xl p-3 text-center" style={{ background: "#111827", border: "1px solid #1F2937" }}>
