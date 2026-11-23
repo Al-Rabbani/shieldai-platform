@@ -21,6 +21,7 @@ from gds_api.tool_gateway import execute_tool, list_tools, TOOL_REGISTRY
 from gds_api.reasoning.governed_tools import execute_governed_tool
 from gds_api.reasoning.prompts import get_agent_prompt, AGENT_REGISTRY
 from gds_api.llm_cost import record_llm_cost
+from gds_api.reasoning.context_window import assert_pairing, context_chars, trim_tool_results
 from gds_api.reasoning.tool_definitions import get_tool_definitions, get_tool_names
 from gds_api.reasoning.kernel_agent_loop import run_kernel_agent
 
@@ -94,6 +95,10 @@ class AgenticLoop:
     """The core reasoning engine — agents that THINK, not just execute."""
     
     MAX_ITERATIONS = 10
+    # Item 43: measured 107,218 input tokens for one posture run because nothing was ever compacted. Older tool results
+    # are shortened to a head; the most recent stay verbatim because they are what the next step reasons about.
+    KEEP_TOOL_RESULTS = int(os.getenv("AGENT_CONTEXT_KEEP_RESULTS", "4"))
+    TOOL_HEAD_CHARS = int(os.getenv("AGENT_CONTEXT_HEAD_CHARS", "400"))
     MODEL = "gpt-4.1"
     
     def __init__(self, agent_id: str, model: str = None, *, tenant_id=None, user_id=None,
@@ -157,6 +162,16 @@ analyze them and decide the next step. When done, provide a summary.
             logger.info(f"Iteration {iteration + 1}/{self.MAX_ITERATIONS}")
             
             try:
+                messages, _compacted = trim_tool_results(
+                    messages, keep_recent=self.KEEP_TOOL_RESULTS, head_chars=self.TOOL_HEAD_CHARS
+                )
+                if _compacted:
+                    logger.info(
+                        f"  Context trimmed: {_compacted} older tool results compacted, "
+                        f"{context_chars(messages)} chars in context"
+                    )
+                assert_pairing(messages)
+
                 _call_started = time.perf_counter()
                 response = await self.client.chat.completions.create(
                     model=self.model,
