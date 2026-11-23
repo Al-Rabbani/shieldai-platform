@@ -596,8 +596,8 @@ async def provision_tenant(
     await db.execute(
         text(
             """
-            INSERT INTO roles (id, tenant_id, name, permissions, created_at)
-            VALUES (:id, :tid, 'platform_owner', cast(:perms AS jsonb), now())
+            INSERT INTO roles (id, tenant_id, name, permissions, created_at, requires_mfa)
+            VALUES (:id, :tid, 'platform_owner', cast(:perms AS jsonb), now(), true)
             """
         ),
         {
