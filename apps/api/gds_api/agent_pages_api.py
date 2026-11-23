@@ -67,7 +67,7 @@ WHERE tenant_id = :tid
 """
 
 _HIGH_EPSS_LIST_SQL = """
-SELECT title, cve, cvss, epss
+SELECT title, cve, cve AS cve_id, cvss, cvss AS cvss_score, epss, epss AS epss_score
 FROM security_findings
 WHERE tenant_id = :tid AND status = 'open' AND epss IS NOT NULL
 ORDER BY epss DESC, cvss DESC NULLS LAST
@@ -98,7 +98,7 @@ WHERE tenant_id = :tid
 """
 
 _INTERNET_FACING_SQL = """
-SELECT name, native_resource_type, provider, region_or_location
+SELECT name, name AS asset, native_resource_type, provider, region_or_location
 FROM cloud_assets
 WHERE tenant_id = :tid AND internet_exposure_known IS TRUE
 ORDER BY name
@@ -131,7 +131,10 @@ SELECT (SELECT count(*) FROM user_sessions WHERE tenant_id = :tid) AS sessions,
 _FRAMEWORK_SQL = """
 SELECT framework AS name,
        count(*) FILTER (WHERE verdict_source = 'automated' AND lower(status) = 'pass') AS passing,
-       count(*) FILTER (WHERE verdict_source = 'automated' AND lower(status) = 'fail') AS failing
+       count(*) FILTER (WHERE verdict_source = 'automated' AND lower(status) = 'fail') AS failing,
+       round(100.0 * count(*) FILTER (WHERE verdict_source = 'automated' AND lower(status) = 'pass')
+             / NULLIF(count(*) FILTER (WHERE verdict_source = 'automated' AND lower(status) IN ('pass','fail')), 0), 1)
+         AS score
 FROM compliance_assessments
 GROUP BY framework
 ORDER BY (count(*) FILTER (WHERE verdict_source = 'automated' AND lower(status) = 'pass'))::float
@@ -142,7 +145,7 @@ LIMIT 3
 _FRAMEWORK_COUNT_SQL = "SELECT count(DISTINCT framework) AS total FROM compliance_assessments"
 
 _TOP_FINDINGS_SQL = """
-SELECT title, severity, cvss, cve
+SELECT title, severity, cvss, cvss AS cvss_score, cve, cve AS cve_id
 FROM security_findings
 WHERE tenant_id = :tid AND status = 'open'
 ORDER BY cvss DESC NULLS LAST, detected_at DESC
