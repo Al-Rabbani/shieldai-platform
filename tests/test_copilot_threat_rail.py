@@ -35,7 +35,11 @@ def test_the_stale_absence_claim_is_gone():
     )
 
 
-def test_the_empty_state_gives_the_true_reason():
+def test_the_empty_state_is_gated_and_claims_only_what_was_read():
+    """Live, the ungated sentence rendered mid-fetch and asserted the register held nothing while it held 899 CVEs."""
     src = code()
-    assert "It is empty because no such finding is" in src
-    assert "unavailableEntities().includes(\"ThreatIntelFeed\") && threats.length === 0" not in src
+    assert "const [loaded, setLoaded] = useState(false);" in src
+    assert "setLoaded(true);" in src
+    assert "{loaded && threats.length === 0 && (" in src, "an in-flight empty array must not state an absence"
+    assert "This read returned none, which is not the" in src
+    assert "It is empty because no such finding is" not in src

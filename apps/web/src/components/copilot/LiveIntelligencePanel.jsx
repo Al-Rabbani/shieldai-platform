@@ -18,6 +18,9 @@ export default function LiveIntelligencePanel() {
   const [darkWeb, setDarkWeb] = useState([]);
   /* The route's own refusal. unavailableEntities() lists entities with no route, and DarkWebAlert now has one. */
   const [darkWebCoverage, setDarkWebCoverage] = useState(null);
+  /* Every read below can return an empty array while still in flight. Without this flag an empty rail states a fact
+   * about the register ("nothing is recorded") that the read has not established yet. */
+  const [loaded, setLoaded] = useState(false);
 
   const load = useCallback(async () => {
     const [r, inc, thr, find, dw] = await Promise.all([
@@ -34,6 +37,7 @@ export default function LiveIntelligencePanel() {
     setThreats(thr.filter(t => t.affects_you).slice(0, 5));
     setFindings(find);
     setDarkWeb(dw);
+    setLoaded(true);
     base44.entities.DarkWebAlert.summary()
       .then((payload) => setDarkWebCoverage(payload || null))
       .catch(() => setDarkWebCoverage(null));
@@ -153,10 +157,10 @@ export default function LiveIntelligencePanel() {
         )}
 
         {/* An unserved source is stated, not left as silence that reads like "nothing found". */}
-        {threats.length === 0 && (
+        {loaded && threats.length === 0 && (
           <p className="text-[9px] text-slate-600 leading-snug">
-            This rail lists findings in your own register that carry a CVE. It is empty because no such finding is
-            recorded right now, not because nothing was checked.
+            This rail lists findings in your own register that carry a CVE. This read returned none, which is not the
+            same as the register holding none.
           </p>
         )}
 
