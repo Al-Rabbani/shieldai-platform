@@ -1,68 +1,40 @@
-import React, { useEffect, useState } from "react";
-import { base44 } from "@/api/base44Client";
-import { CalendarCheck, RefreshCw, Loader2 } from "lucide-react";
+import React from "react";
+import { CalendarCheck, CalendarX } from "lucide-react";
 
+/**
+ * This panel claimed a Google Calendar sync that does not exist.
+ *
+ * Measured 23 Nov 2026 on this host: there is no SlaCalendarEvent store (no table matched calendar/event), the function
+ * gdsCriticalDeadlineSync is refused by the adapter, the root crontab holds no calendar entry (certbot,
+ * docker-builder-prune, e2scrub_all, gds-paging, gds-webhooks, root.crontab, sysstat), and there is no Google service
+ * account - no /opt/*.json and no GOOGLE_APPLICATION_CREDENTIALS in /opt/.env. The panel nevertheless read
+ * "0 deadline event(s) synced" beside a working Sync button and stated "The daily 06:00 sync does this automatically",
+ * so an integration that does not exist looked like one sitting idle.
+ */
 export default function SlaCalendarSyncPanel() {
-  const [rows, setRows] = useState([]);
-  const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState(null);
-
-  useEffect(() => {
-    base44.entities.SlaCalendarEvent.list("-due_at", 100).then(setRows).catch(() => setRows([]));
-  }, []);
-
-  async function sync() {
-    setBusy(true);
-    setMessage(null);
-    try {
-      const response = await base44.functions.invoke("gdsCriticalDeadlineSync", {});
-      const data = response.data || {};
-      setMessage({
-        type: "ok",
-        text: `${data.tracked || 0} critical deadline(s) tracked · ${data.created || 0} created, ${data.updated || 0} updated, ${data.removed || 0} removed.`,
-      });
-      const fresh = await base44.entities.SlaCalendarEvent.list("-due_at", 100).catch(() => []);
-      setRows(fresh || []);
-    } catch (error) {
-      setMessage({ type: "err", text: error?.response?.data?.error || error.message });
-    }
-    setBusy(false);
-  }
-
-  const upcoming = rows.slice(0, 4);
-
   return (
     <div className="rounded-xl p-3" style={{ background: "#111827", border: "1px solid #1F2937" }}>
       <div className="flex flex-wrap items-center gap-2">
-        <CalendarCheck size={14} className="text-emerald-400" />
+        <CalendarX size={14} className="text-slate-500" />
         <p className="text-[11px] font-bold text-white">Google Calendar · critical SLA deadlines</p>
-        <span className="text-[10px] text-slate-500">{rows.length} deadline event(s) synced</span>
-        <button
-          onClick={sync}
-          disabled={busy}
-          className="ml-auto flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-500/30 disabled:opacity-40"
-        >
-          {busy ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />} {busy ? "Syncing…" : "Sync now"}
-        </button>
+        <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-700/40 text-slate-300 border border-slate-600">
+          not connected
+        </span>
       </div>
 
-      {message && (
-        <p className={`text-[10px] mt-1.5 ${message.type === "err" ? "text-red-400" : "text-emerald-300"}`}>{message.text}</p>
-      )}
-
-      {upcoming.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 mt-2">
-          {upcoming.map((row) => (
-            <span key={row.id} className="px-1.5 py-0.5 rounded text-[10px] bg-[#0a0f1e] border border-slate-700 text-slate-300">
-              {row.due_date} · {row.finding_title?.length > 28 ? `${row.finding_title.slice(0, 27)}…` : row.finding_title}
-            </span>
-          ))}
-        </div>
-      )}
-
-      <p className="text-[9px] text-slate-600 mt-2">
-        Open critical findings with an SLA deadline become all-day events on the app's Google Calendar, with a reminder the day before. Closed findings have their event removed. The daily 06:00 sync does this automatically.
+      <p className="text-[10px] text-slate-400 mt-1.5">
+        No deadline has been synced, and none can be: this host has no Google service account, no calendar sync job runs
+        on any schedule, and there is no store recording a synced event. Nothing here is a count of zero events; it is
+        the absence of the integration.
       </p>
+
+      <div className="flex flex-wrap items-center gap-2 mt-2">
+        <CalendarCheck size={12} className="text-slate-600" />
+        <p className="text-[9px] text-slate-600">
+          To make this real it needs a Google service account with calendar scope in /opt/.env, a scheduled job, and a
+          store for the event ids it creates. Until then no critical finding has an external calendar reminder.
+        </p>
+      </div>
     </div>
   );
 }
