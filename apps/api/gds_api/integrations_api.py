@@ -74,13 +74,32 @@ async def _linear_surface() -> dict[str, Any]:
     return surface
 
 
-async def _existing_tables(db: AsyncSession) -> set[str]:
+async def _store_state(db: AsyncSession, tenant_id: str) -> dict[str, dict[str, Any]]:
+    """Whether each connector store exists, and how many rows this tenant has in it.
+
+    A table that exists and is empty is a different fact from a table that exists and holds endpoints, and from a table
+    that was never created. Reporting only "exists" would let an empty webhook store read as a configured one.
+    """
     rows = (
         await db.execute(
             text("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'")
         )
     ).all()
-    return {row[0] for row in rows}
+    tables = {row[0] for row in rows}
+    state: dict[str, dict[str, Any]] = {}
+    for name in CANDIDATE_STORES:
+        if name not in tables:
+            state[name] = {"exists": False, "rows": None}
+            continue
+        # The name comes from CANDIDATE_STORES, never from a request, so it cannot carry injected SQL.
+        counted = (
+            await db.execute(
+                text(f"SELECT count(*) AS total FROM {name} WHERE tenant_id = :tid"),  # noqa: S608
+                {"tid": tenant_id},
+            )
+        ).mappings().first()
+        state[name] = {"exists": True, "rows": counted["total"] if counted else 0}
+    return state
 
 
 @router.get("/status")
@@ -106,7 +125,7 @@ async def integrations_status(
         )
     ).mappings().all()
 
-    tables = await _existing_tables(db)
+    stores = await _store_state(db, tenant_id)
 
     cloud_rows = [
         {
@@ -139,7 +158,7 @@ async def integrations_status(
                 "Presence of a credential is not delivery. Nothing on this route sends a message."
             ),
         },
-        "stores": {name: (name in tables) for name in CANDIDATE_STORES},
+        "stores": stores,
         "secrets": {
             "measurable": False,
             "reason": (

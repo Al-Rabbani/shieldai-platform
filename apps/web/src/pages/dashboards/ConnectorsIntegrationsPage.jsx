@@ -32,8 +32,8 @@ export default function ConnectorsIntegrationsPage() {
   const envs = status?.cloud?.environments || [];
   const teams = status?.linear?.teams || [];
   const stores = status?.stores || {};
-  const absent = Object.entries(stores).filter(([, exists]) => !exists).map(([name]) => name);
-  const present = Object.entries(stores).filter(([, exists]) => exists).map(([name]) => name);
+  const absent = Object.entries(stores).filter(([, state]) => !state?.exists).map(([name]) => name);
+  const present = Object.entries(stores).filter(([, state]) => state?.exists).map(([name]) => name);
 
   return (
     <DashboardPage
@@ -74,7 +74,7 @@ export default function ConnectorsIntegrationsPage() {
                 <span className={`w-2 h-2 rounded-full ${env.discovery_status === "completed" ? "bg-emerald-500" : "bg-slate-600"}`} />
               </div>
               <p className="text-[11px] text-slate-400">{env.name} · {env.native_id}</p>
-              <p className="text-[10px] text-slate-500 mt-1">{env.asset_count} assets · discovery {env.discovery_status}</p>
+              <p className="text-[10px] text-slate-500 mt-1">{env.asset_count} asset{env.asset_count === 1 ? "" : "s"} · discovery {env.discovery_status}</p>
               <div className="mt-2"><StatusBadge status={env.discovery_status || env.status} /></div>
             </div>
           ))}
@@ -83,13 +83,15 @@ export default function ConnectorsIntegrationsPage() {
 
       <SectionCard title="Connector stores">
         <div className="space-y-2">
-          {Object.entries(stores).map(([name, exists]) => (
+          {Object.entries(stores).map(([name, state]) => (
             <div key={name} className="flex items-start gap-3 rounded-lg p-3" style={{ background: "#0a0f1e", border: "1px solid #1F2937" }}>
-              <span className={`mt-1 w-2 h-2 rounded-full ${exists ? "bg-emerald-500" : "bg-slate-600"}`} />
+              <span className={`mt-1 w-2 h-2 rounded-full ${state?.exists ? "bg-emerald-500" : "bg-slate-600"}`} />
               <div className="min-w-0">
                 <p className="text-xs font-semibold text-white">{name}</p>
                 <p className="text-[11px] text-slate-500">
-                  {exists ? "exists" : `does not exist — ${STORE_NOTES[name] || "no table behind this entity"} cannot be recorded`}
+                  {state?.exists
+                    ? `exists · ${state.rows} row(s) for this tenant${state.rows === 0 ? " — the store is there but nothing is configured in it" : ""}`
+                    : `does not exist — ${STORE_NOTES[name] || "no table behind this entity"} cannot be recorded`}
                 </p>
               </div>
             </div>

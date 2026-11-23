@@ -46,7 +46,7 @@ export default function IntegrationsSettingsPage() {
   const envs = status?.cloud?.environments || [];
   const stores = status?.stores || {};
   const notes = status?.notifications || {};
-  const absentStores = Object.entries(stores).filter(([, exists]) => !exists).map(([name]) => name);
+  const absentStores = Object.entries(stores).filter(([, state]) => !state?.exists).map(([name]) => name);
 
   return (
     <div className="min-h-screen p-4 space-y-4" style={{ background: "#050b14" }}>
@@ -130,6 +130,9 @@ export default function IntegrationsSettingsPage() {
         <p className="text-[11px] text-slate-500">
           {absentStores.length > 0
             ? `No store exists for: ${absentStores.join(", ")}. Integrations added by hand therefore have nowhere to be recorded, which is why none are listed.`
+              + (Object.entries(stores).some(([, st]) => st?.exists && st?.rows === 0)
+                  ? ` A store that does exist can still be empty: ${Object.entries(stores).filter(([, st]) => st?.exists).map(([n, st]) => `${n} ${st.rows}`).join(", ")}.`
+                  : "")
             : "Every connector store this page reads exists."}
         </p>
         <p className="text-[11px] text-slate-500">{status?.secrets?.reason}</p>
