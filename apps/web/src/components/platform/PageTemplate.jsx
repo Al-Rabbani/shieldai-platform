@@ -93,6 +93,12 @@ export function useAgentPage(agentId, task) {
       for (const key of payload._absent?.scalar || []) {
         if (payload[key] === undefined) payload[key] = "—";
       }
+      /* Collections the route could not measure arrive as empty arrays: omitting them made a page that reads
+       * `data?.top_alerts.length` throw and blank itself. The page's headline and basis line say why the list is empty,
+       * so an empty list here is not a claim that nothing was found. */
+      for (const key of payload._absent?.list || []) {
+        if (payload[key] === undefined) payload[key] = [];
+      }
       setData(payload);
       setStatus(payload.status ?? null);
       setEntitiesRead(payload._basis ? [payload._basis] : []);
