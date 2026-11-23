@@ -99,6 +99,7 @@ const ENTITY_ROUTES = {
   /* Item 26. CustomReportsPage runs real reports over six served sources; only the saved definition had no
    * table, and the refused Drive function already told the user the report was stored on the platform. */
   CustomReport: { path: "/custom-reports" },
+  RemediationTemplate: { path: "/remediation-templates" },
 
   /* The settings page reads and saves org settings; both calls used to be swallowed, so nothing was ever written. The
    * store is one row per tenant, saved with PUT /settings/org, and the response states which fields are enforced. */
