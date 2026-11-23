@@ -9,7 +9,7 @@ import { QUICK_ACTIONS } from "./agentFleetData";
  * Not claimed: no wake word and no always-on listening. The microphone is opened only while the button is recording,
  * and the track is stopped the moment recording ends.
  */
-export default function ChatInputBar({ input, setInput, onSend, loading, selectedAgent, priority, setPriority, onQuickAction }) {
+export default function ChatInputBar({ input, setInput, onSend, loading, selectedAgent, priority, setPriority, onQuickAction, missionMode, setMissionMode }) {
   const [recording, setRecording] = useState(false);
   const [busy, setBusy] = useState(false);
   const [voiceError, setVoiceError] = useState(null);
@@ -77,6 +77,21 @@ export default function ChatInputBar({ input, setInput, onSend, loading, selecte
           <span className="text-[11px] font-medium px-2.5 py-1 rounded-lg text-blue-300" style={{ background: "#141d35", border: "1px solid #1e3a5f" }}>
             {selectedAgent ? `${selectedAgent.replace(/^AI\s+/, "")}` : "🔮 GASCI Auto-Route"} ▾
           </span>
+          <button
+            onClick={() => setMissionMode?.(v => !v)}
+            title={missionMode
+              ? "MISSION: the planner picks the agents, they run in parallel, and one aggregate answer comes back. Costs about $0.07 and takes 30-60s."
+              : "ASK: one agent answers. Press to switch to MISSION, which plans the goal across several agents."}
+            className="text-[11px] font-bold px-2.5 py-1 rounded-lg flex-shrink-0"
+            style={{
+              background: missionMode ? "#3b1d5e" : "#141d35",
+              border: `1px solid ${missionMode ? "#7c3aed" : "#1e3a5f"}`,
+              color: missionMode ? "#e9d5ff" : "#64748b",
+              cursor: "pointer",
+            }}
+          >
+            {missionMode ? "⚡ MISSION · multi-agent" : "ASK · one agent"}
+          </button>
           <select value={priority} onChange={e => setPriority(e.target.value)} style={{ background: "#141d35", border: "1px solid #1e3a5f", borderRadius: 8, color: "#94a3b8", padding: "4px 8px", fontSize: 11 }}>
             <option value="normal">⚡ Priority: Normal</option>
             <option value="high">⚡ Priority: High</option>

@@ -160,7 +160,7 @@ export default function ChatMessage({ message, onRegenerate }) {
           </div>
 
           <div className="px-4 pb-2.5 text-[10px] text-slate-600">
-            {message.release ? `release ${message.release}` : "release unknown"} · {message.agents_count || message.agent_steps?.length || 0} agent(s) · Mission: {message.mission_id ? message.mission_id.slice(0, 16) : "none returned"} · {message.command_type || "—"}
+            {message.release ? `release ${message.release}` : "release unknown"} · {message.agents_count || message.agent_steps?.length || 0} agent(s) · Mission: {message.mission_id ? message.mission_id.slice(0, 16) : "none returned"} · {message.command_type || "—"}{message.cost_usd != null ? ` · $${message.cost_usd.toFixed(4)}` : ""}
           </div>
         </div>
       </div>

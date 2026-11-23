@@ -27,6 +27,7 @@ from gds_api import (
     commands_api,
     conversations,
     copilot_api,
+    copilot_orchestrate_api,
     scheduler_api,
     engineering_api,
     evidence,
@@ -213,6 +214,7 @@ app.include_router(compliance_api.router)
 app.include_router(linear_api.router)
 app.include_router(integrations_api.router)
 app.include_router(copilot_api.router)
+app.include_router(copilot_orchestrate_api.router)
 app.include_router(scheduler_api.router)
 app.include_router(mssp_api.router)
 app.include_router(scans_api.router)

@@ -26,9 +26,26 @@ function detectCommandType(text) {
   return "auto";
 }
 
+/* Per-agent presentation for the mission cards. Unknown agents fall back to a neutral robot rather than inventing a
+ * colour or an identity the registry does not carry. */
+const AGENT_LOOK = {
+  "ai-chief-ciso": { emoji: "👑", color: "#a855f7" },
+  "ai-soc-director": { emoji: "🛡️", color: "#38bdf8" },
+  "ai-vuln-director": { emoji: "🔍", color: "#f59e0b" },
+  "ai-cloud-director": { emoji: "☁️", color: "#22d3ee" },
+  "ai-threat-hunter": { emoji: "🎯", color: "#f43f5e" },
+  "ai-incident-commander": { emoji: "🚨", color: "#ef4444" },
+  "ai-compliance-director": { emoji: "📋", color: "#4ade80" },
+  "ai-risk-director": { emoji: "📊", color: "#eab308" },
+  "ai-remediation-director": { emoji: "🔧", color: "#84cc16" },
+  "ai-report-agent": { emoji: "📝", color: "#94a3b8" },
+};
+
 export default function GDSCoPilotPage() {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
+  /* Item 44: ASK (one agent, cheap) or MISSION (planner picks agents, costs money). */
+  const [missionMode, setMissionMode] = useState(false);
   const [loading, setLoading] = useState(false);
   const [priority, setPriority] = useState("normal");
   const [selectedAgent, setSelectedAgent] = useState(null);
@@ -61,6 +78,37 @@ export default function GDSCoPilotPage() {
     setMission({ agentLabel: selectedAgent || null, commandType, startedAt: Date.now() });
 
     try {
+      if (missionMode) {
+        /* A real multi-agent mission: the planner chooses the agents, they run under governance, and one aggregate
+         * answer comes back. No progress events exist, so the screen shows elapsed time only. */
+        const run = await base44.platform.orchestrateMission(userInput);
+        setMessages(prev => [...prev, {
+          role: "assistant",
+          content: run.answer || "The mission finished without an aggregate answer.",
+          agent_steps: (run.agents || []).map(a => {
+            const look = AGENT_LOOK[a.agent_id] || { emoji: "🤖", color: "#38bdf8" };
+            return {
+              agent: a.agent_id || "unknown agent",
+              emoji: look.emoji,
+              color: look.color,
+              duration_ms: a.duration_ms,
+              output: a.summary || a.error || "This agent returned no summary.",
+            };
+          }),
+          agents_used: (run.agents || []).map(a => a.agent_id),
+          agents_count: run.total_agents,
+          mission_id: run.mission_id,
+          command_type: "MISSION",
+          total_duration_ms: run.duration_ms,
+          cost_usd: run.cost_usd,
+          release: version?.sha ? version.sha.slice(0, 7) : null,
+          source_input: userInput,
+        }]);
+        setLoading(false);
+        setMission(null);
+        base44.platform.unreadNotificationCount().then(setUnread).catch(() => {});
+        return;
+      }
       const result = await invokeAction("gdsAgentOS", {
       goal: userInput,
       command_type: commandType,
@@ -124,7 +172,7 @@ export default function GDSCoPilotPage() {
           )}
         </div>
 
-        <ChatInputBar
+        <ChatInputBar missionMode={missionMode} setMissionMode={setMissionMode}
           input={input}
           setInput={setInput}
           onSend={() => sendMessage()}

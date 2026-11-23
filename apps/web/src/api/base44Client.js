@@ -441,6 +441,30 @@ class NotOnThisPlatform extends Error {
 
 /* Item 40. The voice routes answer with MP3 bytes, not JSON, so they cannot go through request(): it reads the body as
  * text and would hand back null. This returns the Blob and the response headers the routes set. */
+/* A structured error detail must be read out, not stringified into "[object Object]". FastAPI returns a dict detail
+ * for a prompt-guard refusal ({error, attack_type, matched_rules, severity, recorded, note}) and a list for validation
+ * errors; that refusal is exactly the case where the operator needs to know which rule fired and whether it was recorded. */
+function readableErrorDetail(value, fallback) {
+  if (value == null) return fallback;
+  if (typeof value === 'string') return value;
+  if (Array.isArray(value)) {
+    return value
+      .map((v) => (v && v.msg ? `${(v.loc || []).slice(-1)[0] || 'field'}: ${v.msg}` : JSON.stringify(v)))
+      .join('; ');
+  }
+  if (typeof value === 'object') {
+    const head = value.error || value.detail || value.message || fallback;
+    const extras = [];
+    if (value.attack_type) extras.push(`attack type ${value.attack_type}`);
+    if (value.matched_rules?.length) extras.push(`rules ${value.matched_rules.join(', ')}`);
+    if (value.severity) extras.push(`severity ${value.severity}`);
+    if (value.recorded !== undefined) extras.push(value.recorded ? 'attempt recorded' : 'attempt could NOT be recorded');
+    if (value.note) extras.push(value.note);
+    return extras.length ? `${head} (${extras.join('; ')})` : String(head);
+  }
+  return String(value);
+}
+
 async function requestBlob(path, { method = 'POST', body } = {}) {
   const response = await fetch(`${API}${path}`, {
     method,
@@ -457,8 +481,9 @@ async function requestBlob(path, { method = 'POST', body } = {}) {
     const text = await response.text();
     let detail = response.statusText;
     try { detail = JSON.parse(text).detail || detail; } catch { detail = text || detail; }
-    const error = new Error(`${method} ${path} failed: ${detail}`);
+    const error = new Error(`${method} ${path} failed: ${readableErrorDetail(detail, response.statusText)}`);
     error.status = response.status;
+    error.detail = detail;
     throw error;
   }
   const blob = await response.blob();
@@ -507,8 +532,9 @@ async function request(path, { method = 'GET', body, query } = {}) {
   }
   if (!response.ok) {
     const detail = (payload && (payload.detail || payload.message)) || response.statusText;
-    const error = new Error(`${method} ${path} failed: ${detail}`);
+    const error = new Error(`${method} ${path} failed: ${readableErrorDetail(detail, response.statusText)}`);
     error.status = response.status;
+    error.detail = detail;
     throw error;
   }
   return payload;
@@ -881,6 +907,10 @@ export const base44 = {
     remember: (memory) => request('/copilot/memory', { method: 'POST', body: memory }),
     forget: (memoryId) => request(`/copilot/memory/${memoryId}`, { method: 'DELETE' }),
     /* Item 42. The autonomous loop: a host cron job, read and controlled through these routes. */
+    /* Item 44. Plans the goal across agents and runs them under governance. Not the same call as a question: it costs
+     * roughly $0.07 measured, takes 30-60s, and streams nothing. */
+    orchestrateMission: (goal, options = {}) =>
+      request('/copilot/mission/orchestrate', { method: 'POST', body: { goal, allow_writes: !!options.allow_writes } }),
     scheduler: () => request('/copilot/scheduler'),
     pauseSchedule: (name) => request(`/copilot/scheduler/${encodeURIComponent(name)}/pause`, { method: 'POST', body: {} }),
     resumeSchedule: (name) => request(`/copilot/scheduler/${encodeURIComponent(name)}/resume`, { method: 'POST', body: {} }),
