@@ -45,6 +45,9 @@ test('unserved sources are stated rather than left silent', () => {
   assert.doesNotMatch(code, /No threat-intel feed is served here/);
   assert.match(code, /Derived from this tenant's own findings that carry a CVE/);
   assert.match(code, /No advisory, malware, ransomware or dark-web feed/);
-  /* An empty rail still gives its true reason instead of a bare silence. */
-  assert.match(code, /It is empty because no such finding is/);
+  /* An empty rail still says something, but only after the reads settle, and only about the read: an in-flight empty
+   * array must not state that the register holds nothing. */
+  assert.match(code, /loaded && threats\.length === 0/);
+  assert.match(code, /This read returned none, which is not the/);
+  assert.doesNotMatch(code, /It is empty because no such finding is/);
 });
