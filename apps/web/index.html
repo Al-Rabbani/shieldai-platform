@@ -18,25 +18,6 @@
     <meta name="twitter:image" content="https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=1200&h=630&fit=crop" />
   </head>
   <body>
-    <script>
-      // TEMPORARY DIAGNOSTIC: render boot failures into the page so they can be read headlessly.
-      (function () {
-        function show(label, detail) {
-          var el = document.getElementById('gds-boot-error') || document.createElement('pre');
-          el.id = 'gds-boot-error';
-          el.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;color:#ff6b6b;background:#1a0000;padding:16px;font:12px/1.5 monospace;white-space:pre-wrap;margin:0';
-          el.textContent = label + '\n' + detail;
-          document.body.appendChild(el);
-        }
-        window.addEventListener('error', function (e) {
-          show('BOOT ERROR: ' + (e.message || 'unknown'), (e.filename || '') + ':' + (e.lineno || '') + ':' + (e.colno || ''));
-        });
-        window.addEventListener('unhandledrejection', function (e) {
-          var r = e.reason || {};
-          show('PROMISE REJECTION: ' + (r.message || r), r.stack || '');
-        });
-      })();
-    </script>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
