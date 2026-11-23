@@ -17,6 +17,7 @@ const SECTIONS = [
     { icon: LayoutDashboard, label: "My Dashboard", path: "/my-dashboard" },
     { icon: Bot, label: "AI Co-Pilot", path: "/copilot" },
     { icon: Brain, label: "Co-Pilot Memory", path: "/copilot/memory" },
+    { icon: Timer, label: "Co-Pilot Scheduler", path: "/copilot/scheduler" },
     { icon: Bell, label: "Notifications", path: "/notifications" },
   ]},
   { label: "OFFENSIVE", color: "#ef4444", items: [

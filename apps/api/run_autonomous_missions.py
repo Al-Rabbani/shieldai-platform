@@ -19,6 +19,7 @@ import json
 import os
 import sys
 import time
+import urllib.parse
 import urllib.request
 import urllib.error
 from datetime import datetime, timezone
@@ -75,6 +76,17 @@ def save_json(path, data):
     with open(tmp, "w") as f:
         json.dump(data, f, indent=2)
     os.replace(tmp, path)
+
+
+
+def guard(name, key):
+    """Ask the API whether this run is allowed right now. The pause flag and the daily cost cap are enforced there."""
+    return http_json("GET", f"/copilot/scheduler/guard?name={urllib.parse.quote(name)}", key=key)
+
+
+def record_run(payload, key):
+    """Record the outcome. The API sums the cost from cost_records by mission id, so it is not supplied here."""
+    return http_json("POST", "/copilot/scheduler/runs", payload, key)
 
 
 def run_mission(entry, key):
@@ -150,8 +162,34 @@ def main():
         if now - last < interval:
             continue
 
+        verdict = guard(name, key)
+        if not verdict.get("allow"):
+            reason = verdict.get("reason") or f"guard refused: {verdict}"
+            print(f"[{datetime.now(timezone.utc).isoformat()}] skipped mission: {name} - {reason}", flush=True)
+            record_run({
+                "schedule_name": name,
+                "tenant_id": verdict.get("tenant_id"),
+                "status": "skipped",
+                "detail": reason,
+            }, key)
+            continue
+
         print(f"[{datetime.now(timezone.utc).isoformat()}] running mission: {name}", flush=True)
+        started = datetime.now(timezone.utc)
         summary = run_mission(entry, key)
+        record_run({
+            "schedule_name": name,
+            "tenant_id": verdict.get("tenant_id"),
+            "status": "completed" if summary.get("ok") else "failed",
+            "mission_id": summary.get("mission_id"),
+            "agents": summary.get("agents"),
+            "agents_succeeded": summary.get("agents_succeeded"),
+            "tool_calls": summary.get("tool_calls"),
+            "duration_ms": summary.get("duration_ms"),
+            "detail": summary.get("error"),
+            "started_at": started.isoformat(),
+            "completed_at": datetime.now(timezone.utc).isoformat(),
+        }, key)
 
         state.setdefault(name, {})
         state[name]["last_run_ts"] = int(now)

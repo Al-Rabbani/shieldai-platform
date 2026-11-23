@@ -72,7 +72,7 @@ def test_the_capability_map_names_the_absences_instead_of_leaving_them_to_infere
     source = (API / "copilot_api.py").read_text()
     for absence in ("autonomous_scheduler", "streaming", "external_agent_protocols", "durable_operator_preferences"):
         assert absence in source, f"{absence} must be stated, not omitted"
-    assert "No scheduler starts a mission on its own" in source
+    assert "A cron job on this host runs" in source
     assert "No A2A or MCP endpoint is served" in source
 
 
@@ -160,3 +160,11 @@ def test_the_capability_map_no_longer_claims_there_is_no_preference_store():
     src = (API / "copilot_api.py").read_text()
     assert '"available": False,\n                "reason": "There is no store of standing preferences' not in src
     assert '"read_by_a_mission": True' in src
+
+
+def test_the_scheduler_claim_was_corrected_not_quietly_swapped():
+    """Item 42: the map said no scheduler existed. One did. The correction must be visible in the payload."""
+    src = (API / "copilot_api.py").read_text()
+    assert '"available": True,\n                "how": "A cron job on this host' in src
+    assert '"corrected"' in src
+    assert "No scheduler starts a mission on its own" not in src

@@ -227,8 +227,16 @@ async def copilot_capabilities(
             "approval_gate": True,
             "writes_default_off": True,
             "autonomous_scheduler": {
-                "available": False,
-                "reason": "No scheduler starts a mission on its own. Every mission here was requested by a person or a page.",
+                "available": True,
+                "how": "A cron job on this host runs /opt/gds-os/apps/api/run_autonomous_missions.py every 30 minutes "
+                       "under flock, against a schedule registry (/opt/gds-os/mission_registry.json). Runs are recorded "
+                       "in copilot_scheduler_log and reported by GET /copilot/scheduler.",
+                "corrected": "An earlier version of this map said no scheduler existed. That was wrong: the cron entry has "
+                             "been launching missions since October. What was missing was visibility and a control, not a "
+                             "scheduler.",
+                "visible_from": "GET /copilot/scheduler",
+                "limits": "One registry entry today; pausing writes interval 0 into the file, and a mission already "
+                          "running is not cancelled.",
             },
             "streaming": {
                 "available": False,

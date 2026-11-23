@@ -880,6 +880,10 @@ export const base44 = {
     memories: () => request('/copilot/memory'),
     remember: (memory) => request('/copilot/memory', { method: 'POST', body: memory }),
     forget: (memoryId) => request(`/copilot/memory/${memoryId}`, { method: 'DELETE' }),
+    /* Item 42. The autonomous loop: a host cron job, read and controlled through these routes. */
+    scheduler: () => request('/copilot/scheduler'),
+    pauseSchedule: (name) => request(`/copilot/scheduler/${encodeURIComponent(name)}/pause`, { method: 'POST', body: {} }),
+    resumeSchedule: (name) => request(`/copilot/scheduler/${encodeURIComponent(name)}/resume`, { method: 'POST', body: {} }),
     /* Speech to text. The transcript comes back for review; nothing is sent on the operator's behalf. */
     transcribe: (audioBlob, filename) => {
       const form = new FormData();
