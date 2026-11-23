@@ -50,9 +50,11 @@ function stubFetch(responses) {
 
 test('a refused entity returns nothing and records its name', async () => {
   const { base44, unavailableEntities } = await loadAdapter();
-  const rows = await base44.entities.DarkWebAlert.list();
+  /* DarkWebAlert used to stand here, but item 37 gave it a route (GET /intel/dark-web) that refuses in words. An entity
+   * with no route at all is the case this test is about, and SecretLeakageAlert is one: no secret scanner exists. */
+  const rows = await base44.entities.SecretLeakageAlert.list();
   assert.deepEqual(rows, []);
-  assert.ok(unavailableEntities().includes('DarkWebAlert'));
+  assert.ok(unavailableEntities().includes('SecretLeakageAlert'));
 });
 
 test('a refused entity refuses to write', async () => {
