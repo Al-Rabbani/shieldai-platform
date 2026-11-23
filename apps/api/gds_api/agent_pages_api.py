@@ -133,14 +133,13 @@ SELECT framework AS name,
        count(*) FILTER (WHERE verdict_source = 'automated' AND lower(status) = 'pass') AS passing,
        count(*) FILTER (WHERE verdict_source = 'automated' AND lower(status) = 'fail') AS failing
 FROM compliance_assessments
-WHERE tenant_id = :tid
 GROUP BY framework
 ORDER BY (count(*) FILTER (WHERE verdict_source = 'automated' AND lower(status) = 'pass'))::float
          / NULLIF(count(*) FILTER (WHERE verdict_source = 'automated' AND lower(status) IN ('pass','fail')), 0) ASC NULLS LAST
 LIMIT 3
 """
 
-_FRAMEWORK_COUNT_SQL = "SELECT count(DISTINCT framework) AS total FROM compliance_assessments WHERE tenant_id = :tid"
+_FRAMEWORK_COUNT_SQL = "SELECT count(DISTINCT framework) AS total FROM compliance_assessments"
 
 _TOP_FINDINGS_SQL = """
 SELECT title, severity, cvss, cve
@@ -366,7 +365,9 @@ async def task_compliance(db, tid: str) -> dict[str, Any]:
         "frameworks": total["total"],
         "top_failing": [dict(r) for r in rows],
         "_basis": "Frameworks are counted from compliance_assessments, the same verdict source GET /compliance/frameworks reads, so a "
-                  "framework with verdicts but no catalogue row is not dropped. top_failing lists the three lowest pass rates.",
+                  "framework with verdicts but no catalogue row is not dropped. Compliance verdicts are platform-wide: this table "
+                  "carries no tenant column, which is why the header strip counts them the same way. top_failing lists the "
+                  "three lowest pass rates.",
     }
 
 
