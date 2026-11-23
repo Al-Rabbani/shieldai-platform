@@ -36,6 +36,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from gds_api.db import get_db
 from gds_api.security import CurrentUser, require_permission
+from gds_api.org_settings_api import hours_override
 
 router = APIRouter(prefix="/findings", tags=["findings-escalation"])
 
@@ -111,13 +112,17 @@ def _iso(value):
     return value.isoformat() if isinstance(value, datetime) else value
 
 
-def _plan(rows, mod) -> list[dict]:
-    """Rows past their severity policy whose band is not already recorded."""
+def _plan(rows, mod, overrides: dict | None = None) -> list[dict]:
+    """Rows past their severity policy whose band is not already recorded.
+
+    overrides carries the tenant's own SLA hours per severity; a severity it does not name keeps the platform
+    ladder, so a tenant that sets only a critical limit does not silently unset the other two.
+    """
     plan = []
     for row in rows:
         m = row._mapping
         severity = (m["severity"] or "").lower()
-        hours = mod.POLICY_HOURS.get(severity)
+        hours = (overrides or {}).get(severity) or mod.POLICY_HOURS.get(severity)
         if not hours:
             continue
         age = float(m["age_hours"] or 0.0)
@@ -152,7 +157,8 @@ async def escalate_stale(
 
     params = {"tenant_id": current_user.tenant_id}
     rows = (await db.execute(text(_OPEN_SQL), params)).fetchall()
-    plan = _plan(rows, mod)
+    overrides = await hours_override(db, current_user.tenant_id)
+    plan = _plan(rows, mod, overrides)
 
     by_band: dict[str, int] = {}
     by_severity: dict[str, int] = {}
@@ -198,6 +204,8 @@ async def escalate_stale(
         "by_band": by_band,
         "by_severity": by_severity,
         "policy_hours": mod.POLICY_HOURS,
+        "effective_hours": {**mod.POLICY_HOURS, **overrides},
+        "policy_source": "tenant settings" if overrides else "platform default ladder",
         "oldest_open_detected_at": _iso(oldest),
         "preview": plan[:10],
         # No Slack send happens here: delivery of an alert is the webhook's job, and the browser must not hold it.

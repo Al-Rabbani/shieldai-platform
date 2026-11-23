@@ -89,6 +89,21 @@ const ENTITY_ROUTES = {
   /* The strategy library creates, edits and deletes; the triage queue reads published ones by times_reused and bumps the
    * counter when applied. No strategy table existed, so every write vanished and the library was always empty. */
   FixStrategy: { path: "/fix-strategies" },
+  /* The settings page reads and saves org settings; both calls used to be swallowed, so nothing was ever written. The
+   * store is one row per tenant, saved with PUT /settings/org, and the response states which fields are enforced. */
+  OrgSettings: {
+    path: "/settings/org",
+    single: true,
+    upsert: "PUT",
+    /* The route answers {settings, stored, enforced_by, basis}: the page reads the fields at the top level and
+     * checks `stored`, so the envelope is flattened here rather than in every page. */
+    unwrap: (payload) => ({
+      ...(payload?.settings || {}),
+      stored: payload?.stored,
+      enforced_by: payload?.enforced_by,
+      basis: payload?.basis,
+    }),
+  },
   AuthorizedTarget: { path: "/red-team/targets" },
   RedTeamStatus: { path: "/red-team/status", single: true },
   RedTeamOverview: { path: "/red-team/overview", single: true },
@@ -579,6 +594,9 @@ function applyFields(name, row) {
   return out;
 }
 
+/* A single-object route may publish an envelope; `unwrap` names how to flatten it, so pages keep reading flat fields. */
+const singleRow = (route, payload) => (route.unwrap ? route.unwrap(payload) : payload);
+
 function entity(name) {
   const route = ENTITY_ROUTES[name];
 
@@ -610,7 +628,7 @@ function entity(name) {
       const payload = await request(path, {
         query: { sort: typeof sort === 'string' ? sort : undefined, limit },
       });
-      return (route.single ? [payload] : rows(payload)).map((row) => applyFields(name, row));
+      return (route.single ? [singleRow(route, payload)] : rows(payload)).map((row) => applyFields(name, row));
     },
     async filter(query, sortOrOptions, limit) {
       if (!route) {
@@ -643,14 +661,14 @@ function entity(name) {
         const merged = [];
         for (const value of op.$in) {
           const payload = await request(path, { query: { ...base, [field]: value } });
-          merged.push(...(route.single ? [payload] : rows(payload)));
+          merged.push(...(route.single ? [singleRow(route, payload)] : rows(payload)));
         }
         const trimmed = limit != null ? merged.slice(0, limit) : merged;
         return trimmed.map((row) => applyFields(name, row));
       }
 
       const payload = await request(path, { query: params });
-      return (route.single ? [payload] : rows(payload)).map((row) => applyFields(name, row));
+      return (route.single ? [singleRow(route, payload)] : rows(payload)).map((row) => applyFields(name, row));
     },
     /* The platform's own count for an entity that publishes one. A page that shows a total must read this,
      * because a fetched page is capped and can only ever describe itself. */
@@ -668,6 +686,17 @@ function entity(name) {
       }
       const { path } = guard('get');
       return request(`${path}/${encodeURIComponent(id)}`);
+    },
+    /* One row per tenant (or per scope) is saved with a PUT at the collection path, not a POST that appends. Pages that
+     * edit a single record call upsert() so a second save updates instead of duplicating. */
+    async upsert(data) {
+      if (!route || !route.upsert) {
+        unmapped.add(name);
+        throw new NotOnThisPlatform(name, 'Upsert');
+      }
+      const { path } = guard('upsert');
+      const payload = await request(path, { method: route.upsert, body: toPlatformBody(name, data) });
+      return route.single ? singleRow(route, payload) : payload;
     },
     async create(data) {
       const { path } = guard('create');

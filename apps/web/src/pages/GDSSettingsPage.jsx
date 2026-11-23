@@ -25,6 +25,7 @@ export default function GDSSettingsPage() {
   const [mfaRequired, setMfaRequired] = useState(false);
   const [dataResidency, setDataResidency] = useState("eu");
   const [retentionDays, setRetentionDays] = useState(90);
+  const [saveError, setSaveError] = useState(null);
 
   useEffect(() => {
     base44.entities.OrgSettings.list("-created_date", 1).then(list => {
@@ -43,21 +44,28 @@ export default function GDSSettingsPage() {
         setDataResidency(o.data_residency || dataResidency);
         setRetentionDays(o.retention_days ?? retentionDays);
       }
-    }).catch(() => {}).finally(() => setLoading(false));
+    }).catch((error) => {
+      /* A swallowed read leaves the form showing defaults that look like stored values. Say it failed. */
+      setSaveError(error?.message || "The platform's settings could not be read; the values below are defaults, not stored settings.");
+    }).finally(() => setLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  /* This used to swallow both calls with `.catch(() => {})` and then show "Settings saved" regardless, so a save that
+   * wrote nothing reported success. It now surfaces the failure and only claims success when the platform confirms it. */
   async function save(fields) {
     setSaving(true);
+    setSaveError(null);
     const payload = { organization_name: orgName, domain, industry, sla_critical_hours: slaCritical, sla_high_hours: slaHigh, sla_medium_hours: slaMedium, auto_triage_enabled: autoTriage, auto_fix_enabled: autoFix, ci_gate_enabled: ciGate, data_residency: dataResidency, retention_days: retentionDays, ...fields };
-    if (org?.id) {
-      await base44.entities.OrgSettings.update(org.id, payload).catch(() => {});
-    } else {
-      const created = await base44.entities.OrgSettings.create(payload).catch(() => null);
-      if (created) setOrg(created);
+    try {
+      const saved = await base44.entities.OrgSettings.upsert(payload);
+      setOrg(saved || null);
+      toast.success(saved?.stored === false ? "Saved, but the platform reported it was not stored" : "Settings saved");
+    } catch (error) {
+      setSaveError(error?.message || "The platform rejected the save.");
+      toast.error("Settings were not saved");
     }
     setSaving(false);
-    toast.success("Settings saved");
   }
 
   if (loading) {
@@ -68,6 +76,16 @@ export default function GDSSettingsPage() {
     <div className="min-h-screen p-4 space-y-4" style={{ background: "#050b14" }}>
       <h1 className="text-xl font-bold text-white">⚙️ PLATFORM SETTINGS</h1>
       <SettingsTabs active={tab} onChange={setTab} />
+      {saveError && (
+        <p className="text-[11px] text-red-400 rounded-lg px-3 py-2" style={{ background: "#1f1215", border: "1px solid #7f1d1d" }}>
+          {saveError}
+        </p>
+      )}
+      <p className="text-[10px] text-slate-500 max-w-xl">
+        Only the SLA hours change platform behaviour: they decide when a finding is escalated to a human. Auto-triage,
+        auto-fix, the CI-gate switch, the MFA requirement, retention and residency are recorded here but no engine on this
+        platform reads them yet.
+      </p>
 
       <div className="rounded-xl p-4 max-w-xl space-y-3" style={{ background: "#111827", border: "1px solid #1F2937" }}>
         {tab === "General" && (
