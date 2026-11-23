@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
+import AbsentStore from "@/components/platform/AbsentStore";
 
 export default function ZeroTrustPage() {
   const [policies, setPolicies] = useState([]);
@@ -36,7 +37,7 @@ export default function ZeroTrustPage() {
           <div className="rounded-xl overflow-hidden" style={{ background: "#111827", border: "1px solid #1F2937" }}>
             <p className="text-xs font-bold uppercase tracking-wider text-slate-400 px-4 pt-3 pb-2">Zero Trust Policies</p>
             {policies.length === 0 ? (
-              <p className="text-sm text-slate-500 px-4 pb-4">No zero trust policies configured.</p>
+              <AbsentStore entity="ZeroTrustPolicy" what="Zero trust policies:" className="mx-4 mb-4" />
             ) : (
               <table className="w-full text-sm">
                 <thead>

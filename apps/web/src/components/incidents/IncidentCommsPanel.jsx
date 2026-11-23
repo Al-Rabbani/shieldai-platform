@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { base44 } from "@/api/base44Client";
+import AbsentStore from "@/components/platform/AbsentStore";
 
 export default function IncidentCommsPanel({ incidentId }) {
   const [messages, setMessages] = useState([]);
@@ -21,23 +22,16 @@ export default function IncidentCommsPanel({ incidentId }) {
 
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
-  async function send(e) {
-    e.preventDefault();
-    if (!text.trim() || sending) return;
-    setSending(true);
-    await base44.entities.IncidentComment.create({
-      incident_id: incidentId, message: text.trim(), author_name: me?.full_name || "Responder",
-    }).catch(() => {});
-    setText("");
-    setSending(false);
-  }
+  /* The send() that used to live here wrote to IncidentComment, which has no store on this platform, and swallowed
+   * the failure with .catch(() => {}). The box cleared and the message was discarded, so the panel reported a
+   * delivered update that never existed. Posting is disabled below until there is somewhere to post to. */
 
   return (
     <div>
-      <p className="text-[10px] text-slate-500 uppercase mb-1">🗨️ Live War Room Chat</p>
+      <p className="text-[10px] text-slate-500 uppercase mb-1">🗨️ War room chat</p>
       <div className="rounded-lg p-2 space-y-2 max-h-48 overflow-y-auto" style={{ background: "#0a0f1e", border: "1px solid #1F2937" }}>
         {messages.length === 0 ? (
-          <p className="text-xs text-slate-600 py-2 text-center">No updates yet. Say something to the team.</p>
+          <AbsentStore entity="IncidentComment" className="my-1" />
         ) : (
           messages.map((m, i) => (
             <div key={m.id || i} className="text-xs">
@@ -48,13 +42,10 @@ export default function IncidentCommsPanel({ incidentId }) {
         )}
         <div ref={endRef} />
       </div>
-      <form onSubmit={send} className="flex gap-2 mt-2">
-        <input
-          value={text} onChange={e => setText(e.target.value)} placeholder="Post an update..."
-          className="flex-1 rounded-lg px-3 py-2 text-xs bg-slate-900 border border-slate-700 text-white"
-        />
-        <button type="submit" disabled={sending} className="px-3 py-2 rounded-lg text-xs font-bold bg-blue-500 text-white hover:bg-blue-600 transition disabled:opacity-50">Send</button>
-      </form>
+      <p className="text-[11px] mt-2 leading-relaxed" style={{ color: "#d7c48a" }}>
+        Posting is disabled: there is no incident-comment store on this platform, so an update posted here would be
+        discarded rather than delivered to the team.
+      </p>
     </div>
   );
 }

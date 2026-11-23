@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
+import AbsentStore from "@/components/platform/AbsentStore";
 
 const EVENT_TYPES = ["detection", "triage", "containment", "eradication", "recovery", "notification", "escalation", "other"];
 const EVENT_META = {
@@ -56,7 +57,7 @@ export default function IncidentTimelineModal({ incident, onClose }) {
         {loading ? (
           <div className="w-6 h-6 border-2 border-t-blue-500 border-white/10 rounded-full animate-spin mx-auto my-8" />
         ) : sorted.length === 0 ? (
-          <p className="text-sm text-slate-500">No phases logged yet. Add the first milestone below.</p>
+          <AbsentStore entity="IncidentTimeline" what="Incident phases:" />
         ) : (
           <div className="space-y-0">
             {sorted.map((ev, i) => {
@@ -96,7 +97,7 @@ export default function IncidentTimelineModal({ incident, onClose }) {
             </div>
           </form>
         ) : (
-          <button onClick={() => setShowForm(true)} className="mt-3 px-3 py-1.5 rounded-lg text-xs font-medium bg-blue-500/15 text-blue-400 border border-blue-500/30 hover:bg-blue-500/25 transition">+ Log Milestone</button>
+          <button disabled title="IncidentTimeline has no store on this platform, so a logged milestone would be discarded rather than recorded." className="mt-3 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed">+ Log Milestone (not stored)</button>
         )}
 
         <button onClick={onClose} className="mt-6 px-4 py-2 rounded-lg text-xs font-medium bg-slate-700/50 text-slate-300 hover:bg-slate-700 transition">Close</button>

@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { History, RefreshCw, Cloud, FileText, ExternalLink, ShieldCheck, FolderLock } from "lucide-react";
+import AbsentStore from "@/components/platform/AbsentStore";
 
 const EVENT_STYLE = {
   evidence_created: { label: "Evidence collected", color: "text-emerald-300 bg-emerald-500/15 border-emerald-500/40" },
@@ -163,7 +164,7 @@ export default function ComplianceAuditLogPage() {
       ) : visible.length === 0 ? (
         <div className="rounded-xl py-16 text-center" style={{ background: "#111827", border: "1px solid #1F2937" }}>
           <ShieldCheck size={22} className="mx-auto text-slate-600 mb-2" />
-          <p className="text-xs text-slate-500">No evidence activity in this range yet.</p>
+          <AbsentStore entity="ComplianceEvidenceAudit" what="Evidence activity:" />
         </div>
       ) : (
         <div className="space-y-1.5">

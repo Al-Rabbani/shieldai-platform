@@ -1,9 +1,10 @@
 import React from "react";
+import AbsentStore from "@/components/platform/AbsentStore";
 
 const SEV_COLOR = { critical: "bg-red-500/20 text-red-400", high: "bg-orange-500/20 text-orange-400", medium: "bg-yellow-500/20 text-yellow-400", low: "bg-blue-500/20 text-blue-400" };
 
 export default function IdentityThreatsTable({ threats }) {
-  if (threats.length === 0) return <p className="text-sm text-slate-500">No identity threats detected.</p>;
+  if (threats.length === 0) return <AbsentStore entity="IdentityThreat" what="Identity threats:" />;
   return (
     <div className="space-y-1.5">
       {threats.map((t, i) => (
