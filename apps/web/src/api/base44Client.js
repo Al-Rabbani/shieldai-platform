@@ -190,6 +190,19 @@ const ENTITY_ROUTES = {
 const ABSENT = Symbol('absent');
 
 const REFUSAL_REASONS = {
+  /* Item 34: these four have no table at all. Reading one returns an empty list, which a page renders as "none". */
+  SecretReference:
+    'There is no secrets inventory on this platform: credentials live in the host environment, so no secret can be '
+    + 'listed or rotated here. What is configured, by name only, is served at GET /secrets/posture.',
+  CertificateRecord:
+    'There is no certificate store on this platform. The certificate each hostname actually serves, with its expiry, '
+    + 'is read from a live TLS handshake at GET /secrets/posture.',
+  SecretLeakageAlert:
+    'No secret scanner runs on this platform, so no leakage alert exists to record or read. GET /secrets/posture '
+    + 'states which scanners were looked for and found absent.',
+  SecretAccessPolicy:
+    'There is no per-secret access-policy store. Credential access is enforced by the API\'s own permission checks, '
+    + 'not by policy records a page could list or edit.',
   DarkWebAlert:
     'No dark-web collector exists on this platform and there is no alert store, so no leak, credential or chatter alert '
     + 'is recorded. The dark-web routes serve on-demand email and domain lookups only, which return what a lookup found '
@@ -816,6 +829,14 @@ export const base44 = {
   platform: {
     async agentPage(task, agent) {
       return request('/platform/agent-page', { query: { task, agent } });
+    },
+    /* Item 34. The secrets page used to read four entities that have no table, so it printed four zeros over "No
+     * secrets registered / No certificates tracked / No leakage alerts / No access policies configured" - a clean bill
+     * of health for an estate nothing had measured. One route answers all of it from what exists: a live TLS handshake
+     * per hostname, credential NAMES from the process environment (never values), the api_keys table, and named
+     * refusals for the scanner and policy stores that do not exist. */
+    async secretsPosture() {
+      return request('/secrets/posture');
     },
   },
 
