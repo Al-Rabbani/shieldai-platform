@@ -4,10 +4,12 @@ Until now compliance existed only as numbers inside mission reports: the databas
 rows in compliance_assessments and the platform quotes 22.2% everywhere, but OpenAPI offered
 no GET for it, so no client could show what the platform claims.
 
-HONEST LIMIT, stated in every response: compliance_assessments has no tenant_id and no RLS.
-It is a single global assessment set, so `tenant_scoped` is false. This endpoint therefore does
-not pretend the figures are per-tenant. Partitioning compliance per tenant is a schema decision
-(control status genuinely differs per customer) and is not faked here.
+SCOPE, stated in every response: the VERDICTS and the SCOPE DECISIONS are per tenant.
+compliance_assessments and compliance_scope_determinations carry a tenant_id and FORCE RLS
+(migration 074), and every route below binds the caller's tenant before it reads. The framework and
+control catalogues (compliance_frameworks, compliance_controls) are shared reference data describing
+what the standard requires, so they stay global on purpose: two customers must not disagree about
+what PCI-DSS contains.
 """
 from __future__ import annotations
 
@@ -21,9 +23,22 @@ from gds_api.security import CurrentUser, get_current_user
 router = APIRouter(prefix="/compliance", tags=["compliance"])
 
 TENANT_SCOPE_NOTE = (
-    "compliance_assessments is a global assessment set with no tenant_id or RLS; "
-    "these figures are platform-wide, not per-tenant."
+    "These verdicts are this tenant's own: compliance_assessments and compliance_scope_determinations "
+    "carry a tenant_id and FORCE RLS. The framework and control catalogues are shared reference data, "
+    "so the same control list appears for every tenant while the verdicts on it do not."
 )
+
+
+async def _bind(db: AsyncSession, user: CurrentUser) -> str:
+    """Bind the caller's tenant for the rest of this transaction and return it as a string.
+
+    RLS is FORCED on both verdict tables, so an unbound read returns zero rows rather than another
+    tenant's rows - which would render as "no compliance data" and read as a clean bill of health.
+    str() is deliberate: asyncpg rejects a UUID object bound to a uuid column.
+    """
+    tenant_id = str(user.tenant_id)
+    await db.execute(text("SELECT set_config('gds.tenant_id', :tid, true)"), {"tid": tenant_id})
+    return tenant_id
 
 
 def score_of(passing: int, failing: int) -> float:
@@ -57,6 +72,7 @@ async def list_frameworks(
     7 assessed controls out of 58 is not a compliant framework. Manual rows carry no evidence and are
     counted separately rather than being allowed to lift the score.
     """
+    tenant_id = await _bind(db, user)
     # UNION of both sources. Listing only compliance_frameworks silently dropped four frameworks whose verdicts
     # exist but whose catalogue row does not: measured 20 Nov 2026, compliance_assessments held 18 manual rows for
     # iso27001, nist_csf, pci_dss and soc2, and none of those keys appeared anywhere on the compliance surface. A
@@ -69,8 +85,9 @@ async def list_frameworks(
         "       NULL::integer AS official_control_count, NULL::varchar AS jurisdiction, false AS catalogued "
         "FROM compliance_assessments a "
         "WHERE a.framework NOT IN (SELECT framework_key FROM compliance_frameworks) "
+        "  AND a.tenant_id = :tid "
         "ORDER BY framework_key"
-    ))).mappings().all()
+    ), {"tid": tenant_id})).mappings().all()
 
     counts = (await db.execute(text(
         "SELECT framework, "
@@ -81,8 +98,8 @@ async def list_frameworks(
         "COUNT(*) FILTER (WHERE verdict_source = 'determination') AS not_applicable, "
         "COUNT(*) FILTER (WHERE verdict_source = 'manual') AS manual, "
         "MAX(assessed_at) AS last_assessed "
-        "FROM compliance_assessments GROUP BY framework"
-    ))).mappings().all()
+        "FROM compliance_assessments WHERE tenant_id = :tid GROUP BY framework"
+    ), {"tid": tenant_id})).mappings().all()
     by_fw = {r["framework"]: r for r in counts}
 
     # A determination says what a framework applies to. It is reported beside the counts because "not applicable"
@@ -91,8 +108,8 @@ async def list_frameworks(
         "SELECT framework_key, determination_ref, status, cde_defined, saq_track, approved_by, approved_at, "
         "review_due_at, jsonb_array_length(applicable_refs) AS applicable_refs, "
         "jsonb_array_length(not_applicable_refs) AS not_applicable_refs, caveats "
-        "FROM compliance_scope_determinations WHERE status = 'approved'"
-    ))).mappings().all()
+        "FROM compliance_scope_determinations WHERE status = 'approved' AND tenant_id = :tid"
+    ), {"tid": tenant_id})).mappings().all()
     det_by_fw = {d["framework_key"]: d for d in determinations}
 
     frameworks = []
@@ -164,7 +181,7 @@ async def list_frameworks(
                           "count minus any requirement excluded by an approved scope determination. A framework with "
                           "no determination has nothing excluded. A requirement excluded by determination is reported "
                           "as not_applicable, which is not the same as untested",
-        "tenant_scoped": False,
+        "tenant_scoped": True,
         "note": TENANT_SCOPE_NOTE,
     }
 
@@ -178,7 +195,8 @@ async def list_controls(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     """Control-level verdicts with the observed facts behind each one."""
-    clauses, params = [], {"limit": max(1, min(limit, 500))}
+    tenant_id = await _bind(db, user)
+    clauses, params = [], {"limit": max(1, min(limit, 500)), "tid": tenant_id}
     if framework:
         clauses.append("c.framework_key = :fw")
         params["fw"] = framework
@@ -194,6 +212,7 @@ async def list_controls(
         "LEFT JOIN compliance_assessments a "
         "  ON a.framework = c.framework_key AND a.control_id = c.control_ref "
         "  AND a.verdict_source IN ('automated', 'determination') "
+        "  AND a.tenant_id = :tid "
         f"{where} ORDER BY c.framework_key, c.control_ref LIMIT :limit"
     ), params)).mappings().all()
 
@@ -232,7 +251,8 @@ async def list_determinations(
     A framework that reports not_applicable without this record would be asking for trust. This returns the whole
     determination: what was measured, what was decided, who approved it, when it expires and what could void it.
     """
-    clauses, params = [], {}
+    tenant_id = await _bind(db, user)
+    clauses, params = ["tenant_id = :tid"], {"tid": tenant_id}
     if framework:
         clauses.append("framework_key = :fw")
         params["fw"] = framework
@@ -273,7 +293,7 @@ async def list_determinations(
         } for r in rows],
         "note": "not_applicable verdicts are only valid where a determination listed here is approved; the evidence "
                 "array is what the decision was based on, and caveats names what it does not cover",
-        "tenant_scoped": False,
+        "tenant_scoped": True,
     }
 
 
@@ -285,7 +305,8 @@ async def list_assessments(
     status: str | None = Query(None),
     limit: int = Query(200, ge=1, le=1000),
 ) -> dict:
-    clauses, params = [], {"limit": limit}
+    tenant_id = await _bind(db, user)
+    clauses, params = ["tenant_id = :tid"], {"limit": limit, "tid": tenant_id}
     if framework:
         clauses.append("lower(framework) = lower(:framework)")
         params["framework"] = framework
@@ -309,6 +330,6 @@ async def list_assessments(
             "mapped_finding": r["mapped_finding"],
             "assessment_date": r["assessment_date"].isoformat() if r["assessment_date"] else None,
         } for r in rows],
-        "tenant_scoped": False,
+        "tenant_scoped": True,
         "note": TENANT_SCOPE_NOTE,
     }

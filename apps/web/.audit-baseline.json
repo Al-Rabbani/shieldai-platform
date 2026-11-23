@@ -1,0 +1,13 @@
+{
+  "high_allowed": 1,
+  "note": "Every entry here is a high-severity npm advisory this platform has decided to carry, with the reason. The gate refuses a deploy when the high count exceeds high_allowed, so the number can only go down deliberately. Fixing an entry means removing it from this file and lowering high_allowed in the same commit.",
+  "accepted": [
+    {
+      "package": "zod",
+      "advisory": "Zod can exhaust memory while validating oversized constrained collections",
+      "installed": "3.x (transitive and direct)",
+      "fixed_in": "4.6.7 (semver-major)",
+      "reason": "The fix is a major upgrade of a schema library used across the frontend. The advisory is a denial-of-service on attacker-supplied oversized collections, and every schema in this app validates responses from our own API, not arbitrary third-party payloads. Carried until the zod 4 migration is scheduled as its own item, because a half-tested major bump across 100 routed pages is a larger risk than the advisory."
+    }
+  ]
+}

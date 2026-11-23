@@ -1,0 +1,52 @@
+name: Dependency Audit
+
+# WHY THIS EXISTS: the security gate workflow triggers on pull_request only, so a change could reach the host
+# through scripts/ops/deploy.sh with no remote check at all, and pip-audit had never been run on the Python
+# tree. This workflow runs on every push as well, so the same audit that gates a deploy also reports on the
+# remote, and a red run is visible before the next deploy.
+on:
+  push:
+    branches: [main, master, gdsa-radar-live, develop]
+  pull_request:
+    branches: [main, master, develop]
+  workflow_dispatch:
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Python dependencies (pip-audit)
+        run: |
+          python -m pip install --upgrade pip pip-audit
+          cd apps/api
+          python -m pip_audit -r requirements.txt --progress-spinner off
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: JavaScript dependencies (npm audit against the recorded baseline)
+        run: |
+          cd apps/web
+          npm ci --ignore-scripts
+          node -e '
+            const { execSync } = require("child_process");
+            const fs = require("fs");
+            const audit = JSON.parse(execSync("npm audit --json || true").toString());
+            const meta = (audit.metadata || {}).vulnerabilities || {};
+            const base = JSON.parse(fs.readFileSync(".audit-baseline.json", "utf8"));
+            const allowed = base.high_allowed || 0;
+            console.log(`critical=${meta.critical||0} high=${meta.high||0} baseline_allows=${allowed}`);
+            if ((meta.critical || 0) > 0) { console.error("critical advisory present"); process.exit(1); }
+            if ((meta.high || 0) > allowed) {
+              console.error("high advisories grew past the baseline in apps/web/.audit-baseline.json");
+              process.exit(1);
+            }
+            for (const a of base.accepted || []) console.log(`accepted: ${a.package} - ${a.reason}`);
+          '
