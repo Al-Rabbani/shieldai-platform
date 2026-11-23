@@ -19,6 +19,8 @@ from .service import (
 )
 from .models import Subscription
 from .plans import PLANS
+from .webhook_signature import InvalidSignature as InvalidStripeSignature
+from .webhook_signature import verify as verify_stripe_signature
 
 def _ensure_stripe():
     """Set stripe.api_key from environment."""
@@ -250,13 +252,17 @@ async def webhook(request: Request, db: AsyncSession = Depends(get_db)):
     signature_verified = False
 
     if STRIPE_WEBHOOK_SECRET:
+        # Verified here rather than through stripe.Webhook.construct_event: on this stack (stripe-python 15.4.0)
+        # construct_event raises AttributeError("object") for a CORRECTLY signed payload and
+        # SignatureVerificationError only for a forged one, so the old block accepted forgeries and rejected every
+        # real delivery with a 4xx that Stripe does not retry. See billing/webhook_signature.py for the measurement.
         try:
-            stripe.Webhook.construct_event(payload, sig_header, STRIPE_WEBHOOK_SECRET)
+            verify_stripe_signature(payload, sig_header, STRIPE_WEBHOOK_SECRET)
             signature_verified = True
-        except stripe.error.SignatureVerificationError:
-            raise HTTPException(status_code=400, detail="Invalid webhook signature")
-        except Exception as e:
-            raise HTTPException(status_code=400, detail=f"Webhook error: {str(e)}")
+        except InvalidStripeSignature as exc:
+            raise HTTPException(status_code=400, detail=f"Invalid webhook signature: {exc}") from None
+        # Deliberately no catch-all here. A fault in verification or processing must surface as 500 so Stripe
+        # retries; answering 400 tells Stripe the event is unacceptable and it is never delivered again.
     # else: no secret configured means the endpoint accepts unsigned events. That is recorded as
     # signature_verified=false rather than being silently treated as verified.
 
