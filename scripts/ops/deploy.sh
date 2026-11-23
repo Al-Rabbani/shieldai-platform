@@ -148,7 +148,7 @@ else
 
   # Dependency gate: refuses a deploy that introduces a known-vulnerable python or javascript
   # dependency. Placed before the build so nothing is installed, migrated or restarted.
-  if ! bash "$ROOT/scripts/ops/dependency-audit.sh" >/tmp/deploy-dep-audit.log 2>&1; then
+  if ! bash "$REPO/scripts/ops/dependency-audit.sh" >/tmp/deploy-dep-audit.log 2>&1; then
     cat /tmp/deploy-dep-audit.log
     fail "dependency audit failed - nothing was deployed"
     exit 13
