@@ -19,6 +19,7 @@ import asyncio
 import inspect
 import json
 from typing import Dict, Any, Optional
+from gds_api.llm_cost import record_llm_cost
 
 logger = logging.getLogger("gds.kernel.agent_runner")
 
@@ -177,6 +178,7 @@ async def run_kernel_agent_runner(
         for iteration in range(max_iterations):
             iterations += 1
 
+            _call_started = time.perf_counter()
             response = client.chat.completions.create(
                 model=model,
                 messages=messages,
@@ -184,6 +186,16 @@ async def run_kernel_agent_runner(
                 tool_choice="auto" if tool_defs else None,
                 temperature=0.1,
                 max_tokens=4096
+            )
+            # This runner carries no tenant of its own, so it records only when its caller supplies one. An
+            # unrecorded call is logged with the site named rather than passing silently.
+            await record_llm_cost(
+                tenant_id=tenant_id,
+                mission_id=mission_id,
+                model=model,
+                usage=getattr(response, "usage", None),
+                latency_ms=(time.perf_counter() - _call_started) * 1000,
+                call_site="reasoning/kernel_agent_runner",
             )
 
             msg = response.choices[0].message

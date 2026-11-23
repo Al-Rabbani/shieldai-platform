@@ -36,19 +36,81 @@ import RiskTrendChart from "@/components/home/RiskTrendChart";
 import ThreatBreakdownDonut from "@/components/home/ThreatBreakdownDonut";
 import SecurityFeaturesRow from "@/components/home/SecurityFeaturesRow";
 
+/* A DAILY summary that regenerates on every visit is neither daily nor free. Measured 23 Nov 2026: opening the Command
+ * Centre created a real reasoning mission ("Reasoning mission: ai-report-agent - Daily intelligence summary ...") and
+ * spent real tokens, every single visit - the OpenAI key answers 200, so this was money, not a stub. The summary is now
+ * kept for the calendar day it was generated for, and regenerating it is an explicit act with a button that says so. */
+const SUMMARY_CACHE_KEY = "gds.commandCentre.dailySummary.v1";
+
+function todayKey() {
+  const now = new Date();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${now.getFullYear()}-${month}-${day}`;
+}
+
+function readCachedSummary() {
+  try {
+    const raw = window.localStorage.getItem(SUMMARY_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || !parsed.text || parsed.day !== todayKey()) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedSummary(text) {
+  const record = { text, day: todayKey(), at: new Date().toISOString() };
+  try {
+    window.localStorage.setItem(SUMMARY_CACHE_KEY, JSON.stringify(record));
+  } catch {
+    /* A browser with storage disabled still gets the summary for this view; it just cannot keep it. */
+  }
+  return record;
+}
+
 export default function CommandCenter() {
   const [dailySummary, setDailySummary] = useState("");
+  const [summaryAt, setSummaryAt] = useState(null);
+  const [summaryError, setSummaryError] = useState(null);
   const [summaryLoading, setSummaryLoading] = useState(true);
   const [estateSummary, setEstateSummary] = useState(null);
   const [complianceSummary, setComplianceSummary] = useState(null);
 
-  useEffect(() => {
-    invokeAction("gdsAgentOS", {
-      action: "command", command_type: "soc_summary",
-      input: "Daily intelligence summary for the GDS Command Centre dashboard. 3 paragraphs max. Lead with most critical issue. Include risk score, top CVE, cloud status, active incident if any. End with single most important action for today.",
-      priority: "normal",
-    }).then(r => setDailySummary(r.response)).catch(() => setDailySummary("Summary unavailable.")).finally(() => setSummaryLoading(false));
+  const generateSummary = useCallback(async () => {
+    setSummaryLoading(true);
+    setSummaryError(null);
+    try {
+      const result = await invokeAction("gdsAgentOS", {
+        action: "command", command_type: "soc_summary",
+        input: "Daily intelligence summary for the GDS Command Centre dashboard. 3 paragraphs max. Lead with most critical issue. Include risk score, top CVE, cloud status, active incident if any. End with single most important action for today.",
+        priority: "normal",
+      });
+      const text = result?.response || "";
+      if (!text) throw new Error("the reasoning call returned no summary");
+      const record = writeCachedSummary(text);
+      setDailySummary(text);
+      setSummaryAt(record.at);
+    } catch (error) {
+      setSummaryError(error?.message || "the reasoning call failed");
+    } finally {
+      setSummaryLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    const cached = readCachedSummary();
+    if (cached) {
+      /* Already generated today: show it rather than spending another model call to reproduce it. */
+      setDailySummary(cached.text);
+      setSummaryAt(cached.at);
+      setSummaryLoading(false);
+      return;
+    }
+    generateSummary();
+  }, [generateSummary]);
   const [loading, setLoading] = useState(true);
   const [risk, setRisk] = useState(null);
   const [cloudFindings, setCloudFindings] = useState([]);
@@ -257,7 +319,13 @@ export default function CommandCenter() {
         <ComplianceAndCIEMColumn frameworks={frameworks} ciemFindings={ciemFindings} />
       </div>
 
-      <DailyIntelligenceSummary loading={summaryLoading} text={dailySummary} />
+      <DailyIntelligenceSummary
+        loading={summaryLoading}
+        text={dailySummary}
+        generatedAt={summaryAt}
+        error={summaryError}
+        onRefresh={generateSummary}
+      />
 
       <QuickActionsBar onRefresh={loadAll} />
     </div>

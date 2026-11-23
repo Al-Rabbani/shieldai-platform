@@ -20,6 +20,7 @@ except ImportError:
 from gds_api.tool_gateway import execute_tool, list_tools, TOOL_REGISTRY
 from gds_api.reasoning.governed_tools import execute_governed_tool
 from gds_api.reasoning.prompts import get_agent_prompt, AGENT_REGISTRY
+from gds_api.llm_cost import record_llm_cost
 from gds_api.reasoning.tool_definitions import get_tool_definitions, get_tool_names
 from gds_api.reasoning.kernel_agent_loop import run_kernel_agent
 
@@ -156,6 +157,7 @@ analyze them and decide the next step. When done, provide a summary.
             logger.info(f"Iteration {iteration + 1}/{self.MAX_ITERATIONS}")
             
             try:
+                _call_started = time.perf_counter()
                 response = await self.client.chat.completions.create(
                     model=self.model,
                     messages=messages,
@@ -163,6 +165,16 @@ analyze them and decide the next step. When done, provide a summary.
                     tool_choice="auto",
                     temperature=0.1,
                     max_tokens=4096,
+                )
+                # The loop carries the tenant and mission it was given, so every iteration leaves a real cost row.
+                # Without this the platform spent tokens it could not account for (measured 23 Nov 2026).
+                await record_llm_cost(
+                    tenant_id=self.tenant_id,
+                    mission_id=self.mission_id,
+                    model=self.model,
+                    usage=getattr(response, "usage", None),
+                    latency_ms=(time.perf_counter() - _call_started) * 1000,
+                    call_site="reasoning/agent_loop",
                 )
                 
                 msg = response.choices[0].message

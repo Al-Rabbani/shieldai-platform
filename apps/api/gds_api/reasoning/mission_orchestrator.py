@@ -17,6 +17,7 @@ import json
 import threading
 from datetime import UTC, datetime
 from typing import Dict, Any, List, Optional
+from gds_api.llm_cost import record_llm_cost
 
 logger = logging.getLogger("gds.kernel.mission")
 
@@ -192,7 +193,8 @@ AGENT_CATALOG = {
 # ═══════════════════════════════════════════════════════════
 # Mission planning
 # ═══════════════════════════════════════════════════════════
-async def plan_mission(goal: str, model: str = "gpt-4.1") -> Dict[str, Any]:
+async def plan_mission(goal: str, model: str = "gpt-4.1", tenant_id: Any = None,
+                      mission_id: Any = None) -> Dict[str, Any]:
     """Use GPT-4.1 to plan which agents to invoke."""
     agent_descriptions = "\n".join([
         "- %s: %s (Use when: %s)" % (aid, info["specialty"], info["use_when"])
@@ -226,6 +228,7 @@ Respond with JSON only, no markdown:
         load_dotenv("/opt/.env")
         client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
         
+        _call_started = time.perf_counter()
         response = client.chat.completions.create(
             model=model,
             messages=[
@@ -235,6 +238,14 @@ Respond with JSON only, no markdown:
             temperature=0.1,
             max_tokens=1000,
             response_format={"type": "json_object"}
+        )
+        await record_llm_cost(
+            tenant_id=tenant_id,
+            mission_id=mission_id,
+            model=model,
+            usage=getattr(response, "usage", None),
+            latency_ms=(time.perf_counter() - _call_started) * 1000,
+            call_site="reasoning/mission_orchestrator.plan_mission",
         )
         plan = json.loads(response.choices[0].message.content)
         logger.info("Mission plan: %d agents, parallel=%s" % (len(plan.get("agents", [])), plan.get("parallel", False)))
@@ -383,7 +394,7 @@ async def execute_mission(
     logger.info("Mission %s started: %s" % (mission_id, goal[:100]))
     
     # Step 1: Plan
-    plan = await plan_mission(goal, model)
+    plan = await plan_mission(goal, model, tenant_id=context.get("tenant_id"), mission_id=mission_id)
     with _MISSIONS_LOCK:
         _MISSIONS[mission_id]["plan"] = plan
         _MISSIONS[mission_id]["status"] = "executing"
@@ -496,7 +507,8 @@ async def execute_mission(
     with _MISSIONS_LOCK:
         _MISSIONS[mission_id]["status"] = "aggregating"
     
-    unified_report = await _aggregate_results(goal, agent_results, plan.get("aggregator", "ai-chief-ciso"), model)
+    unified_report = await _aggregate_results(goal, agent_results, plan.get("aggregator", "ai-chief-ciso"), model,
+                                               tenant_id=context.get("tenant_id"), mission_id=mission_id)
     
     duration_ms = int((time.time() - start_time) * 1000)
     total_tool_calls = sum(len(ar.get("tool_calls", [])) for ar in agent_results)
@@ -693,7 +705,8 @@ def get_mission_status(mission_id: str) -> Dict[str, Any]:
 # ═══════════════════════════════════════════════════════════
 # Result aggregation
 # ═══════════════════════════════════════════════════════════
-async def _aggregate_results(goal, agent_results, aggregator_agent, model="gpt-4.1") -> str:
+async def _aggregate_results(goal, agent_results, aggregator_agent, model="gpt-4.1",
+                          tenant_id: Any = None, mission_id: Any = None) -> str:
     """GPT-4.1 synthesizes all agent results into a unified report."""
     agent_summaries = []
     for ar in agent_results:
@@ -736,6 +749,7 @@ AUTHORITATIVE PLATFORM COUNTS (read from the live database at this moment; these
         from dotenv import load_dotenv
         load_dotenv("/opt/.env")
         client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        _call_started = time.perf_counter()
         response = client.chat.completions.create(
             model=model,
             messages=[
@@ -744,6 +758,14 @@ AUTHORITATIVE PLATFORM COUNTS (read from the live database at this moment; these
             ],
             temperature=0.2,
             max_tokens=2000
+        )
+        await record_llm_cost(
+            tenant_id=tenant_id,
+            mission_id=mission_id,
+            model=model,
+            usage=getattr(response, "usage", None),
+            latency_ms=(time.perf_counter() - _call_started) * 1000,
+            call_site="reasoning/mission_orchestrator.aggregate",
         )
         _report = response.choices[0].message.content or "No report generated"
         try:

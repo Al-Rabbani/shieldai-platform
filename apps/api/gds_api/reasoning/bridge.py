@@ -4,7 +4,7 @@ This wires the AgenticLoop into the existing AgentExecutionLoop and
 AgentTaskQueue so that when a task is dequeued, it runs through the
 LLM reasoning loop instead of the pre-programmed routing.
 """
-import os, sys, json, asyncio, logging
+import os, sys, json, asyncio, logging, time
 from datetime import datetime
 
 logger = logging.getLogger("gds.reasoning.bridge")
@@ -21,6 +21,7 @@ from gds_api.reasoning.governed_tools import (
     set_mission_outcome,
 )
 from gds_api.reasoning.prompts import AGENT_REGISTRY, list_agents
+from gds_api.llm_cost import record_llm_cost
 
 
 class ReasoningBridge:
@@ -90,7 +91,7 @@ class ReasoningBridge:
         
         return result
     
-    async def auto_select_agent(self, goal: str) -> str:
+    async def auto_select_agent(self, goal: str, tenant_id: str = None, mission_id: str = None) -> str:
         """Use LLM to select the best agent for a goal.
         
         Instead of pre-programmed routing, ask the LLM which agent
@@ -106,6 +107,7 @@ class ReasoningBridge:
             for a in agents
         ])
         
+        _call_started = time.perf_counter()
         response = await client.chat.completions.create(
             model=REASONING_MODEL,
             messages=[
@@ -114,6 +116,15 @@ class ReasoningBridge:
             ],
             temperature=0,
             max_tokens=50
+        )
+        # The routing call is a real model call and was the first one every mission made without a cost row.
+        await record_llm_cost(
+            tenant_id=tenant_id,
+            mission_id=mission_id,
+            model=REASONING_MODEL,
+            usage=getattr(response, "usage", None),
+            latency_ms=(time.perf_counter() - _call_started) * 1000,
+            call_site="reasoning/bridge.auto_select_agent",
         )
         
         agent_id = response.choices[0].message.content.strip()
@@ -146,7 +157,7 @@ class ReasoningBridge:
                                    tenant_id: str = None, user_id: str = None,
                                    allow_writes: bool = True) -> AgentResult:
         """Auto-select the best agent and execute the goal."""
-        agent_id = await self.auto_select_agent(goal)
+        agent_id = await self.auto_select_agent(goal, tenant_id=tenant_id)
         return await self.execute_task(agent_id, goal, context, tenant_id=tenant_id, user_id=user_id,
                                        allow_writes=allow_writes)
     
