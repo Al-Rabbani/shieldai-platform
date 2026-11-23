@@ -44,7 +44,10 @@ router = APIRouter(prefix="/copilot/scheduler", tags=["copilot"])
 
 REGISTRY_PATH = Path(os.getenv("COPILOT_SCHEDULER_REGISTRY", "/opt/gds-os/mission_registry.json"))
 STATE_PATH = Path(os.getenv("COPILOT_SCHEDULER_STATE", "/opt/gds-os/mission_state.json"))
-DAILY_CAP_USD = float(os.getenv("COPILOT_SCHEDULER_DAILY_CAP_USD", "0.50"))
+# Measured 23 Nov 2026: one platform-posture-check run (3 agents, 20 tool calls, 44.7s) cost $0.24502, so the
+# configured 6-hourly cadence needs about $0.98 a day. A $0.50 cap held the scheduler after two runs - a guardrail
+# that starves what it guards. $1.50 funds the cadence with headroom and still stops a runaway loop.
+DAILY_CAP_USD = float(os.getenv("COPILOT_SCHEDULER_DAILY_CAP_USD", "1.50"))
 DEFAULT_INTERVAL_SECONDS = 21600
 PLATFORM_TENANT_SLUG = os.getenv("COPILOT_SCHEDULER_TENANT_SLUG", "gds")
 
@@ -281,6 +284,9 @@ async def scheduler_status(
             }
             for r in runs
         ],
+        "cost_basis": "A run's cost is summed from cost_records over that run's own start and finish window. It is not "
+                       "attributed by mission id, because the bridge tags its cost rows with an internal mission uuid "
+                       "the runner never sees.",
         "limits": LIMITS,
     }
 
@@ -439,15 +445,20 @@ async def record_run(
 
     await _set_tenant(db, tenant_id)
     cost = None
-    if body.mission_id:
+    cost_basis = None
+    if body.started_at:
+        # By the run's own window, not by mission id: the bridge tags cost rows with an internal mission uuid the runner
+        # never sees, and one row in three carries no mission id at all.
         cost = (
             await db.execute(
                 text(
-                    "SELECT sum(cost_usd) FROM cost_records WHERE tenant_id = :t AND mission_id::text = :m"
+                    "SELECT sum(cost_usd) FROM cost_records WHERE tenant_id = :t"
+                    " AND created_at >= :st AND created_at <= coalesce(:ct, now())"
                 ),
-                {"t": tenant_id, "m": body.mission_id},
+                {"t": tenant_id, "st": body.started_at, "ct": body.completed_at},
             )
         ).scalar()
+        cost_basis = "summed over the run's own start and finish window"
     row = (
         await db.execute(
             text(
@@ -474,4 +485,9 @@ async def record_run(
         )
     ).first()
     await db.commit()
-    return {"recorded": True, "id": str(row[0]), "cost_usd": float(cost) if cost is not None else None}
+    return {
+        "recorded": True,
+        "id": str(row[0]),
+        "cost_usd": float(cost) if cost is not None else None,
+        "cost_basis": cost_basis,
+    }

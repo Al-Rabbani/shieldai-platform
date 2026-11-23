@@ -8,7 +8,7 @@
         "ai-vuln-director",
         "ai-threat-hunter"
       ],
-      "interval_seconds": 60,
+      "interval_seconds": 21600,
       "context": {
         "scope": "gds-platform",
         "targets": [
@@ -16,8 +16,7 @@
           "api.globaldigitalsecurity.io",
           "app.globaldigitalsecurity.io"
         ]
-      },
-      "enabled_interval_seconds": 21600
+      }
     }
   ]
 }
