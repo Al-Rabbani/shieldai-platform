@@ -191,7 +191,7 @@ export default function AssignmentRulesPage() {
             <div key={rule.id} className="rounded-xl px-3 py-2.5" style={{ background: "#111827", border: "1px solid #1F2937", opacity: rule.is_active ? 1 : 0.55 }}>
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-sm font-bold text-white">{rule.rule_name}</span>
-                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-300 border border-blue-500/30">{rule.asset_type === "any" ? "ANY TYPE" : String(rule.asset_type).toUpperCase()}</span>
+                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-300 border border-blue-500/30">{`${rule.match_severity ? String(rule.match_severity).toUpperCase() : "ANY SEVERITY"}${rule.match_source ? ` · ${String(rule.match_source).toUpperCase()}` : ""}`}</span>
                 <span className="text-[10px] text-slate-500">{rule.owner_team || "every team"}</span>
                 <span className="ml-auto text-[10px] text-slate-500">fired {rule.fire_count || 0}×{rule.last_fired ? ` · ${new Date(rule.last_fired).toLocaleDateString("en-GB")}` : ""}</span>
                 <button onClick={() => startEdit(rule)} className="text-slate-500 hover:text-blue-300"><Pencil size={13} /></button>
