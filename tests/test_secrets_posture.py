@@ -74,6 +74,10 @@ def _posture(db=None, hosts=("app.example.test",)):
     return asyncio.run(m.secrets_posture(db=db or FakeDb(), current_user=_user()))
 
 
+# Captured before the autouse fixture replaces it: the hostname tests exercise the real derivation.
+_REAL_ENDPOINT_HOSTS = m._endpoint_hosts
+
+
 @pytest.fixture(autouse=True)
 def _no_network(monkeypatch):
     monkeypatch.setattr(m, "_endpoint_hosts", lambda: ["app.example.test"])
@@ -289,3 +293,64 @@ def test_adapter_exposes_the_posture_route():
     assert "request('/secrets/posture')" in adapter
     for entity in ("SecretReference:", "CertificateRecord:", "SecretLeakageAlert:", "SecretAccessPolicy:"):
         assert entity in adapter, f"{entity} needs a refusal reason naming the measured absence"
+
+
+# --- hostnames and DER parsing (both defects appeared only when the live route was called) ------------------------
+
+def test_app_domain_with_a_published_subdomain_probes_the_real_hostnames(monkeypatch):
+    """APP_DOMAIN is https://app.globaldigitalsecurity.io. Taken literally it produced www.app.…, app.app.… and
+    api.app.… - three hostnames that do not exist - while the real apex, www and api were never probed."""
+    monkeypatch.setenv("APP_DOMAIN", "https://app.globaldigitalsecurity.io")
+    assert _REAL_ENDPOINT_HOSTS() == [
+        "globaldigitalsecurity.io",
+        "www.globaldigitalsecurity.io",
+        "app.globaldigitalsecurity.io",
+        "api.globaldigitalsecurity.io",
+    ]
+
+
+def test_a_bare_apex_is_probed_without_being_stripped(monkeypatch):
+    monkeypatch.setenv("APP_DOMAIN", "globaldigitalsecurity.io")
+    hosts = _REAL_ENDPOINT_HOSTS()
+    assert hosts[0] == "globaldigitalsecurity.io"
+    assert len(hosts) == 4
+
+
+def test_no_app_domain_means_no_endpoint_is_invented(monkeypatch):
+    monkeypatch.delenv("APP_DOMAIN", raising=False)
+    assert _REAL_ENDPOINT_HOSTS() == []
+
+
+def test_der_parsing_reads_subject_issuer_and_expiry():
+    """The certificate is described from its DER bytes: ssl returns an EMPTY dict when verification is off, which is
+    how the first version reported a served certificate with no subject, no issuer and no expiry."""
+    import datetime as dt
+
+    from cryptography import x509
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import rsa
+    from cryptography.x509.oid import NameOID
+
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    now = dt.datetime.now(dt.timezone.utc)
+    cert = (
+        x509.CertificateBuilder()
+        .subject_name(x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "app.example.test")]))
+        .issuer_name(x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "Test CA")]))
+        .public_key(key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(now - dt.timedelta(days=10))
+        .not_valid_after(now + dt.timedelta(days=49))
+        .add_extension(x509.SubjectAlternativeName([x509.DNSName("app.example.test")]), critical=False)
+        .sign(key, hashes.SHA256())
+    )
+    parsed = m._parse_der(cert.public_bytes(serialization.Encoding.DER))
+    assert parsed["common_name"] == "app.example.test"
+    assert parsed["issuer"] == "Test CA"
+    assert parsed["sans"] == ["app.example.test"]
+    assert parsed["not_after"] > parsed["not_before"]
+    assert 48 <= (parsed["not_after"] - now).days <= 49
+
+
+def test_empty_der_parses_to_nothing_rather_than_raising():
+    assert m._parse_der(b"") == {}

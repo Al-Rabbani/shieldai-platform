@@ -37,6 +37,13 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+try:  # Present in this platform's venv (cryptography 50.0.2). The fallback keeps the route usable without it.
+    from cryptography import x509
+    from cryptography.x509.oid import NameOID
+except ImportError:  # pragma: no cover - exercised only on a host without the package
+    x509 = None
+    NameOID = None
+
 from gds_api.db import get_db
 from gds_api.security import CurrentUser, require_permission
 
@@ -187,43 +194,89 @@ def _credential_inventory() -> dict[str, Any]:
     }
 
 
+PUBLISHED_PREFIXES = ("www.", "app.", "api.")
+
+
+def _base_domain(host: str) -> str:
+    """The registrable domain behind a published hostname.
+
+    APP_DOMAIN is a full URL whose host is itself a subdomain (https://app.globaldigitalsecurity.io), so taking it
+    literally produced www.app.globaldigitalsecurity.io, app.app.… and api.app.… - three hostnames that do not exist,
+    while the real apex, www and api endpoints were never probed. Stripping one published prefix first is what makes the
+    four probes the four real names.
+    """
+    for prefix in PUBLISHED_PREFIXES:
+        if host.startswith(prefix) and host.count(".") >= 2:
+            return host[len(prefix):]
+    return host
+
+
 def _endpoint_hosts() -> list[str]:
-    """The hostnames this platform serves, from APP_DOMAIN plus the app/api/www prefixes it is published under.
+    """The hostnames this platform serves: the base domain from APP_DOMAIN plus the www/app/api names it publishes.
 
     A hostname that does not resolve or does not answer is reported as a failed probe, not dropped: a missing endpoint
     is a fact worth seeing.
     """
     raw = (os.getenv("APP_DOMAIN") or "").strip()
-    apex = re.sub(r"^https?://", "", raw).split("/")[0].strip().lower()
+    host = re.sub(r"^https?://", "", raw).split("/")[0].split(":")[0].strip().lower()
     hosts: list[str] = []
-    if apex:
-        candidates = [apex, f"www.{apex}", f"app.{apex}", f"api.{apex}"]
-        for host in candidates:
-            if host and host not in hosts:
-                hosts.append(host)
+    if host:
+        base = _base_domain(host)
+        for candidate in (base, f"www.{base}", f"app.{base}", f"api.{base}"):
+            if candidate and candidate not in hosts:
+                hosts.append(candidate)
     return hosts
 
 
-def _rdn(cert_part: Any, key: str) -> str | None:
-    """Pull one value out of ssl's ((('commonName', 'x'),), ...) structure."""
-    for rdn in cert_part or ():
-        for name, value in rdn:
-            if name == key:
-                return value
-    return None
-
-
 def _handshake(host: str, port: int = 443, verify: bool = True, timeout: float = 6.0) -> dict[str, Any]:
-    """One TLS handshake. verify=False still reads the certificate, so an expired chain is described, not hidden."""
+    """One TLS handshake, returning the peer certificate in DER.
+
+    DER rather than ssl's decoded dict: with verification disabled Python returns an EMPTY dict from getpeercert(), so
+    the first version of this route reported a served certificate with no subject, no issuer and no expiry. The DER
+    bytes are always available, so the certificate is described whether or not the chain verifies.
+    """
     context = ssl.create_default_context()
     if not verify:
         context.check_hostname = False
         context.verify_mode = ssl.CERT_NONE
     with socket.create_connection((host, port), timeout=timeout) as sock:
         with context.wrap_socket(sock, server_hostname=host) as tls:
-            cert = tls.getpeercert() or {}
             cipher = tls.cipher() or (None, None, None)
-            return {"cert": cert, "tls_version": tls.version(), "cipher": cipher[0]}
+            return {
+                "der": tls.getpeercert(binary_form=True),
+                "tls_version": tls.version(),
+                "cipher": cipher[0],
+            }
+
+
+def _parse_der(der: bytes) -> dict[str, Any]:
+    """Subject, issuer, SANs and validity from the DER certificate."""
+    if not der:
+        return {}
+    if x509 is None:  # pragma: no cover - only without the cryptography package
+        return {}
+    cert = x509.load_der_x509_certificate(der)
+
+    def first(oid) -> str | None:
+        values = cert.subject.get_attributes_for_oid(oid)
+        return values[0].value if values else None
+
+    issuer_cn = cert.issuer.get_attributes_for_oid(NameOID.COMMON_NAME)
+    issuer_org = cert.issuer.get_attributes_for_oid(NameOID.ORGANIZATION_NAME)
+    try:
+        sans = cert.extensions.get_extension_for_class(x509.SubjectAlternativeName).value.get_values_for_type(
+            x509.DNSName
+        )
+    except x509.ExtensionNotFound:
+        sans = []
+    return {
+        "common_name": first(NameOID.COMMON_NAME),
+        "issuer": issuer_cn[0].value if issuer_cn else (issuer_org[0].value if issuer_org else None),
+        "sans": sans,
+        "not_before": cert.not_valid_before_utc,
+        "not_after": cert.not_valid_after_utc,
+        "serial": format(cert.serial_number, "x"),
+    }
 
 
 def _probe_endpoint(host: str, port: int = 443) -> dict[str, Any]:
@@ -249,36 +302,26 @@ def _probe_endpoint(host: str, port: int = 443) -> dict[str, Any]:
         result["reason"] = f"{type(exc).__name__}: {exc}"
         return result
 
-    cert = served["cert"]
+    parsed = _parse_der(served["der"])
     result.update(
         served=True,
         tls_version=served["tls_version"],
         cipher=served["cipher"],
-        common_name=_rdn(cert.get("subject"), "commonName"),
-        issuer=_rdn(cert.get("issuer"), "commonName") or _rdn(cert.get("issuer"), "organizationName"),
-        sans=[value for kind, value in cert.get("subjectAltName", ()) if kind == "DNS"],
+        common_name=parsed.get("common_name"),
+        sans=parsed.get("sans", []),
+        issuer=parsed.get("issuer"),
+        serial=parsed.get("serial"),
     )
-    not_after_raw = cert.get("notAfter")
-    not_before_raw = cert.get("notBefore")
-    if not_after_raw:
-        try:
-            not_after = dt.datetime.fromtimestamp(
-                ssl.cert_time_to_seconds(not_after_raw), tz=dt.timezone.utc
-            )
-            result["not_after"] = not_after.isoformat()
-            # Floored, so "0 days" means less than a day left rather than none.
-            days = int((not_after - now).total_seconds() // 86400)
-            result["days_until_expiry"] = days
-            result["expired"] = days < 0
-        except ValueError:
-            result["not_after"] = not_after_raw
-    if not_before_raw:
-        try:
-            result["not_before"] = dt.datetime.fromtimestamp(
-                ssl.cert_time_to_seconds(not_before_raw), tz=dt.timezone.utc
-            ).isoformat()
-        except ValueError:
-            result["not_before"] = not_before_raw
+    not_after = parsed.get("not_after")
+    not_before = parsed.get("not_before")
+    if not_after is not None:
+        result["not_after"] = not_after.isoformat()
+        # Floored, so "0 days" means less than a day left rather than none.
+        days = int((not_after - now).total_seconds() // 86400)
+        result["days_until_expiry"] = days
+        result["expired"] = days < 0
+    if not_before is not None:
+        result["not_before"] = not_before.isoformat()
 
     try:
         _handshake(host, port, verify=True)
