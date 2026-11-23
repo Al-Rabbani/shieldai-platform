@@ -40,6 +40,7 @@ from gds_api import (
     platform_intel_api,
     team_api,
     redteam_overview_api,
+    fix_schedule_api,
     policy,
     redteam,
     repository_api,
@@ -208,6 +209,7 @@ app.include_router(findings.router)
 app.include_router(platform_intel_api.router)
 app.include_router(team_api.router)
 app.include_router(redteam_overview_api.router)
+app.include_router(fix_schedule_api.router)
 app.include_router(incidents.router)
 app.include_router(knowledge.router)
 app.include_router(workflow_runs.router)

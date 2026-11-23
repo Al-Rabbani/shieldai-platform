@@ -82,6 +82,10 @@ const ENTITY_ROUTES = {
   /* The offensive side: real stores only. authorized_targets holds 2 rows and red_team_safety_state 1, so those are
    * served. /red-team/overview states the absent stores (attack paths, simulations, campaigns, attack findings) by name
    * instead of letting four counters print 0. */
+  /* The fix calendar and planning board drag a finding into a week, move it, and drop it back to the backlog - create,
+   * update and delete across 11 call sites. No fix_schedule table existed, so every one of those writes was refused and
+   * the board reverted on reload. GET/POST/PATCH/DELETE /fix-schedule record exactly what a person placed. */
+  FixScheduleItem: { path: "/fix-schedule" },
   AuthorizedTarget: { path: "/red-team/targets" },
   RedTeamStatus: { path: "/red-team/status", single: true },
   RedTeamOverview: { path: "/red-team/overview", single: true },
