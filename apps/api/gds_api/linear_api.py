@@ -308,8 +308,10 @@ async def linear_action(
                 text(
                     f"""
                     SELECT {FINDING_COLUMNS} FROM security_findings sf
+                    /* A finding being worked is open with remediation_started_at set; "in_remediation" is not a status
+                     * this register holds, so it must not appear in the predicate. */
                     WHERE sf.tenant_id = :tid
-                      AND sf.status IN ('open', 'in_remediation')
+                      AND sf.status = 'open'
                       AND lower(sf.severity) = 'critical'
                       AND NOT EXISTS (
                           SELECT 1 FROM linear_issue_links l

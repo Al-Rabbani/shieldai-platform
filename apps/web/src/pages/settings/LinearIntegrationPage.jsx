@@ -3,7 +3,7 @@ import { base44 } from "@/api/base44Client";
 import LinearConnectionCard from "@/components/settings/LinearConnectionCard";
 import LinearFindingTickets from "@/components/settings/LinearFindingTickets";
 import LinearLinkTable from "@/components/settings/LinearLinkTable";
-import { RefreshCw, Workflow } from "lucide-react";
+import { RefreshCw, Workflow, Ticket } from "lucide-react";
 
 const TEAM_KEY = "gds_linear_team_id";
 
@@ -119,6 +119,26 @@ export default function LinearIntegrationPage() {
   /* One bulk call: the route reads the linked tickets from Linear, updates the links and writes the state back onto the
    * finding. It reports how many it checked, how many it could read and how many it changed, so a zero is a measured
    * zero rather than a cheerful success. */
+  /* Ticket every unticketed open critical finding. The route does the selecting and the filing, and reports how many it
+   * considered, how many it created and any refusal, so a zero is measured rather than assumed. */
+  async function autoCritical() {
+    setSyncing(true);
+    setMessage(null);
+    try {
+      const response = await base44.functions.invoke("gdsLinearSync", { action: "auto_critical", team_id: teamId || undefined });
+      const data = response.data || {};
+      const failed = (data.failed || [])[0];
+      setMessage({
+        type: failed ? "err" : "ok",
+        text: `${data.considered || 0} unticketed open critical finding(s) considered · ${data.created || 0} ticket(s) created${failed ? ` · stopped: ${failed.reason}` : ""}.`,
+      });
+      await loadRecords();
+    } catch (error) {
+      setMessage({ type: "err", text: error?.response?.data?.detail || error?.response?.data?.error || error.message });
+    }
+    setSyncing(false);
+  }
+
   async function syncNow() {
     setSyncing(true);
     setMessage(null);
@@ -146,16 +166,25 @@ export default function LinearIntegrationPage() {
           <div>
             <h1 className="text-xl font-bold text-white">Linear ticketing</h1>
             <p className="text-xs text-slate-500">Critical findings become Linear tickets; the board's state is written back to the finding status.</p>
-            <p className="text-[10px] text-amber-300/80 mt-0.5">Background automation (new critical finding, and completion sync) raises tickets with the Linear account of the admin who saved it — so an admin must connect Linear here for those to fire.</p>
+            <p className="text-[10px] text-slate-500 mt-0.5">Nothing here runs on a timer: no scheduled job on this host raises tickets automatically, and there is no per-user Linear sign-in. Tickets are raised when you press a button, with the platform's own workspace key.</p>
           </div>
         </div>
-        <button
-          onClick={syncNow}
-          disabled={syncing || !connected}
-          className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-500/30 disabled:opacity-40"
-        >
-          <RefreshCw size={13} className={syncing ? "animate-spin" : ""} /> {syncing ? "Syncing…" : "Sync from Linear"}
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={autoCritical}
+            disabled={syncing || !connected}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold bg-blue-500/20 text-blue-300 border border-blue-500/40 hover:bg-blue-500/30 disabled:opacity-40"
+          >
+            <Ticket size={13} /> Ticket open criticals
+          </button>
+          <button
+            onClick={syncNow}
+            disabled={syncing || !connected}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-500/30 disabled:opacity-40"
+          >
+            <RefreshCw size={13} className={syncing ? "animate-spin" : ""} /> {syncing ? "Syncing…" : "Sync from Linear"}
+          </button>
+        </div>
       </div>
 
       {message && (

@@ -321,6 +321,7 @@ const FUNCTION_ROUTES = {
       create_ticket: { path: '/integrations/linear', method: 'POST' },
       push_state: { path: '/integrations/linear', method: 'POST' },
       sync_states: { path: '/integrations/linear', method: 'POST' },
+      auto_critical: { path: '/integrations/linear', method: 'POST' },
     },
     default: ABSENT,
   },
