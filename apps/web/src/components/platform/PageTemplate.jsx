@@ -82,13 +82,20 @@ export function useAgentPage(agentId, task) {
   const run = useCallback(async () => {
     setLoading(true); setError(false);
     try {
-      const r = await base44.functions.invoke("gdsMasterOrchestrator", { action: "execute", agent_id: agentId, task, input: "Run analysis", priority: "high" });
-      const d = r.data;
-      setData(d.result?.data ?? null);
-      setStatus(d.result?.status ?? null);
-      setEntitiesRead(d.result?.entities_read ?? []);
-      setDurationMs(d.result?.duration_ms ?? null);
-      setAgentName(d.agent?.name ?? "AI Agent");
+      const started = performance.now();
+      const d = await base44.platform.agentPage(task, agentId);
+      /* A key the route could not measure arrives in _absent. Rendering it as 0 would turn "never measured" into
+       * "measured, and none" - the exact fabrication these pages used to commit. An em dash cannot be mistaken for a
+       * count, and StatTile prints it as-is. */
+      const payload = { ...(d || {}) };
+      for (const key of payload._absent || []) {
+        if (payload[key] === undefined) payload[key] = "—";
+      }
+      setData(payload);
+      setStatus(payload.status ?? null);
+      setEntitiesRead(payload._basis ? [payload._basis] : []);
+      setDurationMs(Math.round(performance.now() - started));
+      setAgentName("Register read");
     } catch { setError(true); }
     finally { setLoading(false); }
   }, [agentId, task]);

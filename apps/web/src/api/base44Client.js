@@ -807,6 +807,18 @@ export const base44 = {
     },
   ),
 
+  /* The sixteen agent pages (Exploits, Pentest, Red Team, OSINT, Threat Hunting, Dark Web, Simulation, Vulnerabilities,
+   * SOC, Incidents, Cloud, AI Security, Identity, Risk, Compliance) used to post gdsMasterOrchestrator {action:
+   * "execute"}, which this adapter refuses: its only real equivalent needs the shared bridge key, and that must not live
+   * in a browser bundle. So each page showed "Could not load - retrying..." over four zeros. GET /platform/agent-page
+   * answers each task from the register and the operational tables, and names in _absent the keys it cannot measure so
+   * the page can print an em dash instead of a zero that reads as a measured absence. */
+  platform: {
+    async agentPage(task, agent) {
+      return request('/platform/agent-page', { query: { task, agent } });
+    },
+  },
+
   evidence: {
     /* POST /evidence takes multipart: file, subject_type, subject_id. The bytes are hashed and stored in MinIO by the
      * API, which is why the vault can then verify them. */
