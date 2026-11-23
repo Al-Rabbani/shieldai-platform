@@ -86,6 +86,9 @@ const ENTITY_ROUTES = {
    * update and delete across 11 call sites. No fix_schedule table existed, so every one of those writes was refused and
    * the board reverted on reload. GET/POST/PATCH/DELETE /fix-schedule record exactly what a person placed. */
   FixScheduleItem: { path: "/fix-schedule" },
+  /* The strategy library creates, edits and deletes; the triage queue reads published ones by times_reused and bumps the
+   * counter when applied. No strategy table existed, so every write vanished and the library was always empty. */
+  FixStrategy: { path: "/fix-strategies" },
   AuthorizedTarget: { path: "/red-team/targets" },
   RedTeamStatus: { path: "/red-team/status", single: true },
   RedTeamOverview: { path: "/red-team/overview", single: true },
