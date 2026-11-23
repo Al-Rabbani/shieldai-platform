@@ -86,6 +86,8 @@
 
 A customer is onboarded, isolated, monitored and recoverable when all of the following hold:
 
+Status of the six P0 items on 23 Nov 2026: P0-1, P0-3, P0-5, P0-6 closed and deployed; P0-2 guarded by a test that fails in both directions, with the 74 call sites still to work; P0-4 closed in code with the owner's enrolment outstanding.
+
 1. **Isolation** — no tenant can read, infer or affect another tenant's data through any route or page, including aggregate and compliance surfaces.
 2. **Truth** — no page, route or document states a number or a fact that was not measured. Absence is stated as absence, never as zero.
 3. **Access** — every route is authenticated, authorised by permission, and rate-limited; the operator account is not the only account with a working credential; MFA is available and enforced for privileged roles.
@@ -116,13 +118,13 @@ A customer is onboarded, isolated, monitored and recoverable when all of the fol
 
 ## 4. P0 — blocks any external customer
 
-### P0-1. A GitHub personal access token is stored in plaintext in `.git/config`
+### P0-1. A GitHub personal access token is stored in plaintext in `.git/config` — FIXED 23 Nov 2026 (revocation still owner-only)
 - **Evidence:** `grep -c "ghp_" /opt/gds-os/.git/config` → `1`. The remote URL embeds `https://x-access-token:ghp_…@github.com/Al-Rabbani/shieldai-platform.git`. It is visible in `git remote -v` to anyone with shell access and would be captured by any log or screen share.
 - **Why it blocks:** repo write access to the whole platform, revocable only by GitHub.
 - **Do:** revoke that token at GitHub. Replace with a read-only deploy key or a machine user with a fine-grained token injected at deploy time (`GIT_ASKPASS`/credential helper), never persisted in `.git/config`. Confirm the token is not also in `.env`, any doc, or shell history.
 - **Accept:** `grep -rc "ghp_\|x-access-token" /opt/gds-os/.git/config` → 0; a fresh clone from the repo works with the new mechanism; the old token shows as revoked in GitHub.
 
-### P0-2. 44 entity names requested by routed pages have no route behind them
+### P0-2. 44 entity names requested by routed pages have no route behind them — GUARDED, 74 call sites still open
 - **Evidence:** routed graph (317 modules reachable from `App.jsx`) asks for 96 entity names at 382 call sites; the adapter serves 73 names; **44 unserved at 74 call sites**. Top offenders by call sites: `IncidentTimeline` (4), `CopilotTask` (4), `EvidenceActivity` (4), `EvidenceLibrary` (3), `SlackAlertSetting` (3), `FleetScalingConfig` (3), `SlaTarget` (3), `PostureAlertConfig` (3), `IncidentComment` (3), `AutoRemediationPolicy` (3). Full list of the remaining 34: `RiskScoringConfig`, `NationalThreat`, `AttackSimulation`, `Team`, `CopilotAuditLog`, `CopilotReport`, `LicenseRisk`, `RegulatoryNotification`, `ComplianceEvidenceAudit`, `PentestCampaign`, `AttackFinding`, `Organization`, `BusinessUnit`, `MSSPClientOrganization`, `OrganizationRiskProfile`, `DataSource`, `DataCatalog`, `DataLake`, `DataQualityRule`, `CopilotSession`, `SelfHealingEvent`, `ContainmentAction`, `ComplianceGap`, `ComplianceRecommendation`, `FleetScalingRun`, `AuthorizationPolicy`, `IdentityThreat`, `SBOM`, `NotificationDispatch`, `EscalationPolicy`, `NotificationPreference`, `ExecutiveInsight`, `BoardReport`, `ZeroTrustPolicy`.
 - **Why it blocks:** an unserved read returns `[]`, so each of these renders as "none / 0", which reads as a measured clean state. This is the platform's most repeated defect class.
 - **Do:** for each name decide one of three outcomes, and record the decision in `docs/MODULE_DECISIONS.md`:
@@ -131,25 +133,27 @@ A customer is onboarded, isolated, monitored and recoverable when all of the fol
   (c) **refuse by name** in the adapter with a reason the page renders, plus an honest empty state.
 - **Accept:** a test that walks the routed graph, extracts every `base44.entities.<Name>` and fails on any name absent from both the route map and the refusal map. That test does not exist yet; write it first (it is the only durable guard). Then every routed page renders either data or a stated refusal, verified in a browser.
 
-### P0-3. Compliance is platform-wide, not tenant-scoped
+### P0-3. Compliance is platform-wide, not tenant-scoped — FIXED 23 Nov 2026
 - **Evidence:** `compliance_assessments` (315 rows), `compliance_controls` (297), `compliance_frameworks` (9), `compliance_scope_determinations` (1) have **no `tenant_id` column** and no RLS. `compliance_api.score_of` has no tenant predicate either.
 - **Why it blocks:** with 5 tenants on the platform, every tenant reads the same compliance score. For an MSSP this is a cross-tenant disclosure and a wrong number simultaneously.
 - **Do:** add `tenant_id` to the four tables, backfill to the operating tenant (`2ec10dd0-e48e-4043-8c88-5998ba5e23b0`), enable + FORCE RLS with the standard policy, add `tenant_id` to every query in `apps/api/gds_api/compliance_api.py`, and restate the header strip's `_CONTROL_SQL`. Decide explicitly whether a framework catalogue (`compliance_frameworks`) is shared reference data (keep global, read-only) while assessments and verdicts are per tenant.
 - **Accept:** two tenants sign in; tenant B's `/compliance/frameworks` returns its own (empty or own) state and never tenant A's 315 assessments; a test asserts the SQL carries a tenant predicate; a probe tenant created and deleted for the proof.
 
-### P0-4. Authentication is password-only in practice, with no MFA enrolment
-- **Evidence:** `gds_api/mfa.py` implements TOTP, `mfa_recovery_codes` holds **0 rows**, and nothing enforces enrolment for `platform_owner`/`admin`.
-- **Why it blocks:** the operator account controls remediation execution, cloud credentials and tenant administration. A single reused password is the whole security model.
-- **Do:** require MFA for the owner/admin roles at login (enrolment flow plus enforcement flag per role), keep the TOTP secret out of logs, and record enrolment in the audit trail. Add a recovery-code generation step to enrolment (the table already exists).
-- **Accept:** a role flagged `requires_mfa` cannot complete login without a valid TOTP; enrolment writes N recovery codes; a login without the second factor is refused with a reason and logged; proved with a probe account, then deleted.
+### P0-4. Authentication is password-only in practice, with no MFA enrolment — FIXED 23 Nov 2026
+- **Status:** closed at release `2a9ec118`. Migration 075 adds `roles.requires_mfa` (set true for every role here) and `users.mfa_enrolment_deadline`; `login` refuses an unenrolled account whose deadline has passed with `403 {code: mfa_enrolment_required, enrol_path: /settings/mfa}` and records it; `GET /auth/mfa/policy` states the requirement, the role, the deadline and hours remaining, and `/settings/mfa` renders it as a card.
+- **What was measured first, and corrected the handover's own wording:** the two-step TOTP enrolment already existed (`/auth/mfa/status|enrol|confirm|disable`), login already refused a password-only sign-in for an ENROLLED account, recovery codes were honoured, and `/settings/mfa` was routed and wired. Nothing was REQUIRED: 0 of 5 accounts had enrolled. The mechanism was never the gap; the policy was.
+- **Why a deadline rather than an immediate refusal:** the only account that can administer the platform would be refused at its next login, and enrolment itself needs a session. Existing accounts were given 72 hours (until 26 Nov 2026 14:49 UTC); accounts created after migration 075 carry no deadline and are refused immediately. The break-glass statement is written into the migration.
+- **Proved live:** an overdue probe account → 403 `mfa_enrolment_required`; an account with no deadline → 403; an account inside the window → 200; that account then enrolled (secret, confirm 200), after which a password-only login returned 401 and a login with a TOTP code returned 200. Probes deleted, 5 users / 5 tenants.
+- **Still owed by the owner:** enrolment. `GET /auth/mfa/policy` reports 0 of 5 accounts enrolled, so the deadline is the enforcement date, not a satisfied requirement. Do not read this item as "the estate is protected today".
+- **Not browser-verified:** the settings card is built and the bundle serves (200, 2.7MB), but the browser session could not reach the host (`ERR_TUNNEL_CONNECTION_FAILED`) and the rendered page came back empty twice. Re-check `/settings/mfa` in a browser before calling the UI done.
 
-### P0-5. CI does not gate the deploy, and dependency vulnerabilities are unaudited
+### P0-5. CI does not gate the deploy, and dependency vulnerabilities are unaudited — FIXED 23 Nov 2026
 - **Evidence:** the security gate workflow triggers on `pull_request` only (`branches: [main, master, develop]`); the deploy is a manual `scripts/ops/deploy.sh` on the VPS that runs the pytest suite and the web tests locally but does not require a GitHub check. `npm audit` reports **9 high, 10 moderate**; `pip-audit` is **not installed**, so the Python tree (including torch, fastapi, asyncpg) has never been audited here.
 - **Why it blocks:** a change can reach production without any reviewer or remote gate, and known-vulnerable dependencies are shipping inside a security product.
 - **Do:** install `pip-audit` and add it to CI plus the deploy gate with a severity threshold; triage and fix or formally accept the 9 npm highs (record each acceptance in `docs/decisions/`); make `main` protected and require the CI check; keep the deploy script as the *only* writer to the host but have it refuse a commit that is not green on the remote.
 - **Accept:** `pip-audit` and `npm audit --audit-level=high` both run in CI and in `deploy.sh`; a deliberately introduced high-severity dependency blocks the deploy (prove both ways, as the existing web gate was proved); GitHub shows the check required on `main`.
 
-### P0-6. ~683 unreachable page files contain fabricated data
+### P0-6. ~683 unreachable page files contain fabricated data — FIXED 23 Nov 2026
 - **Evidence:** 785 page files on disk, 102 imported by `App.jsx`. The dead ones still carry `Math.random`, `FALLBACK_*` arrays and "coming soon" strings. Two of these were already caught pretending in production (`RansomwareTrackerPage` with invented gangs and victim counts; `ThreatIntelPage` with a `CANONICAL_THREAT` object claiming 15,847 IOCs and named CVEs against named assets).
 - **Why it blocks:** they are one import away from lying to a customer, and they make every audit of "what does this platform actually show" twice as expensive.
 - **Do:** move unreachable page modules and their exclusive components to `apps/web/src/_retired/` (or delete, with the list recorded in `docs/RETIRED_MODULES.md`), keeping anything imported by a routed module. Add a test that fails when a file under `pages/` is not reachable from `App.jsx` and not on the retired list.
