@@ -19,7 +19,7 @@ Rules enforced here
    is returned with the result so a caller can audit the arithmetic.
 4. Tenant scoping is fail-closed. No bound tenant raises; it never falls back to a global read.
 
-Tables that are NOT tenant-partitioned (compliance_assessments, security_incidents) are
+Tables that are NOT tenant-partitioned (the compliance catalogues) are
 reported with tenant_scoped=False rather than being silently mixed into tenant-scoped output.
 """
 
@@ -181,8 +181,9 @@ async def open_incidents(*, limit: int = 50) -> dict[str, Any]:
         "count": len(rows),
         "incidents": rows,
         "schema_gap": (
-            "the legacy security_incidents table has no tenant_id column, so it is excluded "
-            "from tenant-scoped reads until it is migrated; its rows are not counted here"
+            "the legacy security_incidents table was given a tenant_id and FORCE RLS by migration 078, but "
+            "nothing in the platform writes it and its single row predates the incident store this read uses, "
+            "so it is reported here and not counted"
         ),
     }
 
