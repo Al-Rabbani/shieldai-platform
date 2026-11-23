@@ -116,11 +116,10 @@ export default function IncidentResponsePage() {
       status: "open",
     }).catch(() => {});
 
-    if (incident.status === "new") {
-      await base44.entities.Incident.update(incident.id, { status: "investigating", assigned_to: engineer }).catch(() => {});
-    } else {
-      await base44.entities.Incident.update(incident.id, { assigned_to: engineer }).catch(() => {});
-    }
+    /* Only the assignment is written. "investigating" is not a status the incidents table holds (it has open, and
+     * resolved_at marks closure), so sending it recorded nothing and would have hidden the incident from every count
+     * that reads status = 'open'. An investigation in progress is derived from the assignment itself. */
+    await base44.entities.Incident.update(incident.id, { assigned_to: engineer }).catch(() => {});
     load();
   }
 

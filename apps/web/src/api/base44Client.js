@@ -132,6 +132,7 @@ const ENTITY_ROUTES = {
       'so Slack linkage and per-member escalation settings cannot be saved here; people are managed under Administration.',
   },
   Incident: { path: '/incidents' },
+  IncidentTask: { path: "/incident-tasks" },
   CloudFinding: { path: '/cloud/findings' },
   /* 314 container CVEs exist in `findings` (source trivy_container); this is the route that serves them. */
   ContainerFinding: { path: '/containers/findings', summaryPath: '/containers/summary' },

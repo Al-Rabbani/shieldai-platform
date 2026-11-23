@@ -48,6 +48,7 @@ from gds_api import (
     custom_reports_api,
     remediation_templates_api,
     findings_write_api,
+    incident_tasks_api,
     policy,
     redteam,
     repository_api,
@@ -224,6 +225,7 @@ app.include_router(attack_paths_api.router)
 app.include_router(custom_reports_api.router)
 app.include_router(remediation_templates_api.router)
 app.include_router(findings_write_api.router)
+app.include_router(incident_tasks_api.router)
 app.include_router(incidents.router)
 app.include_router(knowledge.router)
 app.include_router(workflow_runs.router)

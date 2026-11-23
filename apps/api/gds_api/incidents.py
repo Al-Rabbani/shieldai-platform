@@ -178,3 +178,39 @@ async def resolve_incident(
         resolved_findings=resolved,
         accepted_until=composition.get("accepted_until"),
     )
+
+
+@router.patch("/{incident_id}")
+async def assign_incident(
+    incident_id: uuid.UUID,
+    body: dict,
+    current_user: CurrentUser = Depends(require_permission("incidents:write")),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Record who is running an investigation.
+
+    Only assignment is writable here. The page used to send status "investigating" as well, but the incidents table has
+    no such status (it holds open, and resolved_at marks closure), so writing it would have dropped the row out of every
+    count that reads status = 'open'. An investigation in progress is derived: status = 'open' AND assigned_at IS NOT NULL.
+    """
+    assigned_to = (body or {}).get("assigned_to")
+    if not isinstance(assigned_to, str) or not assigned_to.strip():
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "assigned_to is required")
+    row = (
+        await db.execute(
+            text(
+                "UPDATE incidents SET assigned_to = :assigned_to, assigned_at = now() "
+                "WHERE tenant_id = :tenant_id AND id = :id "
+                "RETURNING id, assigned_to, assigned_at"
+            ),
+            {"assigned_to": assigned_to.strip(), "tenant_id": current_user.tenant_id, "id": incident_id},
+        )
+    ).first()
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "no such incident on this tenant")
+    await db.commit()
+    return {
+        "id": str(row[0]),
+        "assigned_to": row[1],
+        "assigned_at": row[2].isoformat() if row[2] else None,
+    }
