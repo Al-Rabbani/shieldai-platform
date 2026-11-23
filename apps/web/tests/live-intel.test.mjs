@@ -37,9 +37,14 @@ test('active incidents are counted as not-terminal, not by one expected status',
   assert.ok(!code.includes('"investigating"'), 'the old status list is back');
 });
 
-test('unserved threat and dark-web sources are stated rather than left silent', () => {
+test('unserved sources are stated rather than left silent', () => {
   assert.match(code, /unavailableEntities/);
-  assert.match(code, /ThreatIntelFeed/);
   assert.match(code, /DarkWebAlert/);
-  assert.match(code, /That is an absence, not a quiet day/);
+  /* ThreatIntelFeed IS served (/threat-intel/feed, item 31), so the rail no longer claims it is absent: it states that
+   * its rows come from this tenant's own findings and that no advisory, malware, ransomware or dark-web feed exists. */
+  assert.doesNotMatch(code, /No threat-intel feed is served here/);
+  assert.match(code, /Derived from this tenant's own findings that carry a CVE/);
+  assert.match(code, /No advisory, malware, ransomware or dark-web feed/);
+  /* An empty rail still gives its true reason instead of a bare silence. */
+  assert.match(code, /It is empty because no such finding is/);
 });
