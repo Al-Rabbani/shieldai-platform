@@ -1,127 +1,103 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { base44 } from "@/api/base44Client";
-import { DashboardPage, StatTile, SectionCard, StatusBadge, LoadingSpinner, EmptyState, Tag } from "@/components/dashboards/DashboardShared";
-import { Plug, Webhook, Activity, Radio } from "lucide-react";
+import { DashboardPage, StatTile, SectionCard, StatusBadge, LoadingSpinner } from "@/components/dashboards/DashboardShared";
+import { Plug, Webhook, Activity, Cloud } from "lucide-react";
+
+/* This page used to read four entities that have no table behind them (ConnectorRegistration, WebhookEndpoint,
+ * ConnectorExecution, EventBusMessage) and, with every read failing into [], printed "No connectors registered" and
+ * four zero tiles. That reads as a platform with nothing configured; the truth is a platform with nowhere to record a
+ * connector. The tiles now separate what exists from what has no store, and the store list is measured live. */
+const STORE_NOTES = {
+  integration_configs: "per-configuration records for hand-added integrations",
+  connector_registrations: "the connector registry itself",
+  webhook_endpoints: "inbound webhook endpoints and their delivery history",
+  connector_executions: "one row per connector run",
+  event_bus_messages: "the event bus message log",
+};
 
 export default function ConnectorsIntegrationsPage() {
-  const [connectors, setConnectors] = useState([]);
-  const [webhooks, setWebhooks] = useState([]);
-  const [executions, setExecutions] = useState([]);
-  const [events, setEvents] = useState([]);
+  const [status, setStatus] = useState(null);
+  const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    Promise.all([
-      base44.entities.ConnectorRegistration.list().catch(() => []),
-      base44.entities.WebhookEndpoint.list("-last_delivery", 20).catch(() => []),
-      base44.entities.ConnectorExecution.list("-created_date", 20).catch(() => []),
-      base44.entities.EventBusMessage.list("-timestamp", 20).catch(() => []),
-    ]).then(([c, w, e, ev]) => {
-      setConnectors(c); setWebhooks(w); setExecutions(e); setEvents(ev); setLoading(false);
-    });
+    base44.integrations.status()
+      .then(setStatus)
+      .catch(e => setError(e.message || "could not read integration status"))
+      .finally(() => setLoading(false));
   }, []);
 
-  if (loading) return <DashboardPage title="Connectors & Integrations" badge="EDP-018"><LoadingSpinner /></DashboardPage>;
+  if (loading) return <DashboardPage title="Connectors &amp; Integrations" badge="EDP-018"><LoadingSpinner /></DashboardPage>;
 
-  const activeConnectors = connectors.filter(c => c.is_active).length;
+  const envs = status?.cloud?.environments || [];
+  const teams = status?.linear?.teams || [];
+  const stores = status?.stores || {};
+  const absent = Object.entries(stores).filter(([, exists]) => !exists).map(([name]) => name);
+  const present = Object.entries(stores).filter(([, exists]) => exists).map(([name]) => name);
 
   return (
-    <DashboardPage title="Connectors & Integrations" badge="EDP-018" subtitle="Manage connector registrations, webhook endpoints, executions, and event bus messages">
+    <DashboardPage
+      title="Connectors &amp; Integrations"
+      badge="EDP-018"
+      subtitle="What this platform can actually speak to, and which connector stores exist"
+    >
+      {error && <p className="text-xs text-red-400 mb-3">Could not read integration status: {error}</p>}
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatTile icon={Plug} label="Connectors" value={connectors.length} sublabel={`${connectors.filter(c => c.category === "cloud").length} cloud`} accent="#3b82f6" />
-        <StatTile icon={Plug} label="Active Connectors" value={activeConnectors} sublabel={`${connectors.length - activeConnectors} inactive`} accent="#10b981" />
-        <StatTile icon={Webhook} label="Webhooks" value={webhooks.length} sublabel={`${webhooks.filter(w => w.is_active).length} active`} accent="#f59e0b" />
-        <StatTile icon={Radio} label="Event Messages" value={events.length} sublabel="Recent bus activity" accent="#8b5cf6" />
+        <StatTile icon={Cloud} label="Cloud Environments" value={envs.length} sublabel={envs.map(e => e.provider).join(", ") || "none connected"} accent="#3b82f6" />
+        <StatTile icon={Activity} label="Assets Discovered" value={status?.cloud?.total_assets ?? 0} sublabel="across those environments" accent="#10b981" />
+        <StatTile icon={Plug} label="Linear Teams" value={status?.linear?.reachable ? teams.length : "—"} sublabel={status?.linear?.reachable ? "visible to this key" : "not reachable"} accent="#f59e0b" />
+        <StatTile icon={Webhook} label="Connector Stores" value={`${present.length} of ${Object.keys(stores).length}`} sublabel={absent.length ? `${absent.length} do not exist` : "all present"} accent="#8b5cf6" />
       </div>
 
-      <SectionCard title="Connector Registrations">
-        {connectors.length === 0 ? <EmptyState message="No connectors registered" /> : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {connectors.map(c => (
-              <div key={c.id} className="rounded-lg p-3" style={{ background: "#0a0f1e", border: "1px solid #1F2937" }}>
-                <div className="flex items-center gap-2 mb-2">
-                  <Plug size={16} className="text-blue-400" />
-                  <p className="text-sm font-semibold text-white flex-1">{c.name}</p>
-                  <span className={`w-2 h-2 rounded-full ${c.is_active ? "bg-emerald-500" : "bg-slate-600"}`} />
-                </div>
-                <div className="flex flex-wrap gap-1 mb-2">
-                  <Tag>{c.category}</Tag>
-                  <Tag>{c.auth_method}</Tag>
-                </div>
-                <div className="flex items-center justify-between text-[10px] text-slate-500">
-                  <span>{c.execution_count} executions</span>
-                  <span>{c.last_sync ? new Date(c.last_sync).toLocaleDateString() : "Never synced"}</span>
-                </div>
-                <div className="mt-2"><StatusBadge status={c.status} /></div>
-              </div>
-            ))}
+      <SectionCard title="Integrations in use">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+          <div className="rounded-lg p-3" style={{ background: "#0a0f1e", border: "1px solid #1F2937" }}>
+            <div className="flex items-center gap-2 mb-2">
+              <Plug size={16} className="text-blue-400" />
+              <p className="text-sm font-semibold text-white flex-1">Linear</p>
+              <span className={`w-2 h-2 rounded-full ${status?.linear?.reachable ? "bg-emerald-500" : "bg-slate-600"}`} />
+            </div>
+            <p className="text-[11px] text-slate-400">
+              {status?.linear?.reachable
+                ? `${status.linear.viewer?.name} · ${teams.length} team(s)`
+                : status?.linear?.reason || "not reachable"}
+            </p>
+            <div className="mt-2"><StatusBadge status={status?.linear?.reachable ? "connected" : "unavailable"} /></div>
           </div>
-        )}
+
+          {envs.map(env => (
+            <div key={env.native_id} className="rounded-lg p-3" style={{ background: "#0a0f1e", border: "1px solid #1F2937" }}>
+              <div className="flex items-center gap-2 mb-2">
+                <Cloud size={16} className="text-blue-400" />
+                <p className="text-sm font-semibold text-white flex-1">{env.provider.toUpperCase()}</p>
+                <span className={`w-2 h-2 rounded-full ${env.discovery_status === "completed" ? "bg-emerald-500" : "bg-slate-600"}`} />
+              </div>
+              <p className="text-[11px] text-slate-400">{env.name} · {env.native_id}</p>
+              <p className="text-[10px] text-slate-500 mt-1">{env.asset_count} assets · discovery {env.discovery_status}</p>
+              <div className="mt-2"><StatusBadge status={env.discovery_status || env.status} /></div>
+            </div>
+          ))}
+        </div>
       </SectionCard>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <SectionCard title="Webhook Endpoints">
-          {webhooks.length === 0 ? <EmptyState message="No webhooks configured" /> : (
-            <div className="space-y-2">
-              {webhooks.map(w => (
-                <div key={w.id} className="rounded-lg p-3" style={{ background: "#0a0f1e", border: "1px solid #1F2937" }}>
-                  <div className="flex items-center gap-2 mb-1">
-                    <Webhook size={14} className="text-amber-400" />
-                    <p className="text-sm font-semibold text-white flex-1">{w.name}</p>
-                    <span className={`w-2 h-2 rounded-full ${w.is_active ? "bg-emerald-500" : "bg-slate-600"}`} />
-                  </div>
-                  <div className="flex flex-wrap gap-1 mb-2">
-                    {(w.events || []).map((ev, i) => <Tag key={i}>{ev}</Tag>)}
-                  </div>
-                  <div className="flex items-center gap-4 text-[10px] text-slate-500">
-                    <span className="text-emerald-400">{w.delivery_count} delivered</span>
-                    <span className="text-red-400">{w.failure_count} failed</span>
-                  </div>
-                </div>
-              ))}
+      <SectionCard title="Connector stores">
+        <div className="space-y-2">
+          {Object.entries(stores).map(([name, exists]) => (
+            <div key={name} className="flex items-start gap-3 rounded-lg p-3" style={{ background: "#0a0f1e", border: "1px solid #1F2937" }}>
+              <span className={`mt-1 w-2 h-2 rounded-full ${exists ? "bg-emerald-500" : "bg-slate-600"}`} />
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-white">{name}</p>
+                <p className="text-[11px] text-slate-500">
+                  {exists ? "exists" : `does not exist — ${STORE_NOTES[name] || "no table behind this entity"} cannot be recorded`}
+                </p>
+              </div>
             </div>
-          )}
-        </SectionCard>
-
-        <SectionCard title="Recent Executions">
-          {executions.length === 0 ? <EmptyState message="No recent executions" /> : (
-            <div className="space-y-2">
-              {executions.map(e => (
-                <div key={e.id} className="rounded-lg p-3 flex items-center gap-3" style={{ background: "#0a0f1e", border: "1px solid #1F2937" }}>
-                  <Activity size={14} className={e.status === "success" ? "text-emerald-400" : "text-red-400"} />
-                  <div className="flex-1">
-                    <p className="text-xs font-semibold text-white">{e.connector_name} · {e.action}</p>
-                    <p className="text-[10px] text-slate-500">By {e.executed_by || "system"} · {e.response_time_ms ? `${e.response_time_ms}ms` : ""}</p>
-                  </div>
-                  <StatusBadge status={e.status} />
-                </div>
-              ))}
-            </div>
-          )}
-        </SectionCard>
-      </div>
-
-      <SectionCard title="Event Bus">
-        {events.length === 0 ? <EmptyState message="No event bus messages" /> : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead><tr className="text-slate-500 border-b border-slate-700">
-                <th className="text-left py-2 px-3">Event Type</th><th className="text-left py-2 px-3">Source</th><th className="text-left py-2 px-3">Consumed By</th><th className="text-left py-2 px-3">Status</th><th className="text-left py-2 px-3">Timestamp</th>
-              </tr></thead>
-              <tbody>
-                {events.map(ev => (
-                  <tr key={ev.id} className="border-b border-slate-800 hover:bg-blue-500/5">
-                    <td className="py-2 px-3 text-white font-medium">{ev.event_type}</td>
-                    <td className="py-2 px-3 text-slate-400">{ev.source}</td>
-                    <td className="py-2 px-3 text-slate-400">{ev.consumed_by}</td>
-                    <td className="py-2 px-3"><StatusBadge status={ev.status} /></td>
-                    <td className="py-2 px-3 text-slate-500">{ev.timestamp ? new Date(ev.timestamp).toLocaleString() : "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+          ))}
+        </div>
+        <p className="text-[11px] text-slate-500 mt-3">
+          Read live from the database schema on every load, so a store that is added later appears here without a code change.
+        </p>
       </SectionCard>
     </DashboardPage>
   );

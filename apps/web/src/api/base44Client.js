@@ -819,6 +819,19 @@ export const base44 = {
     },
   },
 
+  integrations: {
+    /* Every surface this platform can actually speak to, plus the connector stores that do not exist. The page renders
+     * from this rather than from hardcoded copy, so "connected" always means measured. */
+    async status() {
+      return request('/integrations/status');
+    },
+    /* Whether ticketing can work, and how much of the open register is filed. Kept as its own call because it owns the
+     * linear_issue_links facts, which the status route does not read. */
+    async linearStatus() {
+      return request('/integrations/linear/status');
+    },
+  },
+
   evidence: {
     /* POST /evidence takes multipart: file, subject_type, subject_id. The bytes are hashed and stored in MinIO by the
      * API, which is why the vault can then verify them. */
