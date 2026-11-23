@@ -8,7 +8,7 @@ import {
   UserCheck, ClipboardList, Bot, BarChart3, Cpu, Bell, Settings, Swords,
   Map, Skull, Zap, Shield, KeyRound, Dna, Radio, Briefcase, Biohazard, Network,
   LayoutDashboard, ShieldCheck, Building2, Plug, Fingerprint, Database, Target, Radar, Wrench, SlidersHorizontal,
-  Inbox, FolderDown, BellRing, CalendarDays, Gauge, BookOpen, BookMarked, Workflow, Timer, History, TrendingUp,
+  Inbox, FolderDown, BellRing, CalendarDays, Gauge, BookOpen, BookMarked, Workflow, Timer, History, TrendingUp, Brain,
 } from "lucide-react";
 
 const SECTIONS = [
@@ -16,6 +16,7 @@ const SECTIONS = [
     { icon: Home, label: "🏠 Home", path: "/" },
     { icon: LayoutDashboard, label: "My Dashboard", path: "/my-dashboard" },
     { icon: Bot, label: "AI Co-Pilot", path: "/copilot" },
+    { icon: Brain, label: "Co-Pilot Memory", path: "/copilot/memory" },
     { icon: Bell, label: "Notifications", path: "/notifications" },
   ]},
   { label: "OFFENSIVE", color: "#ef4444", items: [

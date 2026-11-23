@@ -876,6 +876,10 @@ export const base44 = {
   platform: {
     /* Item 40. The Co-Pilot's brain, its voice, and the map of both. */
     copilotCapabilities: () => request('/copilot/capabilities'),
+    /* Item 41. The Co-Pilot's standing memory: what the planner is given, in the operator's own words. */
+    memories: () => request('/copilot/memory'),
+    remember: (memory) => request('/copilot/memory', { method: 'POST', body: memory }),
+    forget: (memoryId) => request(`/copilot/memory/${memoryId}`, { method: 'DELETE' }),
     /* Speech to text. The transcript comes back for review; nothing is sent on the operator's behalf. */
     transcribe: (audioBlob, filename) => {
       const form = new FormData();

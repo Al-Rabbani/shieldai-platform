@@ -24,6 +24,7 @@ import MyDashboardPage from '@/pages/MyDashboardPage';
 
 // Co-Pilot
 import GDSCoPilotPage from '@/pages/gds/GDSCoPilotPage';
+import GDSCoPilotMemoryPage from '@/pages/gds/GDSCoPilotMemoryPage';
 
 // Red Team Command (Layer 4 — Hermes)
 import RedTeamCommandPage from '@/pages/RedTeamCommandPage';
@@ -169,6 +170,7 @@ const AuthenticatedApp = () => {
 
           {/* Co-Pilot */}
           <Route path="/copilot" element={<GDSCoPilotPage />} />
+          <Route path="/copilot/memory" element={<GDSCoPilotMemoryPage />} />
 
           {/* Red Team Command (Layer 4 — Hermes) */}
           <Route path="/red-team" element={<RedTeamCommandPage />} />
