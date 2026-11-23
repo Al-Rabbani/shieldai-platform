@@ -58,7 +58,7 @@ export default function AssignmentRulesPage() {
       setShowForm(false);
       setEditingId(null);
       setForm(emptyRule);
-      setMessage({ type: "ok", text: "Rule saved. New findings matching it are assigned on discovery." });
+      setMessage({ type: "ok", text: "Rule saved. Press Apply to assign the findings it matches: nothing assigns on discovery, because no scan triggers an assignment." });
       await load();
     } catch (error) {
       setMessage({ type: "err", text: error.message });
@@ -74,6 +74,25 @@ export default function AssignmentRulesPage() {
   async function toggleActive(rule) {
     await base44.entities.AssignmentRule.update(rule.id, { is_active: !rule.is_active });
     setRules((prev) => prev.map((row) => (row.id === rule.id ? { ...row, is_active: !row.is_active } : row)));
+  }
+
+  /* Assignment is a real POST: it sets owner on unowned open findings that match a rule, and reports what it did. The
+   * first run assigns, a second run assigns nothing because an owned finding is never reassigned. */
+  async function runAssignment() {
+    setRunning(true);
+    setMessage(null);
+    try {
+      const result = await base44.entities.AssignmentRule.run("apply", { apply: true });
+      const perRule = (result.per_rule || []).map((r) => `${r.rule_name}: ${r.assigned ?? r.assignable}`).join(", ");
+      setMessage({
+        type: "ok",
+        text: `${result.assigned || 0} finding(s) assigned · ${result.assignable || 0} matched in total · ${perRule || "no active rule matched"}.`,
+      });
+      await load();
+    } catch (error) {
+      setMessage({ type: "err", text: error.message });
+    }
+    setRunning(false);
   }
 
   // Read-only: shows what the button would do before it is pressed, so the click is informed.
@@ -109,7 +128,7 @@ export default function AssignmentRulesPage() {
           <UserCheck size={22} className="text-blue-400 mt-0.5" />
           <div>
             <h1 className="text-xl font-bold text-white">Finding assignment rules</h1>
-            <p className="text-xs text-slate-500">Route findings by asset type and team ownership. Escalation follows the age policy for each severity, not a flat three days: critical 24h, high 7d, medium 30d, low 90d, info 180d.</p>
+            <p className="text-xs text-slate-500">Assign unowned open findings to a named person, matched on severity and scanner source. Asset type cannot be a match key: no finding records one. Nothing is assigned until you press Apply, and a finding that already has an owner is never reassigned. Slack user ids are recorded but nothing delivers to them - this host holds no Slack bot token.</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -119,6 +138,13 @@ export default function AssignmentRulesPage() {
             className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold bg-amber-500/15 text-amber-300 border border-amber-500/40 hover:bg-amber-500/25 disabled:opacity-40"
           >
             <PlayCircle size={13} /> {running ? "Checking…" : "Escalate stale findings"}
+          </button>
+          <button
+            onClick={runAssignment}
+            disabled={running}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-500/25 disabled:opacity-40"
+          >
+            <PlayCircle size={13} /> {running ? "Applying…" : "Apply assignment rules"}
           </button>
           <button onClick={startCreate} className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold bg-blue-500 text-white hover:bg-blue-600">
             <Plus size={13} /> New rule

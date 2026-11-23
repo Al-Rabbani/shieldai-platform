@@ -86,6 +86,9 @@ const ENTITY_ROUTES = {
    * update and delete across 11 call sites. No fix_schedule table existed, so every one of those writes was refused and
    * the board reverted on reload. GET/POST/PATCH/DELETE /fix-schedule record exactly what a person placed. */
   FixScheduleItem: { path: "/fix-schedule" },
+  /* Five sites saved assignment rules into a table that did not exist, above the promise "New findings matching it are
+   * assigned on discovery", while nothing assigned anything. apply is a real POST that assigns unowned open findings. */
+  AssignmentRule: { path: "/assignment-rules", actions: ["apply"] },
   /* The strategy library creates, edits and deletes; the triage queue reads published ones by times_reused and bumps the
    * counter when applied. No strategy table existed, so every write vanished and the library was always empty. */
   FixStrategy: { path: "/fix-strategies" },
@@ -686,6 +689,16 @@ function entity(name) {
       }
       const { path } = guard('get');
       return request(`${path}/${encodeURIComponent(id)}`);
+    },
+    /* A route may publish non-CRUD actions as POST /<path>/<action>. An action it does not list refuses by name rather than
+     * posting to a guessed path, so a page cannot silently hit nothing. */
+    async run(action, body) {
+      if (!route || !Array.isArray(route.actions) || !route.actions.includes(action)) {
+        unmapped.add(name);
+        throw new NotOnThisPlatform(`${name}.${action}`, 'Action');
+      }
+      const { path } = guard('run');
+      return request(`${path}/${encodeURIComponent(action)}`, { method: 'POST', body: toPlatformBody(name, body || {}) });
     },
     /* One row per tenant (or per scope) is saved with a PUT at the collection path, not a POST that appends. Pages that
      * edit a single record call upsert() so a second save updates instead of duplicating. */
