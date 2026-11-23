@@ -82,6 +82,10 @@ const ENTITY_ROUTES = {
    * CVSS, EPSS and CISA KEV flag. feed_type is KEV or CVE and nothing else, because no advisory, malware, ransomware or
    * APT source exists here - the route names those as unavailable rather than returning an empty page. */
   ThreatIntelFeed: { path: '/threat-intel/feed', summaryPath: '/threat-intel/feed?limit=1' },
+  /* No CVE store exists on this platform, so this is aggregated from the tenant's own findings: one row per CVE, with
+   * its worst severity, highest CVSS and EPSS, the KEV flag, the finding and asset counts, and the scanners that saw it.
+   * Exploit maturity and ransomware use are not measured here and the route names them rather than returning zero. */
+  CVERecord: { path: '/cve/records', summaryPath: '/cve/records?limit=1' },
   Finding: { path: '/findings', summaryPath: '/findings/summary' },
   /* The offensive side: real stores only. authorized_targets holds 2 rows and red_team_safety_state 1, so those are
    * served. /red-team/overview states the absent stores (attack paths, simulations, campaigns, attack findings) by name
@@ -207,6 +211,9 @@ const REFUSAL_REASONS = {
     'No dark-web collector exists on this platform and there is no alert store, so no leak, credential or chatter alert '
     + 'is recorded. The dark-web routes serve on-demand email and domain lookups only, which return what a lookup found '
     + 'at the moment you asked rather than a continuous feed.',
+  CVERecord:
+    'Reading the CVE register is served from GET /cve/records, aggregated from this tenant\'s own findings. Writing a '
+    + 'CVE is not: there is no CVE store here, so a hand-written record would vanish on reload.',
   ThreatIntelFeed:
     'Reading the intel feed is served from GET /threat-intel/feed, derived from this tenant\'s own findings. Writing a '
     + 'feed item is not: there is no intel store, so a manually added item would vanish on reload.',

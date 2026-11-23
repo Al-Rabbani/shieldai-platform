@@ -203,6 +203,7 @@ from gds_api import (
     scans_api,
     secrets_api,
     store_reads_api,
+    cve_api,
 )
 
 app.include_router(compliance_api.router)
@@ -228,6 +229,7 @@ app.include_router(agents_router.router)
 app.include_router(findings.router)
 app.include_router(platform_intel_api.router)
 app.include_router(threat_intel_api.router)
+app.include_router(cve_api.router)
 app.include_router(agent_pages_api.router)
 app.include_router(team_api.router)
 app.include_router(redteam_overview_api.router)
