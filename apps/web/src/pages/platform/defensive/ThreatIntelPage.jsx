@@ -42,7 +42,7 @@ export default function ThreatIntelPage() {
       <div className="rounded-xl border px-4 py-3 text-sm mb-5 bg-muted border-border">
         <span className="font-semibold">
           {counts.total === undefined
-            ? "Reading the register…"
+            ? "Reading the KEV position from the register…"
             : kev > 0
               ? `${kev} CVE${kev === 1 ? "" : "s"} in this register are listed in the CISA KEV catalogue.`
               : "No CVE in this register is listed in the CISA KEV catalogue."}
@@ -70,7 +70,7 @@ export default function ThreatIntelPage() {
 
       <div className="mb-5">
         <h2 className="text-sm font-bold mb-3 uppercase tracking-widest text-muted-foreground">Highest EPSS findings</h2>
-        {isLoading ? (
+        {isLoading || (isFetching && items.length === 0) ? (
           <div className="flex items-center gap-2 text-xs text-muted-foreground py-6">
             <Loader2 className="w-3.5 h-3.5 animate-spin" /> Reading the register…
           </div>
