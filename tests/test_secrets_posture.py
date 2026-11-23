@@ -354,3 +354,16 @@ def test_der_parsing_reads_subject_issuer_and_expiry():
 
 def test_empty_der_parses_to_nothing_rather_than_raising():
     assert m._parse_der(b"") == {}
+
+
+def test_brand_names_come_from_the_route_not_from_css():
+    """The page rendered "Openai", "Github" and "Minio" because it applied text-transform: capitalize to a lowercase
+    key. The spelling is data, so the route carries it."""
+    integrations = {i["integration"]: i for i in _posture()["credentials"]["integrations"]}
+    assert integrations["openai"]["display_name"] == "OpenAI"
+    assert integrations["github"]["display_name"] == "GitHub"
+    assert integrations["minio"]["display_name"] == "MinIO"
+    assert integrations["aws"]["display_name"] == "AWS"
+    page = _code(WEB / "pages" / "dashboards" / "SecretsKeyManagementPage.jsx")
+    assert "entry.display_name" in page
+    assert "capitalize" not in page, "a CSS transform is not a brand name"

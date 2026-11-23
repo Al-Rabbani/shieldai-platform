@@ -210,7 +210,7 @@ export default function SecretsKeyManagementPage() {
           {credentials.integrations.map((entry) => (
             <div key={entry.integration} className="rounded-lg p-3" style={{ background: "#0a0f1e", border: "1px solid #1F2937" }}>
               <div className="flex items-center gap-2 mb-1.5">
-                <p className="text-sm font-semibold text-white flex-1 capitalize">{entry.integration}</p>
+                <p className="text-sm font-semibold text-white flex-1">{entry.display_name || entry.integration}</p>
                 <span
                   className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${
                     entry.state === "configured" ? TONE.ok : entry.state === "partial" ? TONE.warn : TONE.flat

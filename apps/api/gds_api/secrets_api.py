@@ -71,6 +71,24 @@ INTEGRATIONS: dict[str, list[str]] = {
     "malwarebazaar": ["MALWAREBAZAAR_AUTH_KEY"],
 }
 
+# Brand names, because a CSS text-transform is not a name: the page rendered "Openai", "Github", "Minio", "Neo4j" and
+# "Malwarebazaar" from the lowercase keys. The route owns the spelling so a page cannot invent one.
+INTEGRATION_NAMES: dict[str, str] = {
+    "aws": "AWS",
+    "azure": "Azure",
+    "openai": "OpenAI",
+    "anthropic": "Anthropic",
+    "github": "GitHub",
+    "linear": "Linear",
+    "stripe": "Stripe",
+    "resend": "Resend",
+    "slack": "Slack",
+    "backblaze": "Backblaze B2",
+    "minio": "MinIO",
+    "neo4j": "Neo4j",
+    "malwarebazaar": "MalwareBazaar",
+}
+
 # Service attribution by variable-name prefix. Ordered: the first matching prefix wins, so "DATABASE_URL" is the database
 # rather than "url".
 SERVICE_PREFIXES: tuple[tuple[str, str], ...] = (
@@ -174,6 +192,7 @@ def _credential_inventory() -> dict[str, Any]:
         integrations.append(
             {
                 "integration": service,
+                "display_name": INTEGRATION_NAMES.get(service, service),
                 "required": entries,
                 "configured_vars": present,
                 "required_vars": len(entries),
