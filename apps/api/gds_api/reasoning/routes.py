@@ -35,6 +35,48 @@ from gds_api.security import CurrentUser, get_current_user
 
 router = APIRouter(prefix="/reasoning", tags=["reasoning"])
 
+STANDING_MEMORY_PREFIX = "Standing instructions the operator recorded for this tenant"
+
+
+async def _with_standing_memory(goal: str, tenant_id: str, context: dict | None) -> tuple[str, dict]:
+    """Prefix the goal with the tenant's recorded preferences, read from copilot_memory.
+
+    Read-only and best-effort: a memory that cannot be read must not block a mission, but it must not be reported as
+    applied either, so the count that is returned is the count that was really included.
+    """
+    context = dict(context or {})
+    included: list[str] = []
+    try:
+        from sqlalchemy import text as _text
+        from gds_api.db import async_session_factory
+
+        async with async_session_factory() as session:
+            await session.execute(_text("SELECT set_config('gds.tenant_id', :tid, true)"), {"tid": str(tenant_id)})
+            rows = (
+                await session.execute(
+                    _text(
+                        "SELECT kind, key, value FROM copilot_memory WHERE tenant_id = :tid"
+                        " ORDER BY pinned DESC, updated_at DESC LIMIT 20"
+                    ),
+                    {"tid": str(tenant_id)},
+                )
+            ).all()
+        included = [f"- [{r.kind}] {r.key}: {r.value}" for r in rows]
+    except Exception as exc:  # noqa: BLE001 - named in the context, never silently dropped
+        context["standing_memory_error"] = f"{type(exc).__name__}: {exc}"
+
+    if not included:
+        context["standing_memory_count"] = 0
+        return goal, context
+
+    context["standing_memory_count"] = len(included)
+    combined = (
+        f"{goal}\n\n{STANDING_MEMORY_PREFIX}, most important first. They are context for how to answer, not a new task:\n"
+        + "\n".join(included)
+    )
+    return combined, context
+
+
 
 class MissionRequest(BaseModel):
     goal: str
@@ -91,12 +133,14 @@ async def create_mission(req: MissionRequest, request: Request, user: CurrentUse
     guard_note = await _guard_or_refuse(req, tid, _uid(user), request, "POST /reasoning/mission")
     try:
         if req.agent_id:
+            _goal, _ctx = await _with_standing_memory(req.goal, tid, req.context)
             result = await reasoning_bridge.execute_task(
-                req.agent_id, req.goal, req.context, tenant_id=tid, user_id=_uid(user),
+                req.agent_id, _goal, _ctx, tenant_id=tid, user_id=_uid(user),
                 allow_writes=req.allow_writes)
         else:
+            _goal, _ctx = await _with_standing_memory(req.goal, tid, req.context)
             result = await reasoning_bridge.run_with_auto_select(
-                req.goal, req.context, tenant_id=tid, user_id=_uid(user),
+                _goal, _ctx, tenant_id=tid, user_id=_uid(user),
                 allow_writes=req.allow_writes)
 
         return {

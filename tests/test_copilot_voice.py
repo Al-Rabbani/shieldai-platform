@@ -28,7 +28,7 @@ def test_the_voice_routes_are_declared_and_mounted():
     401 paths. The live 401s are proved against the running API instead of guessed at here."""
     from gds_api import copilot_api
     declared = {r.path for r in copilot_api.router.routes}
-    assert declared == {"/copilot/capabilities", "/copilot/voice/transcribe", "/copilot/voice/speak"}
+    assert {"/copilot/capabilities", "/copilot/voice/transcribe", "/copilot/voice/speak"} <= declared
     main_src = (API / "main.py").read_text()
     assert "app.include_router(copilot_api.router)" in main_src
     assert "    copilot_api,\n" in main_src
@@ -110,3 +110,53 @@ def test_the_adapter_has_a_blob_path_because_audio_is_not_json():
     assert "response.blob()" in api
     assert "copilotCapabilities: () => request('/copilot/capabilities')" in api
     assert "form.append('file'" in api
+
+
+# ---- the memory store and the planner reading it ------------------------------------------------------------------
+
+def test_the_memory_routes_exist_and_require_a_user():
+    from gds_api import copilot_api
+    paths = [r.path for r in copilot_api.router.routes]
+    assert paths.count("/copilot/memory") == 2, "GET and POST must both be served"
+    assert "/copilot/memory/{memory_id}" in paths
+    src = code(API / "copilot_api.py")
+    for fn in ("list_memory", "remember", "forget"):
+        assert f"async def {fn}(" in src
+
+
+def test_memory_is_tenant_scoped_and_never_global():
+    src = (API / "copilot_api.py").read_text()
+    assert "copilot_memory WHERE tenant_id = :tid" in src
+    assert "CAST(:mid AS uuid) AND tenant_id = :tid" in src, "a delete must be scoped, not id-only"
+    assert "set_config('gds.tenant_id'" in src, "FORCE RLS needs the tenant bound or every read returns nothing"
+
+
+def test_stating_the_same_key_replaces_it_instead_of_accumulating():
+    src = (API / "copilot_api.py").read_text()
+    assert "ON CONFLICT (tenant_id, kind, key)" in src
+    assert "DO UPDATE SET value = EXCLUDED.value" in src
+
+
+def test_the_migration_grants_what_a_new_table_needs():
+    mig = sorted((pathlib.Path("/opt/gds-os/migrations/security_isolation")).glob("*copilot_memory.sql"))
+    assert mig, "migration 070 must exist"
+    sql = mig[0].read_text()
+    assert "ENABLE ROW LEVEL SECURITY" in sql and "FORCE ROW LEVEL SECURITY" in sql
+    assert "GRANT SELECT, INSERT, UPDATE, DELETE ON copilot_memory TO gds;" in sql
+    assert "GRANT SELECT ON copilot_memory TO gds_runtime;" in sql
+
+
+def test_the_planner_really_reads_the_memory():
+    src = (API / "reasoning" / "routes.py").read_text()
+    assert "copilot_memory" in src
+    assert "STANDING_MEMORY_PREFIX" in src
+    assert "standing_memory_count" in src, "an answer must be able to say what it was working from"
+    # Both planning call sites must use the augmented goal, not the raw one.
+    assert src.count("_with_standing_memory(req.goal") == 2
+    assert "execute_task(\n                req.agent_id, req.goal" not in src
+
+
+def test_the_capability_map_no_longer_claims_there_is_no_preference_store():
+    src = (API / "copilot_api.py").read_text()
+    assert '"available": False,\n                "reason": "There is no store of standing preferences' not in src
+    assert '"read_by_a_mission": True' in src

@@ -125,7 +125,9 @@ async def copilot_capabilities(
         logger.warning("capability catalogue unreadable: %s", exc)
         catalogue = []
 
-    executable = [c for c in catalogue if c["status"] == "ACTIVE"]
+    # The catalogue's own word for an executable capability is OPERATIONAL. Measured: 65 OPERATIONAL, 2 PLANNED,
+    # 3 DISABLED. Comparing against "ACTIVE" counted zero of seventy, which would have read as nothing executable.
+    executable = [c for c in catalogue if c["status"] == "OPERATIONAL"]
     planned = [c for c in catalogue if c["status"] == "PLANNED"]
     disabled = [c for c in catalogue if c["status"] == "DISABLED"]
 
@@ -145,10 +147,37 @@ async def copilot_capabilities(
         "SELECT count(*) FROM missions WHERE tenant_id = :t AND conversation_thread_id IS NOT NULL", t=tenant_id
     )
     knowledge = await scalar("SELECT count(*) FROM knowledge_documents WHERE tenant_id = :t", t=tenant_id)
+    # A receipt is a decision the broker recorded AND executed: capability_requests has no status column at all, so
+    # counting "requests with status executed" raised and returned None, which printed as null.
     receipts = await scalar(
-        "SELECT count(*) FROM capability_requests WHERE tenant_id = :t AND status = 'executed'", t=tenant_id
+        "SELECT count(*) FROM capability_decisions WHERE tenant_id = :t AND executed_at IS NOT NULL", t=tenant_id
+    )
+    decisions_allowed = await scalar(
+        "SELECT count(*) FROM capability_decisions WHERE tenant_id = :t AND decision = 'ALLOW'", t=tenant_id
+    )
+    decisions_denied = await scalar(
+        "SELECT count(*) FROM capability_decisions WHERE tenant_id = :t AND decision = 'DENY'", t=tenant_id
+    )
+    decisions_approval = await scalar(
+        "SELECT count(*) FROM capability_decisions WHERE tenant_id = :t AND decision = 'REQUIRE_APPROVAL'", t=tenant_id
     )
     cost_rows = await scalar("SELECT count(*) FROM cost_records WHERE tenant_id = :t", t=tenant_id)
+    memories = await scalar("SELECT count(*) FROM copilot_memory WHERE tenant_id = :t", t=tenant_id)
+
+    # A count that could not be read is named here rather than left as a null the reader has to interpret.
+    measured = {
+        "missions": missions,
+        "conversation_threads": threads,
+        "thread_turns": turns,
+        "knowledge_documents": knowledge,
+        "executed_receipts": receipts,
+        "decisions_allowed": decisions_allowed,
+        "decisions_denied": decisions_denied,
+        "decisions_require_approval": decisions_approval,
+        "cost_rows": cost_rows,
+        "memories": memories,
+    }
+    counts_unavailable = [name for name, value in measured.items() if value is None]
 
     return {
         "brain": {
@@ -167,7 +196,12 @@ async def copilot_capabilities(
             "disabled": len(disabled),
             "requiring_approval": len([c for c in executable if c["requires_approval"]]),
             "executed_receipts": receipts,
-            "basis": "gds_api.capabilities.catalog.CAPABILITY_REGISTRY, counted now; executable means status ACTIVE",
+            "decisions_allowed": decisions_allowed,
+            "decisions_denied": decisions_denied,
+            "decisions_require_approval": decisions_approval,
+            "basis": "gds_api.capabilities.catalog.CAPABILITY_REGISTRY counted now; executable means status OPERATIONAL. "
+                     "A receipt is a capability_decisions row the broker executed (executed_at set).",
+            "counts_unavailable": counts_unavailable,
             "entries": catalogue,
         },
         "memory": {
@@ -176,10 +210,16 @@ async def copilot_capabilities(
             "thread_turns": turns,
             "knowledge_documents": knowledge,
             "cost_rows": cost_rows,
+            "counts_unavailable": counts_unavailable,
             "durable_operator_preferences": {
-                "available": False,
-                "reason": "There is no store of standing preferences for this Co-Pilot to read. Missions and conversation "
-                          "turns are recorded, so a thread can be reread, but nothing survives a new thread by design yet.",
+                "available": True,
+                "store": "copilot_memory (tenant-scoped, FORCE RLS)",
+                "routes": ["GET /copilot/memory", "POST /copilot/memory", "DELETE /copilot/memory/{id}"],
+                "memories_recorded": memories,
+                "read_by_a_mission": True,
+                "how": "POST /reasoning/mission prefixes the goal with up to 20 recorded memories, most important first, "
+                       "and reports standing_memory_count on the mission context so an answer can state what it used.",
+                "limit": "A memory changes how a mission answers; it does not create, schedule or run one on its own.",
             },
         },
         "orchestration": {
@@ -274,6 +314,113 @@ async def transcribe_audio(
 class SpeakRequest(BaseModel):
     text: str = Field(min_length=1)
     voice: Optional[str] = None
+
+
+class MemoryWrite(BaseModel):
+    kind: str = Field(pattern="^(preference|instruction|fact)$")
+    key: str = Field(min_length=1, max_length=120)
+    value: str = Field(min_length=1, max_length=2000)
+
+
+def _set_tenant(tid: str):
+    """The store is FORCE RLS, so every statement runs under the caller's tenant or returns nothing at all."""
+    from sqlalchemy import text as _text
+    return _text("SELECT set_config('gds.tenant_id', :tid, true)"), {"tid": str(tid)}
+
+
+@router.get("/memory")
+async def list_memory(
+    current_user: CurrentUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> Dict[str, Any]:
+    """Every standing preference, instruction and fact this tenant's Co-Pilot holds, newest first."""
+    tid = _tenant(current_user)
+    stmt, params = _set_tenant(tid)
+    await db.execute(stmt, params)
+    rows = (
+        await db.execute(
+            text(
+                "SELECT id, kind, key, value, source, confidence, pinned, use_count, created_at, updated_at"
+                " FROM copilot_memory WHERE tenant_id = :tid ORDER BY pinned DESC, updated_at DESC"
+            ),
+            {"tid": tid},
+        )
+    ).mappings().all()
+    return {
+        "count": len(rows),
+        "memories": [
+            {
+                "id": str(r["id"]),
+                "kind": r["kind"],
+                "key": r["key"],
+                "value": r["value"],
+                "source": r["source"],
+                "confidence": r["confidence"],
+                "pinned": r["pinned"],
+                "use_count": r["use_count"],
+                "created_at": r["created_at"].isoformat() if r["created_at"] else None,
+                "updated_at": r["updated_at"].isoformat() if r["updated_at"] else None,
+            }
+            for r in rows
+        ],
+        "basis": "copilot_memory for the calling tenant only. A memory is what the operator stated or what a page "
+                 "recorded; nothing here is inferred from a mission.",
+    }
+
+
+@router.post("/memory")
+async def remember(
+    body: MemoryWrite,
+    current_user: CurrentUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> Dict[str, Any]:
+    """Record a standing preference. Stating the same key again replaces it rather than accumulating duplicates."""
+    tid = _tenant(current_user)
+    actor = str(getattr(current_user, "user_id", None) or getattr(current_user, "id", "") or "") or None
+    stmt, params = _set_tenant(tid)
+    await db.execute(stmt, params)
+    row = (
+        await db.execute(
+            text(
+                "INSERT INTO copilot_memory (tenant_id, kind, key, value, source, confidence, created_by)"
+                " VALUES (:tid, :kind, :key, :value, 'operator_stated', 'stated', :actor)"
+                " ON CONFLICT (tenant_id, kind, key)"
+                " DO UPDATE SET value = EXCLUDED.value, updated_at = now(), source = 'operator_stated'"
+                " RETURNING id, (xmax = 0) AS inserted"
+            ),
+            {"tid": tid, "kind": body.kind, "key": body.key, "value": body.value, "actor": actor},
+        )
+    ).mappings().first()
+    await db.commit()
+    return {
+        "id": str(row["id"]),
+        "kind": body.kind,
+        "key": body.key,
+        "value": body.value,
+        "created": bool(row["inserted"]),
+        "note": "Recorded for this tenant. It is read back by GET /copilot/memory; it does not change a mission's "
+                "behaviour on its own.",
+    }
+
+
+@router.delete("/memory/{memory_id}")
+async def forget(
+    memory_id: str,
+    current_user: CurrentUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> Dict[str, Any]:
+    """Forget one memory. Scoped to the caller's tenant, so another tenant's id deletes nothing."""
+    tid = _tenant(current_user)
+    stmt, params = _set_tenant(tid)
+    await db.execute(stmt, params)
+    result = await db.execute(
+        text("DELETE FROM copilot_memory WHERE id = CAST(:mid AS uuid) AND tenant_id = :tid"),
+        {"mid": memory_id, "tid": tid},
+    )
+    await db.commit()
+    if result.rowcount == 0:
+        raise HTTPException(404, "No memory with that id belongs to this tenant")
+    return {"deleted": True, "id": memory_id}
 
 
 @router.post("/voice/speak")
