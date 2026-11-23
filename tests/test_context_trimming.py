@@ -42,26 +42,26 @@ def test_the_conversation_stays_valid_and_pairing_survives():
     assert_pairing(trimmed)                      # raises if a tool message lost its call or vice versa
     assert len(trimmed) == len(messages), "no message may be dropped"
     assert [m.get("role") for m in trimmed] == [m.get("role") for m in messages]
-    assert compacted == len([m for m in messages if m["role"] == "tool"]) - 4
+    assert compacted == len([m for m in messages if m["role"] == "tool"]) - 3
 
 
 def test_the_most_recent_results_are_untouched():
     messages = history()
-    trimmed, _ = trim_tool_results(messages, keep_recent=4)
-    recent = [m for m in trimmed if m["role"] == "tool"][-4:]
+    trimmed, _ = trim_tool_results(messages, keep_recent=3)
+    recent = [m for m in trimmed if m["role"] == "tool"][-3:]
     assert all(len(m["content"]) == 4000 for m in recent)
     assert all("trimmed to bound context" not in m["content"] for m in recent)
 
 
 def test_older_results_are_shortened_and_say_how_much_was_withheld():
     messages = history()
-    trimmed, _ = trim_tool_results(messages, keep_recent=4, head_chars=400)
+    trimmed, _ = trim_tool_results(messages, keep_recent=3, head_chars=300)
     older = [m for m in trimmed if m["role"] == "tool"][:-4]
     assert older
     for message in older:
         assert len(message["content"]) < 4000
-        assert message["content"].startswith("K" * 400)
-        assert "3600 of 4000 characters withheld" in message["content"]
+        assert message["content"].startswith("K" * 300)
+        assert "3700 of 4000 characters withheld" in message["content"]
         assert message["tool_call_id"], "the answer must still name the call it answers"
 
 
@@ -82,8 +82,8 @@ def test_trimming_twice_does_not_stack_markers():
 def test_the_saving_on_the_real_shape_is_most_of_the_context():
     messages = history(turns=7, results_per_turn=3, size=4000)
     before = context_chars(messages)
-    after = context_chars(trim_tool_results(messages, keep_recent=4, head_chars=DEFAULT_HEAD_CHARS)[0])
-    assert after < before * 0.45, f"expected a large cut, got {before} -> {after}"
+    after = context_chars(trim_tool_results(messages, keep_recent=3, head_chars=DEFAULT_HEAD_CHARS)[0])
+    assert after < before * 0.40, f"expected a large cut, got {before} -> {after}"
 
 
 def test_a_small_history_is_left_alone():
@@ -110,4 +110,4 @@ def test_the_loop_compacts_before_every_call():
     # it must run before the provider call, not after it
     assert body.index("trim_tool_results(") < body.index("await self.client.chat.completions.create(")
     assert "assert_pairing(messages)" in body
-    assert 'os.getenv("AGENT_CONTEXT_KEEP_RESULTS", "4")' in body
+    assert 'os.getenv("AGENT_CONTEXT_KEEP_RESULTS", "3")' in body

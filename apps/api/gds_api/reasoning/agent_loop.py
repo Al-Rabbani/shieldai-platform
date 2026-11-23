@@ -97,8 +97,8 @@ class AgenticLoop:
     MAX_ITERATIONS = 10
     # Item 43: measured 107,218 input tokens for one posture run because nothing was ever compacted. Older tool results
     # are shortened to a head; the most recent stay verbatim because they are what the next step reasons about.
-    KEEP_TOOL_RESULTS = int(os.getenv("AGENT_CONTEXT_KEEP_RESULTS", "4"))
-    TOOL_HEAD_CHARS = int(os.getenv("AGENT_CONTEXT_HEAD_CHARS", "400"))
+    KEEP_TOOL_RESULTS = int(os.getenv("AGENT_CONTEXT_KEEP_RESULTS", "3"))
+    TOOL_HEAD_CHARS = int(os.getenv("AGENT_CONTEXT_HEAD_CHARS", "300"))
     MODEL = "gpt-4.1"
     
     def __init__(self, agent_id: str, model: str = None, *, tenant_id=None, user_id=None,
@@ -236,7 +236,7 @@ analyze them and decide the next step. When done, provide a summary.
                             messages.append({
                                 "role": "tool",
                                 "tool_call_id": tool_call.id,
-                                "content": result_str[:4000]
+                                "content": result_str[:2500]
                             })
                             
                         except Exception as e:

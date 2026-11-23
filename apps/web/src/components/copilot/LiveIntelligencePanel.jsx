@@ -104,19 +104,28 @@ export default function LiveIntelligencePanel() {
           </div>
         )}
 
-        {/* Top Threats */}
+        {/* Top threats. These rows are the tenant's OWN findings that carry a CVE, served by /threat-intel/feed; the badge
+            names what the row is rather than asserting external confirmation. */}
         {threats.length > 0 && (
           <div>
-            <p className="text-[10px] text-slate-500 uppercase tracking-widest mb-1.5">Top Threats</p>
+            <p className="text-[10px] text-slate-500 uppercase tracking-widest mb-1.5">Top threats in your estate</p>
             <div className="space-y-1.5">
               {threats.map((t, i) => (
                 <div key={i} className="flex items-center gap-2 rounded-lg p-2" style={{ background: "#111827", border: "1px solid #1F2937" }}>
                   <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: SEV_COLOR[t.severity] }} />
                   <span className="text-[11px] text-slate-300 truncate flex-1">{t.title}</span>
-                  <span className="text-[8px] font-bold px-1.5 py-0.5 rounded bg-red-500/20 text-red-400 flex-shrink-0">AFFECTS GDS</span>
+                  {String(t.feed_type || "").toUpperCase() === "KEV" ? (
+                    <span className="text-[8px] font-bold px-1.5 py-0.5 rounded bg-red-500/20 text-red-400 flex-shrink-0" title="On the CISA known-exploited list, matched against this finding's CVE">KEV LISTED</span>
+                  ) : (
+                    <span className="text-[8px] font-bold px-1.5 py-0.5 rounded bg-slate-500/20 text-slate-300 flex-shrink-0" title="One of this tenant's own findings; no external feed contributed it">OWN FINDING</span>
+                  )}
                 </div>
               ))}
             </div>
+            <p className="text-[9px] text-slate-600 mt-1 leading-snug">
+              Derived from this tenant's own findings that carry a CVE. No advisory, malware, ransomware or dark-web feed
+              is served here, so nothing on this rail is external intelligence.
+            </p>
           </div>
         )}
 
@@ -144,9 +153,10 @@ export default function LiveIntelligencePanel() {
         )}
 
         {/* An unserved source is stated, not left as silence that reads like "nothing found". */}
-        {unavailableEntities().includes("ThreatIntelFeed") && threats.length === 0 && (
+        {threats.length === 0 && (
           <p className="text-[9px] text-slate-600 leading-snug">
-            No threat-intel feed is served here, so this rail shows none. That is an absence, not a quiet day.
+            This rail lists findings in your own register that carry a CVE. It is empty because no such finding is
+            recorded right now, not because nothing was checked.
           </p>
         )}
 

@@ -22,8 +22,8 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Tuple
 
-DEFAULT_KEEP_RECENT = 4
-DEFAULT_HEAD_CHARS = 400
+DEFAULT_KEEP_RECENT = 3
+DEFAULT_HEAD_CHARS = 300
 
 MARKER = "\n...[trimmed to bound context: {omitted} of {total} characters withheld; the tool ran and returned the full result]"
 
