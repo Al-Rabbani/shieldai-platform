@@ -83,10 +83,10 @@ WHERE tenant_id = :tid
 """
 
 _INCIDENT_LIST_SQL = """
-SELECT id, title, severity, status, opened_at
+SELECT id, title, severity, status, created_at
 FROM incidents
 WHERE tenant_id = :tid AND status = 'open'
-ORDER BY opened_at DESC NULLS LAST
+ORDER BY created_at DESC NULLS LAST
 LIMIT 5
 """
 
@@ -129,14 +129,18 @@ SELECT (SELECT count(*) FROM user_sessions WHERE tenant_id = :tid) AS sessions,
 """
 
 _FRAMEWORK_SQL = """
-SELECT name, coalesce(score_over_assessed, 0) AS score
-FROM compliance_frameworks
+SELECT framework AS name,
+       count(*) FILTER (WHERE verdict_source = 'automated' AND lower(status) = 'pass') AS passing,
+       count(*) FILTER (WHERE verdict_source = 'automated' AND lower(status) = 'fail') AS failing
+FROM compliance_assessments
 WHERE tenant_id = :tid
-ORDER BY score ASC
+GROUP BY framework
+ORDER BY (count(*) FILTER (WHERE verdict_source = 'automated' AND lower(status) = 'pass'))::float
+         / NULLIF(count(*) FILTER (WHERE verdict_source = 'automated' AND lower(status) IN ('pass','fail')), 0) ASC NULLS LAST
 LIMIT 3
 """
 
-_FRAMEWORK_COUNT_SQL = "SELECT count(*) AS total FROM compliance_frameworks WHERE tenant_id = :tid"
+_FRAMEWORK_COUNT_SQL = "SELECT count(DISTINCT framework) AS total FROM compliance_assessments WHERE tenant_id = :tid"
 
 _TOP_FINDINGS_SQL = """
 SELECT title, severity, cvss, cve
@@ -361,8 +365,8 @@ async def task_compliance(db, tid: str) -> dict[str, Any]:
         "status": "NORMAL",
         "frameworks": total["total"],
         "top_failing": [dict(r) for r in rows],
-        "_basis": "Framework count and per-framework scores come from compliance_frameworks; top_failing lists the three "
-                  "lowest scoring frameworks.",
+        "_basis": "Frameworks are counted from compliance_assessments, the same verdict source GET /compliance/frameworks reads, so a "
+                  "framework with verdicts but no catalogue row is not dropped. top_failing lists the three lowest pass rates.",
     }
 
 
