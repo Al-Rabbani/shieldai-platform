@@ -80,6 +80,8 @@ export default function GDSCoPilotPage() {
         command_type: result.command_type || commandType,
         version: result.version,
         total_duration_ms: result.total_duration_ms,
+        /* The deployed release, read once from GET /health/version. The footer used to fall back to a typed "v2.0". */
+        release: version?.sha ? version.sha.slice(0, 7) : null,
         source_input: userInput,
       }]);
     } catch (err) {

@@ -1,6 +1,5 @@
 import React, { useState } from "react";
 import ReactMarkdown from "react-markdown";
-import { base44 } from "@/api/base44Client";
 import AgentStepCard from "./AgentStepCard";
 
 function initials(name) {
@@ -8,10 +7,22 @@ function initials(name) {
   return (words[0]?.[0] || "").toUpperCase() + (words[1]?.[0] || "").toUpperCase();
 }
 
+/* Three claims on this card used to be made without anything behind them.
+ *
+ * 1. The footer printed "GDS Agent OS v2.0" on every answer, because message.version was never set and the fallback was
+ *    a literal. The release is now read from GET /health/version by the page and passed down; an unknown release says
+ *    so instead of inventing a number.
+ * 2. "Save Report" called base44.entities.CopilotReport.create(), an entity this platform does not serve, inside
+ *    .catch(() => {}) - so the write always failed and the button always said "Saved!". There is no store for narrative
+ *    answers here (custom_reports holds report DEFINITIONS - source_entity, columns, filters - not prose), so the button
+ *    now does the one thing it can really do: writes the answer to a file the operator keeps, and says "Downloaded".
+ * 3. "Share" said "Shared!" even when navigator.share did not exist and it had only copied to the clipboard, and even
+ *    when the share sheet was dismissed. It now awaits the share and reports what actually happened.
+ */
 export default function ChatMessage({ message, onRegenerate }) {
   const [copied, setCopied] = useState(false);
-  const [saved, setSaved] = useState(false);
-  const [shared, setShared] = useState(false);
+  const [downloaded, setDownloaded] = useState(false);
+  const [shareState, setShareState] = useState(null);
 
   if (message.role === "user") {
     return (
@@ -43,27 +54,45 @@ export default function ChatMessage({ message, onRegenerate }) {
     setCopied(true); setTimeout(() => setCopied(false), 1500);
   }
 
-  async function save() {
-    await base44.entities.CopilotReport.create({
-      report_type: "soc_summary",
-      title: `Agent OS Response — ${message.command_type || "session"}`,
-      audience: "security_team",
-      executive_summary: message.content.slice(0, 2000),
-      status: "ready",
-    }).catch(() => {});
-    setSaved(true); setTimeout(() => setSaved(false), 1500);
+  /* A file on the operator's machine, not a claim that something was stored server-side. */
+  function download() {
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+    const name = `gds-copilot-${message.command_type || "answer"}-${stamp}.md`;
+    const blob = new Blob([message.content || ""], { type: "text/markdown;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = name;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    setDownloaded(true); setTimeout(() => setDownloaded(false), 2000);
   }
 
-  function share() {
+  async function share() {
+    const text = message.content || "";
     if (navigator.share) {
-      navigator.share({ title: "GDS Agent OS Response", text: message.content }).catch(() => {});
+      try {
+        await navigator.share({ title: "GDS Agent OS Response", text });
+        setShareState("shared");
+      } catch (err) {
+        /* AbortError means the operator closed the sheet: nothing was shared and nothing is claimed. */
+        if (err && err.name !== "AbortError") setShareState("failed");
+      }
     } else {
-      navigator.clipboard.writeText(message.content);
+      try {
+        await navigator.clipboard.writeText(text);
+        setShareState("copied");
+      } catch {
+        setShareState("failed");
+      }
     }
-    setShared(true); setTimeout(() => setShared(false), 1500);
+    setTimeout(() => setShareState(null), 2000);
   }
 
   const seconds = message.total_duration_ms ? (message.total_duration_ms / 1000).toFixed(1) : null;
+  const shareLabel = shareState === "shared" ? "Shared" : shareState === "copied" ? "Copied" : shareState === "failed" ? "Could not share" : "Share";
 
   return (
     <div className="flex justify-start mb-4">
@@ -77,7 +106,7 @@ export default function ChatMessage({ message, onRegenerate }) {
         <div className="rounded-xl overflow-hidden" style={{ background: "#111827", border: "1px solid #3b82f655" }}>
           <div className="flex items-center gap-2 px-4 pt-3 pb-2">
             <span className="text-sm">🔮</span>
-            <span className="text-xs font-bold text-blue-400">GASCI — FINAL INTELLIGENCE BRIEFING</span>
+            <span className="text-xs font-bold text-blue-400">GASCI — MISSION RESPONSE</span>
             {seconds && <span className="ml-auto text-[10px] text-slate-500">⚡ {seconds}s</span>}
           </div>
 
@@ -93,13 +122,19 @@ export default function ChatMessage({ message, onRegenerate }) {
 
           <div className="flex items-center gap-4 px-4 py-2.5 border-t" style={{ borderColor: "#1F2937" }}>
             <button onClick={copy} className="text-[11px] font-medium text-blue-400 hover:text-blue-300">📋 {copied ? "Copied!" : "Copy"}</button>
-            <button onClick={save} className="text-[11px] font-medium text-blue-400 hover:text-blue-300">💾 {saved ? "Saved!" : "Save Report"}</button>
+            <button
+              onClick={download}
+              title="Writes this answer to a Markdown file on this machine. There is no report store for narrative answers on this platform."
+              className="text-[11px] font-medium text-blue-400 hover:text-blue-300"
+            >
+              ⬇️ {downloaded ? "Downloaded" : "Download"}
+            </button>
             {onRegenerate && <button onClick={onRegenerate} className="text-[11px] font-medium text-blue-400 hover:text-blue-300">🔄 Regenerate</button>}
-            <button onClick={share} className="text-[11px] font-medium text-blue-400 hover:text-blue-300">📤 {shared ? "Shared!" : "Share"}</button>
+            <button onClick={share} className="text-[11px] font-medium text-blue-400 hover:text-blue-300">📤 {shareLabel}</button>
           </div>
 
           <div className="px-4 pb-2.5 text-[10px] text-slate-600">
-            {message.version || "GDS Agent OS v2.0"} · {message.agents_count || message.agent_steps?.length || 0} agents · Mission: {message.mission_id ? message.mission_id.slice(0, 16) : "—"} · {message.command_type || "—"}
+            {message.release ? `release ${message.release}` : "release unknown"} · {message.agents_count || message.agent_steps?.length || 0} agent(s) · Mission: {message.mission_id ? message.mission_id.slice(0, 16) : "none returned"} · {message.command_type || "—"}
           </div>
         </div>
       </div>
