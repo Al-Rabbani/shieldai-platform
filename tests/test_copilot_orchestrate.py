@@ -110,3 +110,43 @@ def test_the_adapter_posts_the_goal_and_the_write_flag():
     assert "orchestrateMission: (goal, options = {}) =>" in api
     assert "request('/copilot/mission/orchestrate', { method: 'POST'" in api
     assert "allow_writes: !!options.allow_writes" in api
+
+
+def test_the_plan_reports_the_real_agent_names():
+    """Live, this returned [None, None, None]: the orchestrator's steps key the agent as "agent", not "agent_id"."""
+    import sys
+    sys.path.insert(0, "/opt/gds-os/apps/api")
+    from gds_api.copilot_orchestrate_api import summarise_mission
+
+    result = {
+        "mission_id": "mission-abc",
+        "goal": "posture",
+        "plan": {
+            "agents": ["ai-vuln-director", "ai-compliance-director"],
+            "parallel": False,
+            "aggregator": "ai-remediation-director",
+            "rationale": "keyword fallback",
+            "steps": [
+                {"agent": "ai-vuln-director", "goal": "scan"},
+                {"agent": "ai-compliance-director", "goal": "assess"},
+            ],
+        },
+        "agent_results": [
+            {"agent_id": "ai-vuln-director", "success": True, "iterations": 3, "tool_calls": 2,
+             "duration_ms": 6000, "summary": "2 open critical", "error": None},
+        ],
+        "unified_report": "aggregate",
+        "total_agents": 2, "successful_agents": 1, "total_tool_calls": 2, "duration_ms": 30000,
+    }
+    out = summarise_mission(result, 0.0767)
+    assert out["plan"]["agents"] == ["ai-vuln-director", "ai-compliance-director"]
+    assert out["plan"]["sub_goals"] == ["scan", "assess"]
+    assert out["plan"]["reasoning"] == "keyword fallback"
+    assert out["agents"][0]["agent_id"] == "ai-vuln-director"
+    assert out["cost_usd"] == 0.0767
+
+
+def test_the_route_returns_the_summarised_payload():
+    src = code(MOD)
+    assert "payload = summarise_mission(result, cost)" in src
+    assert "payload[\"limits\"] = LIMITS" in src

@@ -87,6 +87,47 @@ async def _spent(db: AsyncSession, tenant_id: str, since) -> Optional[float]:
         return None
 
 
+def summarise_mission(result: Dict[str, Any], cost: Optional[float]) -> Dict[str, Any]:
+    """Shape the orchestrator's result for the chat.
+
+    The planner's steps carry the key "agent" (mission_orchestrator.plan_mission returns {"agent", "goal"}), not
+    "agent_id": reading the wrong key reported three null agent names from a live mission while the agents ran correctly.
+    """
+    plan = result.get("plan") or {}
+    steps = plan.get("steps") or []
+    return {
+        "mission_id": result.get("mission_id"),
+        "goal": result.get("goal"),
+        "answer": result.get("unified_report"),
+        "plan": {
+            "agents": [step.get("agent") or step.get("agent_id") for step in steps],
+            "sub_goals": [step.get("goal") for step in steps],
+            "parallel": bool(plan.get("parallel")),
+            "aggregator": plan.get("aggregator"),
+            "reasoning": plan.get("rationale") or plan.get("reasoning"),
+            "step_count": len(steps),
+        },
+        "agents": [
+            {
+                "agent_id": ar.get("agent_id"),
+                "success": ar.get("success"),
+                "iterations": ar.get("iterations"),
+                "tool_calls": ar.get("tool_calls"),
+                "duration_ms": ar.get("duration_ms"),
+                "summary": ar.get("summary"),
+                "error": ar.get("error"),
+            }
+            for ar in (result.get("agent_results") or [])
+        ],
+        "total_agents": result.get("total_agents"),
+        "successful_agents": result.get("successful_agents"),
+        "total_tool_calls": result.get("total_tool_calls"),
+        "duration_ms": result.get("duration_ms"),
+        "cost_usd": cost,
+        "cost_basis": "summed from cost_records over this mission's own start and finish window",
+    }
+
+
 @router.post(
     "/orchestrate",
     dependencies=[Depends(tenant_rate_limit("copilot_orchestrate", max_requests=8, window_seconds=3600))],
@@ -141,40 +182,8 @@ async def orchestrate(
 
     cost = await _spent(db, tenant_id, started)
 
-    plan = result.get("plan") or {}
-    steps = plan.get("steps") or []
-    agents: List[Dict[str, Any]] = [
-        {
-            "agent_id": ar.get("agent_id"),
-            "success": ar.get("success"),
-            "iterations": ar.get("iterations"),
-            "tool_calls": ar.get("tool_calls"),
-            "duration_ms": ar.get("duration_ms"),
-            "summary": ar.get("summary"),
-            "error": ar.get("error"),
-        }
-        for ar in (result.get("agent_results") or [])
-    ]
-
-    return {
-        "mission_id": result.get("mission_id"),
-        "goal": result.get("goal"),
-        "answer": result.get("unified_report"),
-        "plan": {
-            "agents": [s.get("agent_id") for s in steps],
-            "parallel": bool(plan.get("parallel")),
-            "aggregator": plan.get("aggregator"),
-            "reasoning": plan.get("reasoning") or plan.get("rationale"),
-            "step_count": len(steps),
-        },
-        "agents": agents,
-        "total_agents": result.get("total_agents"),
-        "successful_agents": result.get("successful_agents"),
-        "total_tool_calls": result.get("total_tool_calls"),
-        "duration_ms": result.get("duration_ms"),
-        "cost_usd": cost,
-        "cost_basis": "summed from cost_records over this mission's own start and finish window",
-        "guard": verdict.as_dict() if verdict.triggered else None,
-        "allow_writes": body.allow_writes,
-        "limits": LIMITS,
-    }
+    payload = summarise_mission(result, cost)
+    payload["guard"] = verdict.as_dict() if verdict.triggered else None
+    payload["allow_writes"] = body.allow_writes
+    payload["limits"] = LIMITS
+    return payload
