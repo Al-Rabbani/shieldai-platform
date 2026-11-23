@@ -23,6 +23,8 @@ const TABS = [
 
 export default function ThreatIntelligencePage() {
   const [feeds, setFeeds] = useState([]);
+  /* Counts come from the route: the list above holds one page of rows, not the register. */
+  const [feedSummary, setFeedSummary] = useState(null);
   const [darkWeb, setDarkWeb] = useState([]);
   const [actors, setActors] = useState([]);
   const [groups, setGroups] = useState([]);
@@ -48,13 +50,14 @@ export default function ThreatIntelligencePage() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [tf, dw, apt, rg] = await Promise.all([
+    const [tf, dw, apt, rg, summary] = await Promise.all([
       base44.entities.ThreatIntelFeed.list("-detected_at", 50).catch(() => []),
       base44.entities.DarkWebAlert.list("-detected_at", 20).catch(() => []),
       base44.entities.APTActor.list("-last_seen", 20).catch(() => []),
       base44.entities.RansomwareGroup.list("-last_seen", 20).catch(() => []),
+      base44.entities.ThreatIntelFeed.summary().catch(() => null),
     ]);
-    setFeeds(tf); setDarkWeb(dw); setActors(apt); setGroups(rg);
+    setFeeds(tf); setDarkWeb(dw); setActors(apt); setGroups(rg); setFeedSummary(summary);
     setLoading(false);
   }, []);
 
@@ -105,10 +108,13 @@ export default function ThreatIntelligencePage() {
 
       <div className="grid grid-cols-4 gap-4">
         {[
-          { label: "Active Threat Feeds", value: feeds.length, color: "text-white" },
-          { label: "Affects Us", value: affectsUsCount, color: "text-red-400" },
-          { label: "Dark Web Alerts", value: darkWeb.length, color: "text-white" },
-          { label: "Active APT Groups", value: activeApt, color: "text-orange-400" },
+          /* Every row here is a CVE finding against an asset in this tenant's register, so "affects us" is the
+           * register total, not the number of rows this page happens to hold. Dark web and APT have no store on this
+           * platform, so they say so instead of printing 0, which reads as "we checked and found none". */
+          { label: "CVE findings", value: feedSummary?.counts?.total ?? feeds.length, color: "text-white" },
+          { label: "Affects Us", value: feedSummary?.counts?.total ?? affectsUsCount, color: "text-red-400" },
+          { label: "Dark Web Alerts", value: "not recorded", color: "text-slate-500" },
+          { label: "Active APT Groups", value: "not recorded", color: "text-slate-500" },
         ].map((t, i) => (
           <div key={i} className="rounded-xl p-3 text-center" style={{ background: "#111827", border: "1px solid #1F2937" }}>
             <p className={`text-2xl font-bold ${t.color}`}>{t.value}</p>
