@@ -38,6 +38,7 @@ from gds_api import (
     missions,
     notifications,
     platform_intel_api,
+    threat_intel_api,
     team_api,
     redteam_overview_api,
     fix_schedule_api,
@@ -215,6 +216,7 @@ app.include_router(missions.router)
 app.include_router(agents_router.router)
 app.include_router(findings.router)
 app.include_router(platform_intel_api.router)
+app.include_router(threat_intel_api.router)
 app.include_router(team_api.router)
 app.include_router(redteam_overview_api.router)
 app.include_router(fix_schedule_api.router)

@@ -1,116 +1,59 @@
-import { useState, useEffect, useRef } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
-import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
-import { AlertTriangle, RefreshCw, ExternalLink, CheckCircle, Loader2 } from "lucide-react";
+import { AlertTriangle, RefreshCw, ExternalLink, Loader2, ShieldAlert } from "lucide-react";
 
+/* Only two feed types have a source on this platform: CVE rows from this tenant's own findings register, and KEV rows
+ * among them (flagged from the CISA Known Exploited Vulnerabilities catalogue by enrich_findings.py). The earlier
+ * version of this page offered seven: malware_package, zero_day, typosquat, exploit_released, supply_chain_compromise
+ * and ip_threat had no source at all, and selecting one showed an empty list that read as "nothing is happening". */
 const FEED_TYPE_CONFIG = {
-  malware_package:        { icon: "🦠", label: "MALWARE",        color: "#ef4444", bg: "rgba(239,68,68,0.15)" },
-  zero_day:               { icon: "🔴", label: "ZERO-DAY",       color: "#7f1d1d", bg: "rgba(127,29,29,0.2)" },
-  cve_published:          { icon: "📦", label: "CVE",            color: "#f97316", bg: "rgba(249,115,22,0.15)" },
-  typosquat:              { icon: "🎭", label: "TYPOSQUAT",      color: "#8b5cf6", bg: "rgba(139,92,246,0.15)" },
-  exploit_released:       { icon: "💥", label: "EXPLOIT",        color: "#ef4444", bg: "rgba(239,68,68,0.15)" },
-  supply_chain_compromise:{ icon: "🔗", label: "SUPPLY CHAIN",  color: "#f59e0b", bg: "rgba(245,158,11,0.15)" },
-  ip_threat:              { icon: "🌐", label: "IP THREAT",      color: "#3b82f6", bg: "rgba(59,130,246,0.15)" },
+  CVE: { icon: "📦", label: "CVE", color: "#f97316", bg: "rgba(249,115,22,0.15)" },
+  KEV: { icon: "🔥", label: "KEV", color: "#ef4444", bg: "rgba(239,68,68,0.15)" },
 };
-
 const SEV_COLORS = { critical: "#ef4444", high: "#f97316", medium: "#eab308", low: "#22c55e" };
 
 export default function ThreatIntelPage() {
-  const qc = useQueryClient();
-  const [lastUpdated, setLastUpdated] = useState(new Date());
   const [filterType, setFilterType] = useState("all");
   const [filterSev, setFilterSev] = useState("all");
-  const [affectsYouOnly, setAffectsYouOnly] = useState(false);
-  const [isLoadingFeed, setIsLoadingFeed] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
 
-  // Fetch live threat intel from shieldThreatIntel function
-  const fetchThreatIntel = async () => {
-    try {
-      setIsLoadingFeed(true);
-      const response = await fetch('/api/functions/shieldThreatIntel', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'fetch', days_back: 7, ecosystems: ['npm','PyPI','Go','Maven'] })
-      });
-      if (!response.ok) throw new Error('Failed to fetch threat intel');
-      const { threats } = await response.json();
-      // Store in entity for display
-      for (const threat of threats) {
-        await base44.entities.ThreatIntelFeed.create(threat).catch(() => {});
-      }
-      setLastUpdated(new Date());
-      qc.invalidateQueries(["threat-intel-feed"]);
-    } catch (error) {
-      console.error('Error fetching threat intel:', error);
-      toast.error('Failed to refresh threat feed');
-    } finally {
-      setIsLoadingFeed(false);
-      setRefreshing(false);
-    }
-  };
-
-  const { data: feeds = [], isLoading, refetch } = useQuery({
+  /* The feed is derived from the register, so it is read from the route that derives it. No fetch-and-store step: the
+   * old page posted to /api/functions/shieldThreatIntel, which does not exist, and then wrote the result into an entity
+   * that has no store, so the write vanished while the header claimed a live feed. */
+  const { data: feeds = [], isLoading, refetch, isFetching, dataUpdatedAt } = useQuery({
     queryKey: ["threat-intel-feed"],
-    queryFn: async () => {
-      // First try to fetch from entity
-      const entityFeeds = await base44.entities.ThreatIntelFeed.list("-detected_at", 200);
-      // If empty, call shieldThreatIntel
-      if (entityFeeds.length === 0) {
-        await fetchThreatIntel();
-        return await base44.entities.ThreatIntelFeed.list("-detected_at", 200);
-      }
-      return entityFeeds;
-    },
-    refetchInterval: 60000,
-    initialData: []
+    queryFn: () => base44.entities.ThreatIntelFeed.list("-detected_at", 200).catch(() => []),
+    initialData: [],
   });
 
-  // Initial fetch on mount
-  useEffect(() => {
-    if (feeds.length === 0 && !isLoadingFeed) {
-      fetchThreatIntel();
-    }
-  }, []);
-
-  const refreshFeed = async () => {
-    setRefreshing(true);
-    await fetchThreatIntel();
-  };
-
-  const updateMut = useMutation({
-    mutationFn: ({ id, data }) => base44.entities.ThreatIntelFeed.update(id, data),
-    onSuccess: () => { qc.invalidateQueries(["threat-intel-feed"]); toast.success("Feed item updated"); }
+  /* Counts come from the route, not from the 200 rows on screen: the register holds more than one page of them. */
+  const { data: summary } = useQuery({
+    queryKey: ["threat-intel-summary"],
+    queryFn: () => base44.entities.ThreatIntelFeed.summary().catch(() => null),
+    initialData: null,
   });
 
-  // Canonical threat intel: 15,847 total IOCs, 234 new today, 3 affecting assets
-  const CANONICAL_THREAT = {
-    totalIOCs: 15847,
-    newToday: 234,
-    affectingAssets: 3,
-    zerodays: 47,
-    malwarePackages: 89,
-    realThreats: [
-      { title: "CVE-2024-3094 XZ Utils backdoor", severity: "critical", cvss: 10, cisaKev: true },
-      { title: "CVE-2024-6387 OpenSSH regreSSHion", severity: "critical", cvss: 8.1 },
-      { title: "PyPI ctx credential exfiltration", severity: "critical", cvss: 9.8 },
-      { title: "Spring4Shell new PoC", severity: "high", cvss: 7.8 },
-    ],
-  };
-  
-  const affectsYouFeeds = feeds.filter(f => f.affects_you && f.status === "active");
-  const todayCount = CANONICAL_THREAT.newToday;
-  const zerodays = CANONICAL_THREAT.zerodays;
-  const malware = CANONICAL_THREAT.malwarePackages;
+  const counts = summary?.counts || {};
+  const unavailable = summary?.unavailable || {};
+  const notRecorded = summary?.not_recorded || {};
+  const basis = summary?.basis || {};
 
-  const filtered = feeds.filter(f => {
+  const filtered = feeds.filter((f) => {
     if (filterType !== "all" && f.feed_type !== filterType) return false;
     if (filterSev !== "all" && f.severity !== filterSev) return false;
-    if (affectsYouOnly && !f.affects_you) return false;
     return true;
   });
+
+  const kev = Number(counts.kev_listed || 0);
+  const kevUnknown = Number(counts.kev_unknown || 0);
+
+  const tiles = [
+    { label: "CVEs in register", value: counts.total ?? "—", color: "#f97316", icon: "📦" },
+    { label: "Open", value: counts.open ?? "—", color: "#ef4444", icon: "🔴" },
+    { label: "KEV listed", value: counts.total === undefined ? "—" : kev, color: "#ef4444", icon: "🔥" },
+    { label: "KEV never checked", value: counts.total === undefined ? "—" : kevUnknown, color: "#eab308", icon: "❓" },
+  ];
 
   return (
     <div className="space-y-6 pb-12">
@@ -118,69 +61,72 @@ export default function ThreatIntelPage() {
       <div className="rounded-2xl p-6 relative overflow-hidden" style={{
         background: "linear-gradient(135deg, #1a0505 0%, #1f0808 50%, #1a0505 100%)",
         border: "1px solid rgba(239,68,68,0.3)",
-        boxShadow: "0 0 60px rgba(239,68,68,0.08)"
+        boxShadow: "0 0 60px rgba(239,68,68,0.08)",
       }}>
         <div className="absolute inset-0 opacity-5" style={{ backgroundImage: "radial-gradient(circle at 20% 50%, #ef4444 0%, transparent 50%)" }} />
         <div className="relative flex items-start justify-between flex-wrap gap-4">
           <div>
             <div className="flex items-center gap-2 mb-2">
-              <div className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse" style={{ boxShadow: "0 0 8px #ef4444" }} />
-              <span className="text-xs font-mono font-bold text-red-400 uppercase tracking-widest">LIVE FEED</span>
+              <div className="w-2.5 h-2.5 rounded-full bg-red-500" style={{ boxShadow: "0 0 8px #ef4444" }} />
+              <span className="text-xs font-mono font-bold text-red-400 uppercase tracking-widest">DERIVED FROM THIS REGISTER</span>
             </div>
             <h1 className="text-3xl font-black text-white mb-1" style={{ textShadow: "0 0 20px rgba(239,68,68,0.3)" }}>
               Threat Intelligence Feed
             </h1>
-            <p className="text-slate-400 text-sm">Real-time malware, zero-days, and supply chain compromises — as they happen.</p>
+            <p className="text-slate-400 text-sm max-w-2xl">
+              Every finding in your own register that carries a CVE, with its CVSS, EPSS and CISA KEV position. There is no
+              external intel subscription behind this page, so nothing here arrives "as it happens".
+            </p>
           </div>
           <div className="flex flex-col items-end gap-2">
-            <button onClick={refreshFeed} disabled={refreshing}
+            <button onClick={() => refetch()} disabled={isFetching}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono transition-all hover:opacity-80 disabled:opacity-50"
               style={{ color: "#ef4444", background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)" }}>
-              {refreshing ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />} 
-              {refreshing ? "Refreshing..." : "🔄 Refresh Feed"}
+              {isFetching ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+              {isFetching ? "Re-reading…" : "Re-read register"}
             </button>
-            <span className="text-[10px] font-mono text-slate-600">
-              Last updated {formatDistanceToNow(lastUpdated, { addSuffix: true })}
-            </span>
+            {dataUpdatedAt > 0 && (
+              <span className="text-[10px] font-mono text-slate-600">
+                Read {formatDistanceToNow(new Date(dataUpdatedAt), { addSuffix: true })}
+              </span>
+            )}
           </div>
         </div>
       </div>
 
-      {/* AFFECTS YOU BANNER — Canonical: 3 threats affecting assets */}
-      {affectsYouFeeds.length > 0 && (
-        <div className="rounded-xl p-4" style={{ background: "rgba(239,68,68,0.08)", border: "2px solid rgba(239,68,68,0.4)", borderLeft: "4px solid #ef4444" }}>
-          <div className="flex items-center gap-2 mb-2">
-            <AlertTriangle className="w-5 h-5 text-red-400" />
-            <span className="text-sm font-bold text-red-400">⚠️ 3 threats in this feed directly affect your connected assets. Immediate action required.</span>
-          </div>
-          <div className="space-y-1.5 ml-7">
-            <div className="flex items-center gap-3">
-              <span className="text-[10px] font-mono text-red-300 font-bold">→ CVE-2024-3094 XZ Utils backdoor</span>
-              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded text-red-400 bg-red-500/10">📦 build-pipeline</span>
-            </div>
-            <div className="flex items-center gap-3">
-              <span className="text-[10px] font-mono text-red-300 font-bold">→ CVE-2024-6387 OpenSSH regreSSHion</span>
-              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded text-red-400 bg-red-500/10">📦 prod-api-01</span>
-            </div>
-            <div className="flex items-center gap-3">
-              <span className="text-[10px] font-mono text-red-300 font-bold">→ PyPI ctx credential exfiltration</span>
-              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded text-red-400 bg-red-500/10">📦 ml-service</span>
-            </div>
+      {/* KEV EVIDENCE STRIP — the old banner asserted "3 threats affect your connected assets" and named three CVEs
+          that were never in this register. What is knowable is the KEV position and where it came from. */}
+      <div className="rounded-xl p-4" style={{
+        background: kev > 0 ? "rgba(239,68,68,0.08)" : "#0a0f1e",
+        border: kev > 0 ? "2px solid rgba(239,68,68,0.4)" : "1px solid rgba(30,58,95,0.5)",
+        borderLeft: kev > 0 ? "4px solid #ef4444" : "4px solid rgba(30,58,95,0.6)",
+      }}>
+        <div className="flex items-start gap-2">
+          {kev > 0 ? <AlertTriangle className="w-5 h-5 text-red-400 flex-shrink-0" /> : <ShieldAlert className="w-5 h-5 text-slate-500 flex-shrink-0" />}
+          <div className="min-w-0">
+            <p className="text-sm font-bold" style={{ color: kev > 0 ? "#f87171" : "#cbd5e1" }}>
+              {counts.total === undefined
+                ? "KEV position not read"
+                : kev > 0
+                  ? `${kev} CVE${kev === 1 ? "" : "s"} in this register appear in the CISA KEV catalogue.`
+                  : "No CVE in this register appears in the CISA KEV catalogue."}
+            </p>
+            <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">{basis.kev || "Reading the KEV position…"}</p>
+            {basis.last_enriched && (
+              <p className="text-[10px] font-mono text-slate-600 mt-1">
+                Last enrichment: {formatDistanceToNow(new Date(basis.last_enriched), { addSuffix: true })}
+              </p>
+            )}
           </div>
         </div>
-      )}
+      </div>
 
-      {/* STATS — Canonical: 15,847 IOCs, 234 new, 3 affecting */}
+      {/* STATS */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        {[
-          { label: "Total IOCs", value: "15,847", color: "#ef4444", icon: "🔴" },
-          { label: "New Today", value: "234", color: "#ef4444", icon: "📈" },
-          { label: "Affects You", value: "3", color: "#ef4444", icon: "⚠️", flash: true },
-          { label: "Zero-Days", value: "47", color: "#7f1d1d", icon: "🔴" },
-        ].map(s => (
-          <div key={s.label} className="rounded-xl p-4" style={{ background: "linear-gradient(145deg, #0f172a, #0a0f1e)", border: `1px solid ${s.flash && s.value > 0 ? "rgba(239,68,68,0.4)" : "rgba(30,58,95,0.4)"}` }}>
+        {tiles.map((s) => (
+          <div key={s.label} className="rounded-xl p-4" style={{ background: "linear-gradient(145deg, #0f172a, #0a0f1e)", border: "1px solid rgba(30,58,95,0.4)" }}>
             <div className="flex items-center gap-2 mb-2">
-              <span className={s.flash && s.value > 0 ? "animate-pulse" : ""}>{s.icon}</span>
+              <span>{s.icon}</span>
               <span className="text-[10px] font-mono text-slate-500 uppercase tracking-wider">{s.label}</span>
             </div>
             <p className="text-2xl font-black font-mono" style={{ color: s.color }}>{s.value}</p>
@@ -200,51 +146,66 @@ export default function ThreatIntelPage() {
             </button>
           ))}
         </div>
-        <div className="flex gap-2 ml-auto">
-          {["all","critical","high","medium","low"].map(sev => (
+        <div className="flex gap-1.5 ml-auto flex-wrap">
+          {["all", "critical", "high", "medium", "low"].map((sev) => (
             <button key={sev} onClick={() => setFilterSev(sev)}
               className={`px-2.5 py-1 rounded text-[10px] font-mono uppercase transition-all ${filterSev === sev ? "font-bold" : "opacity-50"}`}
-              style={filterSev === sev && sev !== "all" ? { color: SEV_COLORS[sev], background: `${SEV_COLORS[sev]}15`, border: `1px solid ${SEV_COLORS[sev]}40` } : { color: "#64748b", border: "1px solid rgba(30,58,95,0.5)" }}>
+              style={{ color: sev === "all" ? "#cbd5e1" : SEV_COLORS[sev], border: "1px solid rgba(30,58,95,0.6)" }}>
               {sev}
             </button>
           ))}
-          <button onClick={() => setAffectsYouOnly(v => !v)}
-            className={`px-3 py-1 rounded text-[10px] font-mono font-bold transition-all ${affectsYouOnly ? "text-red-400 bg-red-500/15 border border-red-500/40" : "text-slate-500 border border-slate-700"}`}>
-            Affects You
-          </button>
         </div>
       </div>
 
-      {/* FEED CARDS */}
+      {/* Feed types with no source are named, not silently empty. */}
+      <div className="rounded-xl p-4" style={{ background: "rgba(15,23,42,0.6)", border: "1px dashed rgba(30,58,95,0.7)" }}>
+        <p className="text-[10px] font-mono text-slate-500 uppercase tracking-wider mb-1.5">Feed types with no source here</p>
+        <div className="flex flex-wrap gap-x-4 gap-y-1">
+          {Object.entries(unavailable).map(([name, why]) => (
+            <span key={name} className="text-[10px] font-mono text-slate-600" title={why}>
+              <span className="text-slate-500 font-bold">{name}</span> · no collector
+            </span>
+          ))}
+          {Object.keys(unavailable).length === 0 && <span className="text-[10px] font-mono text-slate-600">reading…</span>}
+        </div>
+      </div>
+
+      {/* LIST */}
       {isLoading ? (
-        <div className="space-y-3">
-          {[...Array(5)].map((_, i) => <div key={i} className="h-40 rounded-xl animate-pulse" style={{ background: "#0a0f1e" }} />)}
+        <div className="flex items-center justify-center py-16 text-slate-500 text-sm gap-2">
+          <Loader2 className="w-4 h-4 animate-spin" /> Reading the register…
         </div>
       ) : filtered.length === 0 ? (
-        <div className="rounded-xl py-16 text-center" style={{ background: "#0a0f1e", border: "1px solid rgba(30,58,95,0.4)" }}>
-          <p className="text-slate-600">No threats match your filters</p>
+        <div className="rounded-xl p-10 text-center" style={{ background: "#0a0f1e", border: "1px solid rgba(30,58,95,0.4)" }}>
+          <p className="text-sm text-slate-400">No CVE findings match this filter.</p>
         </div>
       ) : (
         <div className="space-y-3">
-          {filtered.map(feed => <ThreatFeedCard key={feed.id} feed={feed} onUpdate={(data) => updateMut.mutate({ id: feed.id, data })} />)}
+          {filtered.slice(0, 120).map((f) => (
+            <ThreatCard key={f.id} f={f} notRecorded={notRecorded} />
+          ))}
+          {filtered.length > 120 && (
+            <p className="text-[10px] font-mono text-slate-600 text-center pt-1">
+              showing 120 of {filtered.length} loaded · {counts.total ?? "—"} CVEs in the register
+            </p>
+          )}
         </div>
       )}
     </div>
   );
 }
 
-function ThreatFeedCard({ feed: f, onUpdate }) {
-  const cfg = FEED_TYPE_CONFIG[f.feed_type] || { icon: "⚠️", label: "THREAT", color: "#ef4444", bg: "rgba(239,68,68,0.1)" };
+function ThreatCard({ f, notRecorded }) {
+  const cfg = FEED_TYPE_CONFIG[f.feed_type] || FEED_TYPE_CONFIG.CVE;
   const sevColor = SEV_COLORS[f.severity] || "#64748b";
 
   return (
     <div className="rounded-xl p-5 transition-all hover:border-opacity-60"
       style={{
-        background: f.affects_you ? "rgba(239,68,68,0.04)" : "#0a0f1e",
-        border: f.affects_you ? "1px solid rgba(239,68,68,0.35)" : "1px solid rgba(30,58,95,0.4)",
-        borderLeft: f.affects_you ? "4px solid #ef4444" : "4px solid transparent"
+        background: f.exploited_in_wild ? "rgba(239,68,68,0.04)" : "#0a0f1e",
+        border: f.exploited_in_wild ? "1px solid rgba(239,68,68,0.35)" : "1px solid rgba(30,58,95,0.4)",
+        borderLeft: f.exploited_in_wild ? "4px solid #ef4444" : "4px solid transparent",
       }}>
-      {/* Header row */}
       <div className="flex items-start justify-between gap-4 mb-3">
         <div className="flex items-start gap-3 min-w-0">
           <span className="text-2xl flex-shrink-0 mt-0.5">{cfg.icon}</span>
@@ -258,34 +219,27 @@ function ThreatFeedCard({ feed: f, onUpdate }) {
                 style={{ color: sevColor, background: `${sevColor}15`, border: `1px solid ${sevColor}40` }}>
                 {f.severity}
               </span>
-              {f.affects_you && (
-                <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded animate-pulse"
-                  style={{ color: "#ef4444", background: "rgba(239,68,68,0.2)", border: "1px solid rgba(239,68,68,0.5)" }}>
-                  ⚠️ AFFECTS YOU
-                </span>
-              )}
-              {f.cvss_score && <span className="text-[10px] font-mono text-slate-400">CVSS: <span className="font-bold text-white">{f.cvss_score}</span></span>}
-              {f.epss_score && <span className="text-[10px] font-mono text-slate-400">EPSS: <span className="font-bold" style={{ color: f.epss_score > 0.7 ? "#ef4444" : "#f97316" }}>{Math.round(f.epss_score * 100)}%</span></span>}
-              {f.cisa_kev && (
+              {f.exploited_in_wild === true && (
                 <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded" style={{ color: "#ef4444", background: "rgba(239,68,68,0.2)", border: "1px solid #ef4444" }}>
                   🔥 CISA KEV
                 </span>
               )}
+              {f.cvss_score != null && <span className="text-[10px] font-mono text-slate-400">CVSS: <span className="font-bold text-white">{f.cvss_score}</span></span>}
+              {f.epss_score != null && <span className="text-[10px] font-mono text-slate-400">EPSS: <span className="font-bold" style={{ color: f.epss_score > 0.7 ? "#ef4444" : "#f97316" }}>{Math.round(f.epss_score * 100)}%</span></span>}
             </div>
             <h3 className="text-sm font-bold text-white">{f.title}</h3>
           </div>
         </div>
         <div className="text-right flex-shrink-0 text-[10px] font-mono text-slate-600">
           {f.detected_at && <p>Detected {formatDistanceToNow(new Date(f.detected_at), { addSuffix: true })}</p>}
-          {f.published_at && <p>Published {formatDistanceToNow(new Date(f.published_at), { addSuffix: true })}</p>}
+          {f.published_at && <p>In KEV since {formatDistanceToNow(new Date(f.published_at), { addSuffix: true })}</p>}
         </div>
       </div>
 
-      {/* Package + CVE info */}
       <div className="flex flex-wrap items-center gap-3 mb-3">
         {f.package_name && (
           <span className="text-xs font-mono font-bold px-2.5 py-1 rounded" style={{ color: "#a78bfa", background: "rgba(167,139,250,0.1)", border: "1px solid rgba(167,139,250,0.2)" }}>
-            📦 {f.package_name} {f.registry && <span className="opacity-60">({f.registry})</span>}
+            📦 {f.package_name}
           </span>
         )}
         {f.cve_id && (
@@ -295,23 +249,16 @@ function ThreatFeedCard({ feed: f, onUpdate }) {
             🔗 {f.cve_id} <ExternalLink className="w-3 h-3" />
           </button>
         )}
-        {f.affected_versions && (
-          <span className="text-[10px] font-mono px-2 py-0.5 rounded text-slate-400" style={{ background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)" }}>
-            Affected: {f.affected_versions}
+        {/* The register records the version installed at scan time, not the upstream affected range. */}
+        {f.installed_evidence && (
+          <span className="text-[10px] font-mono px-2 py-0.5 rounded text-slate-400" style={{ background: "rgba(100,116,139,0.08)", border: "1px solid rgba(100,116,139,0.25)" }}>
+            Installed: {f.installed_evidence}
           </span>
         )}
-        {f.fixed_version && (
-          <span className="text-[10px] font-mono px-2 py-0.5 rounded" style={{ color: "#10b981", background: "rgba(16,185,129,0.1)", border: "1px solid rgba(16,185,129,0.2)" }}>
-            Fixed: {f.fixed_version}
-          </span>
-        )}
-        {f.ip_address && <span className="text-xs font-mono text-slate-400 bg-blue-500/10 px-2 py-0.5 rounded">{f.ip_address} {f.country && `(${f.country})`}</span>}
       </div>
 
-      {/* Description */}
-      <p className="text-sm text-slate-400 leading-relaxed mb-3">{f.description}</p>
+      {f.description && <p className="text-sm text-slate-400 leading-relaxed mb-3">{f.description}</p>}
 
-      {/* Affected asset */}
       {f.affected_asset && (
         <div className="flex items-center gap-2 mb-3 text-xs font-mono">
           <span className="text-slate-500">Affected asset:</span>
@@ -319,7 +266,6 @@ function ThreatFeedCard({ feed: f, onUpdate }) {
         </div>
       )}
 
-      {/* Action required */}
       {f.action_required && (
         <div className="rounded-lg p-3 mb-3" style={{ background: "rgba(16,185,129,0.06)", border: "1px solid rgba(16,185,129,0.2)" }}>
           <p className="text-[10px] font-mono font-bold text-emerald-400 mb-1">⚡ ACTION REQUIRED</p>
@@ -327,21 +273,13 @@ function ThreatFeedCard({ feed: f, onUpdate }) {
         </div>
       )}
 
-      {/* Source + Actions */}
       <div className="flex items-center justify-between flex-wrap gap-3 pt-3" style={{ borderTop: "1px solid rgba(30,58,95,0.3)" }}>
-        {f.source && <span className="text-[10px] font-mono text-slate-600">Source: {f.source}</span>}
-        <div className="flex items-center gap-2 ml-auto">
-          <button onClick={() => toast.info("Jira integration — connect in Integration Hub")}
-            className="px-3 py-1.5 rounded text-xs font-mono transition-all hover:opacity-80"
-            style={{ color: "#a78bfa", background: "rgba(167,139,250,0.1)", border: "1px solid rgba(167,139,250,0.2)" }}>
-            📋 Create Ticket
-          </button>
-          <button onClick={() => onUpdate({ status: "dismissed" })}
-            className="px-3 py-1.5 rounded text-xs font-mono transition-all hover:opacity-80"
-            style={{ color: "#64748b", background: "rgba(100,116,139,0.1)", border: "1px solid rgba(100,116,139,0.2)" }}>
-            Dismiss
-          </button>
-        </div>
+        <span className="text-[10px] font-mono text-slate-600">
+          {f.source ? `Source: ${f.source}` : "Source not recorded"} · status {f.status || "—"}
+        </span>
+        <span className="text-[10px] font-mono text-slate-600" title={notRecorded.affected_versions || ""}>
+          affected version range not recorded
+        </span>
       </div>
     </div>
   );
