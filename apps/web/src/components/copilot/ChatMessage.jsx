@@ -1,3 +1,4 @@
+import { base44 } from "@/api/base44Client";
 import React, { useState } from "react";
 import ReactMarkdown from "react-markdown";
 import AgentStepCard from "./AgentStepCard";
@@ -23,6 +24,7 @@ export default function ChatMessage({ message, onRegenerate }) {
   const [copied, setCopied] = useState(false);
   const [downloaded, setDownloaded] = useState(false);
   const [shareState, setShareState] = useState(null);
+  const [speakState, setSpeakState] = useState(null);
 
   if (message.role === "user") {
     return (
@@ -52,6 +54,23 @@ export default function ChatMessage({ message, onRegenerate }) {
   function copy() {
     navigator.clipboard.writeText(message.content);
     setCopied(true); setTimeout(() => setCopied(false), 1500);
+  }
+
+  /* Voice out. The MP3 is synthesised by the platform and played here; nothing is stored and the text is unchanged. */
+  async function speak() {
+    if (speakState === "playing") return;
+    setSpeakState("synthesising");
+    try {
+      const { url } = await base44.platform.speak(message.content || "");
+      const audio = new Audio(url);
+      audio.onended = () => { setSpeakState(null); URL.revokeObjectURL(url); };
+      audio.onerror = () => { setSpeakState("failed"); URL.revokeObjectURL(url); setTimeout(() => setSpeakState(null), 2500); };
+      await audio.play();
+      setSpeakState("playing");
+    } catch {
+      setSpeakState("failed");
+      setTimeout(() => setSpeakState(null), 2500);
+    }
   }
 
   /* A file on the operator's machine, not a claim that something was stored server-side. */
@@ -122,6 +141,13 @@ export default function ChatMessage({ message, onRegenerate }) {
 
           <div className="flex items-center gap-4 px-4 py-2.5 border-t" style={{ borderColor: "#1F2937" }}>
             <button onClick={copy} className="text-[11px] font-medium text-blue-400 hover:text-blue-300">📋 {copied ? "Copied!" : "Copy"}</button>
+            <button
+              onClick={speak}
+              title="Synthesises this answer as audio and plays it here. Nothing is stored."
+              className="text-[11px] font-medium text-blue-400 hover:text-blue-300"
+            >
+              🔊 {speakState === "playing" ? "Speaking" : speakState === "synthesising" ? "…" : speakState === "failed" ? "Could not speak" : "Speak"}
+            </button>
             <button
               onClick={download}
               title="Writes this answer to a Markdown file on this machine. There is no report store for narrative answers on this platform."

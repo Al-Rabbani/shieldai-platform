@@ -26,6 +26,7 @@ from gds_api import (
     cloud_posture_api,
     commands_api,
     conversations,
+    copilot_api,
     engineering_api,
     evidence,
     executive_api,
@@ -210,6 +211,7 @@ from gds_api import (
 app.include_router(compliance_api.router)
 app.include_router(linear_api.router)
 app.include_router(integrations_api.router)
+app.include_router(copilot_api.router)
 app.include_router(mssp_api.router)
 app.include_router(scans_api.router)
 app.include_router(store_reads_api.router)

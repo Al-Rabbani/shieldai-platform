@@ -438,6 +438,39 @@ class NotOnThisPlatform extends Error {
   }
 }
 
+
+/* Item 40. The voice routes answer with MP3 bytes, not JSON, so they cannot go through request(): it reads the body as
+ * text and would hand back null. This returns the Blob and the response headers the routes set. */
+async function requestBlob(path, { method = 'POST', body } = {}) {
+  const response = await fetch(`${API}${path}`, {
+    method,
+    credentials: 'same-origin',
+    headers: body ? { 'Content-Type': 'application/json' } : undefined,
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  if (response.status === 401) {
+    const error = new Error('Not authenticated');
+    error.status = 401;
+    throw error;
+  }
+  if (!response.ok) {
+    const text = await response.text();
+    let detail = response.statusText;
+    try { detail = JSON.parse(text).detail || detail; } catch { detail = text || detail; }
+    const error = new Error(`${method} ${path} failed: ${detail}`);
+    error.status = response.status;
+    throw error;
+  }
+  const blob = await response.blob();
+  blob.gdsHeaders = {
+    model: response.headers.get('X-GDS-Model'),
+    latencyMs: response.headers.get('X-GDS-Latency-Ms'),
+    costUsd: response.headers.get('X-GDS-Cost-Usd'),
+    costRecorded: response.headers.get('X-GDS-Cost-Recorded'),
+  };
+  return blob;
+}
+
 async function request(path, { method = 'GET', body, query } = {}) {
   let url = `${API}${path}`;
   if (query) {
@@ -841,6 +874,20 @@ export const base44 = {
    * answers each task from the register and the operational tables, and names in _absent the keys it cannot measure so
    * the page can print an em dash instead of a zero that reads as a measured absence. */
   platform: {
+    /* Item 40. The Co-Pilot's brain, its voice, and the map of both. */
+    copilotCapabilities: () => request('/copilot/capabilities'),
+    /* Speech to text. The transcript comes back for review; nothing is sent on the operator's behalf. */
+    transcribe: (audioBlob, filename) => {
+      const form = new FormData();
+      form.append('file', audioBlob, filename || 'speech.webm');
+      return request('/copilot/voice/transcribe', { method: 'POST', body: form });
+    },
+    /* Text to speech. Returns an object URL for an MP3 the caller plays; the bytes are never stored on the host. */
+    speak: async (text) => {
+      const blob = await requestBlob('/copilot/voice/speak', { method: 'POST', body: { text } });
+      return { url: URL.createObjectURL(blob), headers: blob.gdsHeaders || {} };
+    },
+
     /* What is actually deployed, from the route that reports it: commit sha, branch, deploy time, migrations applied.
      * The Co-Pilot header used to print an invented "v2.0" instead. */
     async version() {
