@@ -11,6 +11,7 @@ import { ShieldCheck, ShieldOff, Loader2, Copy, Check } from "lucide-react";
  */
 export default function MfaSettingsPage() {
   const [status, setStatus] = useState(null);
+  const [policy, setPolicy] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -24,6 +25,7 @@ export default function MfaSettingsPage() {
     setLoading(true);
     try {
       setStatus(await base44.auth.mfaStatus());
+      setPolicy(await base44.auth.mfaPolicy().catch(() => null));
       setError("");
     } catch (err) {
       setError(err?.message || "Could not read the second-factor state.");
@@ -148,6 +150,48 @@ export default function MfaSettingsPage() {
             </dl>
           )}
         </section>
+
+        {!loading && policy && (
+          <section className="rounded-xl p-4" style={card}>
+            <div className="flex items-center gap-2">
+              {policy.requires_mfa && !policy.mfa_enabled ? (
+                <ShieldOff size={16} style={{ color: policy.enforced_now ? "#ef4444" : "#f59e0b" }} />
+              ) : (
+                <ShieldCheck size={16} style={{ color: "#10b981" }} />
+              )}
+              <span className="text-sm font-semibold text-white">
+                {!policy.requires_mfa
+                  ? "Not required by your role"
+                  : policy.mfa_enabled
+                    ? "Required by your role · satisfied"
+                    : policy.enforced_now
+                      ? "Required by your role · sign-in is refused until you enrol"
+                      : "Required by your role · enrol before the deadline"}
+              </span>
+            </div>
+            <dl className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+              <div>
+                <dt style={muted}>Role</dt>
+                <dd className="text-white mt-0.5">{policy.role}</dd>
+              </div>
+              <div>
+                <dt style={muted}>Enrol by</dt>
+                <dd className="text-white mt-0.5">
+                  {policy.enrolment_deadline ? new Date(policy.enrolment_deadline).toLocaleString() : "no deadline, in force now"}
+                </dd>
+              </div>
+              <div>
+                <dt style={muted}>Hours remaining</dt>
+                <dd className="text-white mt-0.5">
+                  {policy.hours_remaining === null ? "—" : policy.hours_remaining}
+                </dd>
+              </div>
+            </dl>
+            <p className="mt-3 text-[11px]" style={muted}>
+              {policy.note}
+            </p>
+          </section>
+        )}
 
         {!loading && status && !status.mfa_enabled && !enrolment && (
           <section className="rounded-xl p-4" style={card}>

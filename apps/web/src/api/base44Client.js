@@ -1123,6 +1123,11 @@ export const base44 = {
     async mfaStatus() {
       return request('/auth/mfa/status');
     },
+    /* What this account's ROLE requires, and the date it starts being enforced. Status says what is true of the
+     * factor; policy says what is demanded of the person and how long is left. */
+    async mfaPolicy() {
+      return request('/auth/mfa/policy');
+    },
     async mfaEnrol() {
       return authRequest('/auth/mfa/enrol', {});
     },

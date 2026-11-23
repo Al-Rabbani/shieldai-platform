@@ -43,6 +43,8 @@ class Role(Base):
     id: Mapped[uuid.UUID] = _uuid_pk()
     tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id"))
     name: Mapped[str] = mapped_column(String(100))
+    # Migration 075. A role may require a second factor; every role here does.
+    requires_mfa: Mapped[bool] = mapped_column(default=False, server_default="false")
     # e.g. ["audit:read", "evidence:write", "approvals:decide"]
     permissions: Mapped[list[str]] = mapped_column(JSONB, default=list)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
@@ -64,6 +66,9 @@ class User(Base):
     mfa_secret: Mapped[str | None] = mapped_column(String(512), nullable=True)
     mfa_enabled: Mapped[bool] = mapped_column(default=False, server_default="false")
     mfa_enrolled_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    # Migration 075. Null means the requirement is already in force; a future timestamp is the grace an
+    # account that existed before the policy was switched on was given.
+    mfa_enrolment_deadline: Mapped[datetime | None] = mapped_column(nullable=True)
 
 
 class UserSession(Base):

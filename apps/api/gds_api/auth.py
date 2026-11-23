@@ -166,6 +166,38 @@ async def login(
         # exists and tells the caller the stored hash is malformed.
         password_ok = False
 
+    # MFA POLICY (migration 075). A role may require a second factor. An account that has not enrolled is refused
+    # once its deadline passes, which lets the requirement be switched on without locking an operator out of a
+    # product whose only enrolment path needs a session. The refusal is 403 with a machine-readable code so the
+    # client can send the person to /settings/mfa instead of showing a dead end.
+    if row is not None and row[0].is_active and password_ok and not row[0].mfa_enabled:
+        if mfa.enrolment_overdue(
+            requires_mfa=bool(getattr(row[1], "requires_mfa", False)),
+            mfa_enabled=bool(row[0].mfa_enabled),
+            deadline=row[0].mfa_enrolment_deadline,
+            now=datetime.now(UTC),
+        ):
+            await db.execute(
+                text("SELECT set_config('gds.tenant_id', :tid, false)"), {"tid": str(row[0].tenant_id)}
+            )
+            await record_audit_event(
+                db,
+                tenant_id=row[0].tenant_id,
+                user_id=row[0].id,
+                action="auth.login.mfa_enrolment_required",
+                detail={"deadline": row[0].mfa_enrolment_deadline.isoformat() if row[0].mfa_enrolment_deadline else None},
+            )
+            await db.commit()
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN,
+                detail={
+                    "code": "mfa_enrolment_required",
+                    "message": "This account's role requires a second factor and enrolment is overdue.",
+                    "enrol_path": "/settings/mfa",
+                    "deadline": row[0].mfa_enrolment_deadline.isoformat() if row[0].mfa_enrolment_deadline else None,
+                },
+            )
+
     # Second factor, checked only after the password verifies so a wrong password never reveals that an account
     # has MFA. An account with MFA enabled but no readable secret is a broken row: refuse, never fall open.
     if row is not None and row[0].is_active and password_ok and row[0].mfa_enabled:
@@ -327,6 +359,52 @@ async def me(
             permissions=current_user.permissions,
         ),
     )
+
+@router.get("/mfa/policy")
+async def mfa_policy(
+    current_user=Depends(get_current_user), db: AsyncSession = Depends(get_db)
+) -> dict:
+    """What this account's role requires of it, and whether it is compliant today.
+
+    Separate from /mfa/status on purpose: status says what is true of the factor, this says what is REQUIRED and
+    how long is left. A settings screen needs both, and a person who is inside a grace window needs to be told
+    the date rather than discover it at the next login.
+    """
+    await db.execute(
+        text("SELECT set_config('gds.tenant_id', :t, false)"), {"t": str(current_user.tenant_id)}
+    )
+    row = (await db.execute(
+        text(
+            "SELECT u.mfa_enabled, u.mfa_enrolled_at, u.mfa_enrolment_deadline, r.name, r.requires_mfa "
+            "FROM users u JOIN roles r ON r.id = u.role_id WHERE u.id = :u"
+        ),
+        {"u": str(current_user.user_id)},
+    )).first()
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Account not found")
+    enabled, enrolled_at, deadline, role_name, requires = row
+    now = datetime.now(UTC)
+    if deadline is not None and deadline.tzinfo is None:
+        deadline = deadline.replace(tzinfo=UTC)
+    hours_left = round((deadline - now).total_seconds() / 3600.0, 1) if deadline else None
+    return {
+        "role": role_name,
+        "requires_mfa": bool(requires),
+        "mfa_enabled": bool(enabled),
+        "enrolled_at": enrolled_at.isoformat() if enrolled_at else None,
+        "enrolment_deadline": deadline.isoformat() if deadline else None,
+        "hours_remaining": hours_left,
+        "enforced_now": mfa.enrolment_overdue(
+            requires_mfa=bool(requires), mfa_enabled=bool(enabled), deadline=deadline, now=now
+        ),
+        "note": (
+            "A role that requires a second factor refuses a password-only sign-in. An account that has not "
+            "enrolled is refused once its deadline passes; an account created after the policy carries no "
+            "deadline and is refused immediately. Enrolment is at /settings/mfa and is two-step, so nothing is "
+            "enforced until an authenticator has proved it produces codes."
+        ),
+    }
+
 
 @router.get("/mfa/status")
 async def mfa_status(

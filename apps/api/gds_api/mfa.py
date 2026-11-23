@@ -14,6 +14,7 @@ configured at all, encryption raises instead of silently storing plaintext.
 from __future__ import annotations
 
 import base64
+from datetime import UTC, datetime
 import hashlib
 import hmac
 import os
@@ -83,6 +84,26 @@ def verify(secret: str, code: str, at: float | None = None, window: int = DEFAUL
         if hmac.compare_digest(_code(secret, counter + drift), candidate):
             return True
     return False
+
+
+def enrolment_overdue(*, requires_mfa: bool, mfa_enabled: bool, deadline, now) -> bool:
+    """Whether this account must be refused because its role requires a factor it has not enrolled.
+
+    Kept pure and separate from the login handler because this is the only branch that can lock an operator out
+    of the platform, and it must be provable without a database. Rules, in order:
+      - a role that does not require a factor never refuses anyone;
+      - an account that has enrolled is handled by the normal second-factor check, not here;
+      - no deadline means the requirement is already in force (accounts created after migration 075);
+      - a deadline in the future gives the account time to enrol and does not refuse it.
+    A naive datetime is read as UTC rather than compared to an aware one, which would raise.
+    """
+    if not requires_mfa or mfa_enabled:
+        return False
+    if deadline is None:
+        return True
+    if deadline.tzinfo is None:
+        deadline = deadline.replace(tzinfo=UTC)
+    return now >= deadline
 
 
 def provisioning_uri(secret: str, email: str, issuer: str = ISSUER) -> str:
