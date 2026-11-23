@@ -55,7 +55,7 @@ export default function OrganizationManagementPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <SectionCard title="Business Units">
-          {units.length === 0 ? <EmptyState message="No business units" /> : (
+          {units.length === 0 ? <EmptyState message="No business-unit store on this platform; this is not a measured zero" /> : (
             <div className="grid grid-cols-1 gap-2">
               {units.map(u => (
                 <div key={u.id} className="rounded-lg p-3 flex items-center gap-3" style={{ background: "#0a0f1e", border: "1px solid #1F2937" }}>
@@ -72,7 +72,7 @@ export default function OrganizationManagementPage() {
         </SectionCard>
 
         <SectionCard title="Teams">
-          {teams.length === 0 ? <EmptyState message="No teams" /> : (
+          {teams.length === 0 ? <EmptyState message="No team store on this platform; this is not a measured zero" /> : (
             <div className="space-y-2">
               {teams.map(t => (
                 <div key={t.id} className="rounded-lg p-3" style={{ background: "#0a0f1e", border: "1px solid #1F2937" }}>
@@ -108,7 +108,7 @@ export default function OrganizationManagementPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <SectionCard title="MSSP Clients">
-          {clients.length === 0 ? <EmptyState message="No MSSP clients" /> : (
+          {clients.length === 0 ? <EmptyState message="No MSSP client store on this platform; /mssp/customers serves the real five and this panel does not read it" /> : (
             <div className="overflow-x-auto">
               <table className="w-full text-xs">
                 <thead><tr className="text-slate-500 border-b border-slate-700">

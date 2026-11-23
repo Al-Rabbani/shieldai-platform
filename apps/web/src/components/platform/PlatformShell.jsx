@@ -60,7 +60,7 @@ export default function PlatformShell() {
         </header>
 
         <div className="flex-1 flex flex-col overflow-hidden">
-        <DataAvailabilityBanner />
+        <DataAvailabilityBanner key={location.pathname} pathname={location.pathname} />
         <main className="flex-1 overflow-auto">
           <PageTransition key={location.pathname}>
             <Outlet />

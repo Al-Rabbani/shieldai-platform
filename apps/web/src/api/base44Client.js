@@ -425,6 +425,13 @@ export function unavailableEntities() {
   return Array.from(unmapped).sort();
 }
 
+/* The record is session-wide, so a banner that wants to speak about ONE page has to clear it first. Called by
+ * DataAvailabilityBanner on mount, which PlatformShell keys on the pathname. Nothing else reads this: the pages
+ * that state an absence explicitly use unavailableEntities() and are unaffected. */
+export function resetUnavailable() {
+  unmapped.clear();
+}
+
 class NotOnThisPlatform extends Error {
   /* `detail` is optional and only used where the platform measured exactly what is missing. A page can then tell the
    * operator which half of a feature is absent instead of "not served yet" for all of it. */
