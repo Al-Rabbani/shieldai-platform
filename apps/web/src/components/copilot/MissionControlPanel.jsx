@@ -1,45 +1,47 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
 
-export default function MissionControlPanel({ agents = [] }) {
-  const [visibleCount, setVisibleCount] = useState(0);
-  const [progress, setProgress] = useState(6);
+/* What is observable while a mission runs, and nothing else.
+ *
+ * This panel used to animate a progress bar with Math.random() (6% climbing to 80%), list agents behind pulsing green
+ * dots, and assert "Reading 6 live data sources", "Zero Trust gate: CLEARED" and "GPT-4.1 parallel execution: IN
+ * PROGRESS". The Co-Pilot sends one synchronous POST to the gdsAgentOS function. While it is in flight the browser
+ * knows three things: the request was sent, which agent and command type were asked for, and how long it has waited.
+ * It receives no progress events, no per-agent steps and no gate verdict, so none is drawn. The percentage was the
+ * worst of them: a number that looked measured and was invented, on a page whose whole job is to report measurements.
+ * The response, once it arrives, states what actually executed - that is where the agent steps belong. */
+export default function MissionControlPanel({ agentLabel, commandType, startedAt }) {
   const [elapsed, setElapsed] = useState(0);
 
   useEffect(() => {
-    const timers = agents.map((_, i) => setTimeout(() => setVisibleCount(i + 1), (i + 1) * 300));
-    const progressTimer = setInterval(() => setProgress(p => (p < 80 ? Math.min(80, p + Math.random() * 10) : 80)), 700);
-    const elapsedTimer = setInterval(() => setElapsed(e => e + 1), 1000);
-    return () => { timers.forEach(clearTimeout); clearInterval(progressTimer); clearInterval(elapsedTimer); };
-  }, [agents]);
+    const started = startedAt || Date.now();
+    const tick = () => setElapsed(Math.max(0, Math.round((Date.now() - started) / 1000)));
+    tick();
+    const timer = setInterval(tick, 1000);
+    return () => clearInterval(timer);
+  }, [startedAt]);
 
   return (
     <div className="flex justify-start mb-4">
       <div className="rounded-xl p-4 w-full max-w-lg" style={{ background: "#111827", border: "1px solid #1F2937" }}>
-        <p className="text-xs font-bold text-blue-400 mb-2">🔮 GASCI Orchestrator — Routing Mission</p>
-
-        <p className="text-[11px] text-slate-400 mb-1">Analysing request...</p>
-        <div className="h-1.5 rounded-full bg-[#1F2937] overflow-hidden mb-3">
-          <div className="h-full rounded-full bg-blue-500 transition-all duration-500" style={{ width: `${progress}%` }} />
+        <div className="flex items-center gap-2 mb-2">
+          <span>⏳</span>
+          <p className="text-xs font-bold text-blue-400">Mission in flight</p>
+          <span className="ml-auto text-[10px] font-mono text-slate-500">{elapsed}s</span>
         </div>
 
-        <p className="text-[10px] text-slate-500 uppercase tracking-widest mb-1.5">Activating agents</p>
-        <div className="space-y-1.5 mb-3">
-          {agents.slice(0, visibleCount).map((a, i) => (
-            <div key={i} className="flex items-center gap-2 text-[11px] text-slate-300 animate-fadeIn">
-              <span>{a.emoji}</span>
-              <span className="font-medium w-32 truncate">{a.name.replace(/^AI\s+/, "")}</span>
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              <span className="text-slate-500">{a.detail}</span>
-            </div>
-          ))}
+        <div className="space-y-1">
+          <p className="text-[10px] text-slate-500">
+            Sent to <span className="text-slate-300 font-semibold">{agentLabel || "an agent the orchestrator selects"}</span>
+          </p>
+          <p className="text-[10px] text-slate-500">
+            Command type <span className="text-slate-300 font-mono">{commandType || "auto"}</span>
+          </p>
         </div>
 
-        <div className="space-y-1 pt-2 border-t" style={{ borderColor: "#1F2937" }}>
-          <p className="text-[10px] text-slate-500">📡 Reading 6 live data sources...</p>
-          <p className="text-[10px] text-slate-500">🔐 Zero Trust gate: <span className="text-emerald-400 font-semibold">✓ CLEARED</span></p>
-          <p className="text-[10px] text-slate-500">🤖 GPT-4.1 parallel execution: <span className="text-blue-400 font-semibold">IN PROGRESS</span></p>
-          <p className="text-[10px] text-slate-600 mt-1">⏱️ {elapsed}s elapsed</p>
-        </div>
+        <p className="text-[9px] text-slate-600 mt-2 leading-snug">
+          One synchronous request. The orchestrator streams no progress events, per-agent steps or gate verdict to the
+          browser, so none is shown here; the response states what actually executed.
+        </p>
       </div>
     </div>
   );

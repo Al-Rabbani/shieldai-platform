@@ -841,6 +841,22 @@ export const base44 = {
    * answers each task from the register and the operational tables, and names in _absent the keys it cannot measure so
    * the page can print an em dash instead of a zero that reads as a measured absence. */
   platform: {
+    /* What is actually deployed, from the route that reports it: commit sha, branch, deploy time, migrations applied.
+     * The Co-Pilot header used to print an invented "v2.0" instead. */
+    async version() {
+      return request('/health/version');
+    },
+    /* The calling user's own unread notifications. GET /notifications is scoped to current_user.user_id and returns
+     * the whole unread set (no page cap), so its length is the count, not the length of a truncated page. Returns
+     * null when the route cannot be read, so a badge is omitted rather than drawn as zero. */
+    async unreadNotificationCount() {
+      try {
+        const list = await request('/notifications', { query: { unread_only: true } });
+        return Array.isArray(list) ? list.length : null;
+      } catch {
+        return null;
+      }
+    },
     async agentPage(task, agent) {
       return request('/platform/agent-page', { query: { task, agent } });
     },

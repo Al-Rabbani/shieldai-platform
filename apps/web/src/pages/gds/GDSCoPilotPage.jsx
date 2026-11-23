@@ -33,11 +33,17 @@ export default function GDSCoPilotPage() {
   const [priority, setPriority] = useState("normal");
   const [selectedAgent, setSelectedAgent] = useState(null);
   const [risk, setRisk] = useState(null);
-  const [thinkingAgents, setThinkingAgents] = useState([]);
+  /* What the browser can actually observe about a mission: which agent and command type were sent, and when. The
+   * panel used to be handed a fake "thinking agent" list and animate invented progress over it. */
+  const [mission, setMission] = useState(null);
+  const [version, setVersion] = useState(null);
+  const [unread, setUnread] = useState(null);
   const messagesEndRef = useRef(null);
 
   useEffect(() => {
     base44.entities.GlobalRiskScore.list("-calculated_at", 1).then(r => setRisk(r[0] || null)).catch(() => {});
+    base44.platform.version().then(setVersion).catch(() => setVersion(null));
+    base44.platform.unreadNotificationCount().then(setUnread).catch(() => setUnread(null));
   }, []);
 
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, loading]);
@@ -52,8 +58,7 @@ export default function GDSCoPilotPage() {
     setLoading(true);
     setMessages(prev => [...prev, { role: "user", content: userInput }]);
 
-    /* One request is in flight; naming three agents "fetching" and "scanning" was decoration, not a report. */
-    setThinkingAgents([{ emoji: "⏳", name: "Mission in flight", detail: "Reasoning over the request…" }]);
+    setMission({ agentLabel: selectedAgent || null, commandType, startedAt: Date.now() });
 
     try {
       const result = await invokeAction("gdsAgentOS", {
@@ -81,7 +86,9 @@ export default function GDSCoPilotPage() {
       setMessages(prev => [...prev, { role: "error", content: `Mission failed: ${err.message}. The GDS Agent OS encountered an error.` }]);
     } finally {
       setLoading(false);
-      setThinkingAgents([]);
+      setMission(null);
+      /* A mission can raise a notification; the badge is re-read rather than assumed unchanged. */
+      base44.platform.unreadNotificationCount().then(setUnread).catch(() => {});
     }
   }
 
@@ -98,8 +105,8 @@ export default function GDSCoPilotPage() {
       <AgentFleetPanel selectedAgent={selectedAgent} onSelectAgent={(name) => setSelectedAgent(prev => prev === name ? null : name)} />
 
       <div className="flex-1 flex flex-col min-w-0">
-        <CoPilotTopBar risk={risk} notificationCount={8} />
-        <AgentStatusTicker activeAgents={loading ? thinkingAgents.map(a => a.name) : []} />
+        <CoPilotTopBar risk={risk} unreadCount={unread} version={version} />
+        <AgentStatusTicker activeAgents={loading && mission ? ["Mission in flight"] : []} />
 
         <div className="flex-1 overflow-y-auto flex flex-col px-4 py-4">
           {messages.length === 0 ? (
@@ -109,7 +116,7 @@ export default function GDSCoPilotPage() {
               {messages.map((m, i) => (
                 <ChatMessage key={i} message={m} onRegenerate={m.source_input ? () => regenerate(m) : null} />
               ))}
-              {loading && <MissionControlPanel agents={thinkingAgents} />}
+              {loading && <MissionControlPanel agentLabel={mission?.agentLabel} commandType={mission?.commandType} startedAt={mission?.startedAt} />}
               <div ref={messagesEndRef} />
             </>
           )}
