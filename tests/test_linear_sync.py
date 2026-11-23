@@ -27,18 +27,24 @@ def transport(payload, status=200):
     return httpx.MockTransport(handler)
 
 
-def test_mapping_is_lossy_only_where_linear_has_no_equivalent():
-    """Every status round-trips except false_positive, which Linear cannot express.
+def test_canonical_statuses_round_trip_and_legacy_names_normalise():
+    """The register holds open, resolved and accepted_risk; those three must survive a round trip through Linear.
 
-    Asserting the asymmetry rather than glossing it means a future edit that silently collapses
-    another status has to change this test and say why.
+    Legacy names (fixed, in_remediation, false_positive) may still sit on rows written before the vocabulary was
+    aligned, so they translate instead of falling through to a default - but they are not produced any more.
+    Asserting both halves means an edit that collapses a canonical status, or resurrects a legacy one on the write
+    side, has to change this test and say why.
     """
+    canonical = {"open", "resolved", "accepted_risk"}
+    legacy = {"fixed", "in_remediation", "false_positive"}
+    assert set(linear.APP_TO_STATE) == canonical | legacy
     for app_status, state_type in linear.APP_TO_STATE.items():
         back = linear.STATE_TO_APP[state_type]
-        if app_status == "false_positive":
-            assert back == "accepted_risk"
-        else:
-            assert back == app_status
+        assert back in canonical, f"{app_status} -> {state_type} -> {back} is not a register status"
+        if app_status in canonical:
+            assert back == app_status, f"{app_status} did not round-trip"
+    assert linear.STATE_TO_APP["completed"] == "resolved"
+    assert linear.STATE_TO_APP["started"] == "open"
 
 
 def test_description_carries_what_was_measured():

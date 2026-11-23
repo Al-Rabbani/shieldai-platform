@@ -5,11 +5,12 @@ import LinearFindingTickets from "@/components/settings/LinearFindingTickets";
 import LinearLinkTable from "@/components/settings/LinearLinkTable";
 import { RefreshCw, Workflow } from "lucide-react";
 
-const CONNECTOR_ID = "6afe2658cb6d1a5f73a5d2ab";
 const TEAM_KEY = "gds_linear_team_id";
 
 export default function LinearIntegrationPage() {
   const [connected, setConnected] = useState(false);
+  const [configured, setConfigured] = useState(false);
+  const [reason, setReason] = useState(null);
   const [viewer, setViewer] = useState(null);
   const [teams, setTeams] = useState([]);
   const [teamId, setTeamId] = useState(() => localStorage.getItem(TEAM_KEY) || "");
@@ -20,7 +21,6 @@ export default function LinearIntegrationPage() {
   const [syncing, setSyncing] = useState(false);
   const [creating, setCreating] = useState(null);
   const [message, setMessage] = useState(null);
-  const pollRef = useRef(null);
 
   const loadRecords = useCallback(async () => {
     const [{ items: findingRows }, { items: linkRows }] = await Promise.all([
@@ -31,23 +31,30 @@ export default function LinearIntegrationPage() {
     setLinks(linkRows || []);
   }, []);
 
+  /* One status read answers everything the card shows: whether the server key is present, whether Linear answered, who
+   * it authenticated as, and which teams exist. It also carries the reason when it is not usable, so the page can say
+   * why instead of showing an empty team list. */
   const fetchTeams = useCallback(async () => {
     try {
-      const response = await base44.functions.invoke("gdsLinearSync", { action: "list_teams" });
+      const response = await base44.functions.invoke("gdsLinearSync", { action: "status" });
       const data = response.data || {};
+      setConfigured(Boolean(data.configured));
+      setReason(data.reason || null);
       setTeams(data.teams || []);
       setViewer(data.viewer || null);
-      setConnected(true);
+      setConnected(Boolean(data.configured && data.reachable));
       setTeamId((current) => {
         if (current && (data.teams || []).some((team) => team.id === current)) return current;
         const next = data.teams?.[0]?.id || "";
         if (next) localStorage.setItem(TEAM_KEY, next);
         return next;
       });
-    } catch {
+    } catch (error) {
       setConnected(false);
+      setConfigured(false);
       setTeams([]);
       setViewer(null);
+      setReason(error?.message || "the Linear status route could not be read");
     }
   }, []);
 
@@ -60,35 +67,15 @@ export default function LinearIntegrationPage() {
 
   useEffect(() => {
     load();
-    return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, [load]);
 
-  async function connect() {
+  /* There is no per-user OAuth here: Linear is one workspace authenticated by a server-side API key, so there is nothing
+   * for an engineer to connect or disconnect. This rechecks the server key and reports what it found. */
+  async function recheck() {
     setBusy(true);
     setMessage(null);
-    try {
-      const url = await base44.connectors.connectAppUser(CONNECTOR_ID);
-      const popup = window.open(url, "_blank");
-      if (pollRef.current) clearInterval(pollRef.current);
-      pollRef.current = setInterval(() => {
-        if (!popup || popup.closed) {
-          clearInterval(pollRef.current);
-          pollRef.current = null;
-          fetchTeams();
-        }
-      }, 500);
-    } catch (error) {
-      setMessage({ type: "err", text: error.message });
-    }
-    setBusy(false);
-  }
-
-  async function disconnect() {
-    setBusy(true);
-    await base44.connectors.disconnectAppUser(CONNECTOR_ID).catch(() => {});
-    setConnected(false);
-    setTeams([]);
-    setViewer(null);
+    await fetchTeams();
+    setMessage((current) => current || { type: "ok", text: "Linear connection rechecked." });
     setBusy(false);
   }
 
@@ -129,16 +116,22 @@ export default function LinearIntegrationPage() {
     setCreating(null);
   }
 
+  /* One bulk call: the route reads the linked tickets from Linear, updates the links and writes the state back onto the
+   * finding. It reports how many it checked, how many it could read and how many it changed, so a zero is a measured
+   * zero rather than a cheerful success. */
   async function syncNow() {
     setSyncing(true);
     setMessage(null);
     try {
       const response = await base44.functions.invoke("gdsLinearSync", { action: "sync_states" });
       const data = response.data || {};
-      setMessage({ type: "ok", text: `${data.synced || 0} ticket(s) checked · ${data.updated || 0} finding status update(s) written back.` });
+      setMessage({
+        type: "ok",
+        text: `${data.checked || 0} linked ticket(s) checked · ${data.synced || 0} read from Linear · ${data.updated || 0} finding status update(s) written back.`,
+      });
       await loadRecords();
     } catch (error) {
-      setMessage({ type: "err", text: error?.response?.data?.error || error.message });
+      setMessage({ type: "err", text: error?.response?.data?.detail || error?.response?.data?.error || error.message });
     }
     setSyncing(false);
   }
@@ -177,12 +170,13 @@ export default function LinearIntegrationPage() {
         <>
           <LinearConnectionCard
             connected={connected}
+            configured={configured}
+            reason={reason}
             viewer={viewer}
             teams={teams}
             teamId={teamId}
             onTeamChange={changeTeam}
-            onConnect={connect}
-            onDisconnect={disconnect}
+            onRecheck={recheck}
             busy={busy}
           />
 

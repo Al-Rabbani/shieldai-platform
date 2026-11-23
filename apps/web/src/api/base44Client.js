@@ -186,6 +186,9 @@ const ENTITY_ROUTES = {
 const ABSENT = Symbol('absent');
 
 const REFUSAL_REASONS = {
+  'gdsLinearSync:':
+    'Linear is served for three actions: reading the connection (status), listing teams and raising or moving a ticket. '
+    + 'Any other action is not implemented, so it is refused rather than guessed.',
   TeamMember:
     'Reading team members is served from this tenant\'s own user roster at GET /team/members. Writing one is not: there ' +
     'is no team member store, so Slack linkage and per-member escalation settings have nowhere to be saved. People are ' +
@@ -307,7 +310,20 @@ const FUNCTION_ROUTES = {
       };
     },
   },
-  gdsLinearSync: { path: '/integrations/linear', method: 'POST', body: { action: 'sync' } },
+  /* The route resolves per action, and the caller's action must survive: a hardcoded body here sent "sync" for every
+   * call and the route rejected it. "status" reads the connection; the other three are the actions the route implements.
+   * sync_states is a real bulk action (it reads the linked tickets from Linear and writes their state back), and
+   * push_state moves one finding's ticket. */
+  gdsLinearSync: {
+    byAction: {
+      status: { path: '/integrations/linear/status', method: 'GET' },
+      list_teams: { path: '/integrations/linear', method: 'POST' },
+      create_ticket: { path: '/integrations/linear', method: 'POST' },
+      push_state: { path: '/integrations/linear', method: 'POST' },
+      sync_states: { path: '/integrations/linear', method: 'POST' },
+    },
+    default: ABSENT,
+  },
   /* The shell asks for platform_intel on every page load; that function does not exist here, so the header showed
    * dashes on all 100 pages. GET /platform/intel answers it from security_findings and compliance_controls, returning
    * exactly risk.{score,grade} and defensive.{cloud_open,cloud_critical,vuln_total,vuln_critical,exploited_in_wild,

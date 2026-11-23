@@ -285,7 +285,7 @@ async def linear_action(
                 await db.execute(
                     text(
                         "UPDATE security_findings SET status = :status, "
-                        "resolved_at = CASE WHEN :status = 'fixed' THEN now() ELSE resolved_at END "
+                        "resolved_at = CASE WHEN :status = 'resolved' THEN now() ELSE resolved_at END "
                         "WHERE tenant_id = :tid AND id = :fid AND status <> :status"
                     ),
                     {"status": app_status, "tid": tenant_id, "fid": row["finding_id"]},

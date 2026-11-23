@@ -26,19 +26,25 @@ TIMEOUT_SECONDS = 15.0
 # Linear's workflow state types are a fixed vocabulary; the platform's finding statuses are not. The
 # mapping is declared in both directions so a push and a pull cannot disagree about what "fixed"
 # means, which is how a ticket and its finding drift apart while both look correct.
+# security_findings holds exactly three statuses: open, resolved and accepted_risk. Writing "fixed" or "in_remediation"
+# back from Linear put values in that column which no count, SLA band or executive figure reads, so a ticket closed in
+# Linear left the finding looking open forever. A finding in progress is open with remediation_started_at set, which is
+# derived rather than stored. The legacy names stay on the read side so rows written before this change still translate.
 STATE_TO_APP = {
-    "completed": "fixed",
+    "completed": "resolved",
     "canceled": "accepted_risk",
-    "started": "in_remediation",
+    "started": "open",
     "unstarted": "open",
     "backlog": "open",
     "triage": "open",
 }
 APP_TO_STATE = {
     "open": "unstarted",
-    "in_remediation": "started",
-    "fixed": "completed",
+    "resolved": "completed",
     "accepted_risk": "canceled",
+    # legacy aliases: never produced now, still translated if an old row carries one
+    "fixed": "completed",
+    "in_remediation": "started",
     "false_positive": "canceled",
 }
 
