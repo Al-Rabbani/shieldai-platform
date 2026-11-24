@@ -41,6 +41,7 @@ def _verdict(age_minutes: float | None, interval_minutes: int | None) -> str:
 
 @router.get("/health")
 async def scan_health(
+    now: datetime | None = None,
     current_user: CurrentUser = Depends(require_permission("findings:read")),
     db=Depends(get_db),
 ) -> dict:
@@ -52,7 +53,7 @@ async def scan_health(
     """
     tenant = str(current_user.tenant_id)
     await db.execute(text("SELECT set_config('gds.tenant_id', :t, false)"), {"t": tenant})
-    now = datetime.now(timezone.utc)
+    now = now or datetime.now(timezone.utc)
 
     schedules = (await db.execute(text(
         """

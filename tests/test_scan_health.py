@@ -17,7 +17,9 @@ from datetime import datetime, timedelta, timezone
 
 from gds_api.scan_health_api import _verdict, scan_health
 
-NOW = datetime(2026, 11, 23, 15, 0, tzinfo=timezone.utc)
+# Pinned and passed INTO the route. It used to be a fixed date the route never saw, so these tests passed on the
+# day they were written and turned red a day later when the real clock moved past their last_run_at.
+NOW = datetime.now(timezone.utc).replace(microsecond=0)
 
 
 # ------------------------------------------------------------------ the verdict, which is the whole point
@@ -122,7 +124,7 @@ def _run(**kw):
 
 def _call(schedules, runs, register=None, newest=NOW - timedelta(days=4)):
     db = _FakeDB(schedules, runs, register or {"total": 1002, "open": 849, "critical_open": 0}, newest)
-    out = asyncio.run(scan_health(current_user=_User(), db=db))
+    out = asyncio.run(scan_health(current_user=_User(), db=db, now=NOW))
     return out, db
 
 
