@@ -8,6 +8,7 @@ import {
   resetSlaTargetsCache,
 } from "@/lib/slaTargets";
 import { Timer, Save } from "lucide-react";
+import { absentStoreReason } from "@/api/absentStores";
 
 const SEV_STYLE = {
   critical: "text-red-300 border-red-500/40 bg-red-500/10",
@@ -123,7 +124,7 @@ export default function SlaTargetsPage() {
       </div>
 
       <p className="text-[10px] text-slate-600">
-        A finding with its own SLA date keeps that date; these hours apply whenever no SLA has been set.
+        A finding with its own SLA date keeps that date; these hours apply whenever no SLA has been set. <span className="text-amber-300/90">Saving needs a store this platform does not have, so Save reports that rather than confirming: {absentStoreReason("SlaTarget")}</span>
       </p>
     </div>
   );

@@ -84,3 +84,15 @@ def test_no_new_module_joins_the_unconverted_queue():
     )
     resolved = sorted(queue - still)
     assert not resolved or True, f"queue can shrink (now {len(still)}, was {len(queue)})"
+
+
+def test_every_queued_module_carries_its_reason():
+    """Being in the queue is not proof of a defect; the reason is the measurement that keeps it there."""
+    import json as _json
+    import pathlib as _pathlib
+
+    queue = _json.loads(_pathlib.Path(__file__).resolve().parents[1]
+                        .joinpath("apps/web/.absent-wording-queue.json").read_text())
+    reasons = queue.get("reasons") or {}
+    for module in queue["modules"]:
+        assert reasons.get(module), f"{module} sits in the absent-wording queue with no measured reason"

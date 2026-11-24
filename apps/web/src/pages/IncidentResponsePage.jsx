@@ -52,24 +52,11 @@ export default function IncidentResponsePage() {
     setTimeline(timelineList);
     setLoading(false);
 
-    const active = incList.find(i => !i.closed_at && i.status !== "resolved");
-    if (active) {
-      if (!taskList.some(t => t.incident_id === active.id)) {
-        const created = await base44.entities.IncidentTask.bulkCreate(DEFAULT_TASKS.map(t => ({ ...t, incident_id: active.id }))).catch(() => []);
-        setTasks(prev => [...prev, ...(created || [])]);
-      }
-      if (!timelineList.some(t => t.incident_id === active.id)) {
-        const opened = active.opened_at ? new Date(active.opened_at) : new Date();
-        const events = [
-          { incident_id: active.id, event_type: "detection", title: `Incident opened — ${active.title} encryption activity detected`, timestamp: opened.toISOString() },
-          { incident_id: active.id, event_type: "containment", title: `Network isolation initiated for ${(active.affected_assets || []).slice(0, 2).join(", ")}`, timestamp: new Date(opened.getTime() + 15 * 60000).toISOString() },
-          { incident_id: active.id, event_type: "other", title: "Forensic imaging started", timestamp: new Date(opened.getTime() + 90 * 60000).toISOString() },
-          { incident_id: active.id, event_type: "notification", title: "GDPR assessment in progress — personal data exposure being verified", timestamp: new Date(opened.getTime() + 5 * 3600000).toISOString() },
-        ];
-        const created = await base44.entities.IncidentTimeline.bulkCreate(events).catch(() => []);
-        setTimeline(prev => [...prev, ...(created || [])]);
-      }
-    }
+    /* Nothing is seeded here. This block used to invent the incident's own history: it created default tasks in
+     * IncidentTask and four narrative milestones in IncidentTimeline, neither of which has a store on this
+     * platform. The adapter throws for both, `.catch(() => [])` swallowed the throw, and the empty array was
+     * appended to state - so the page rendered a timeline it had made up, with timestamps derived from
+     * opened_at so it looked observed. An incident with no recorded history now shows none. */
   }, []);
 
   useEffect(() => { load(); }, [load]);

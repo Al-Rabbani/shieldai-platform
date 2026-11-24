@@ -1,5 +1,5 @@
 {
-  "_comment": "Modules that still name an unserved store without the shipped wording. May only shrink.",
+  "_comment": "Modules that name an unserved entity. Being here is not proof of a defect: the reason says what was measured. The list may only shrink.",
   "measured": "2026-11-24",
   "modules": [
     "components/blueteam/BlueTeamAdvisorPanel.jsx",
@@ -37,5 +37,42 @@
     "pages/settings/FleetScalingPage.jsx",
     "pages/settings/RiskScoringPage.jsx",
     "pages/settings/SlaTargetsPage.jsx"
-  ]
+  ],
+  "reasons": {
+    "components/blueteam/BlueTeamAdvisorPanel.jsx": "names the store only (picker, dropdown or a read whose result is not presented as a count); measured 24 Nov 2026: no absence claim in this module",
+    "components/code/CodeRepoDetailCard.jsx": "names the store only (picker, dropdown or a read whose result is not presented as a count); measured 24 Nov 2026: no absence claim in this module",
+    "components/commandcenter/NationalCampaignFeed.jsx": "names the store only (picker, dropdown or a read whose result is not presented as a count); measured 24 Nov 2026: no absence claim in this module",
+    "components/compliance/EvidenceControlUploader.jsx": "names the store only (picker, dropdown or a read whose result is not presented as a count); measured 24 Nov 2026: no absence claim in this module",
+    "components/copilot/ChatMessage.jsx": "names the store only (picker, dropdown or a read whose result is not presented as a count); measured 24 Nov 2026: no absence claim in this module",
+    "components/dashboard/roles/DeveloperDashboardView.jsx": "names the store only (picker, dropdown or a read whose result is not presented as a count); measured 24 Nov 2026: no absence claim in this module",
+    "components/fixes/AutoRemediationToggles.jsx": "already states the absence in its own prose (measured 24 Nov 2026); listed only because it still names the store",
+    "components/gds/CopilotShared.jsx": "names the store only (picker, dropdown or a read whose result is not presented as a count); measured 24 Nov 2026: no absence claim in this module",
+    "components/home/SecurityFeaturesRow.jsx": "names the store only (picker, dropdown or a read whose result is not presented as a count); measured 24 Nov 2026: no absence claim in this module",
+    "components/incidents/GdprNotificationModal.jsx": "names the store only (picker, dropdown or a read whose result is not presented as a count); measured 24 Nov 2026: no absence claim in this module",
+    "components/redteam/RedTeamAdvisorPanel.jsx": "not a store claim: 'No advisory available' is the fallback when the AI response is empty (measured 24 Nov 2026)",
+    "components/redteam/RedTeamEvidenceBasis.jsx": "already states the absence in its own prose (measured 24 Nov 2026); listed only because it still names the store",
+    "components/settings/AgentTaskAssignModal.jsx": "names the store only (picker, dropdown or a read whose result is not presented as a count); measured 24 Nov 2026: no absence claim in this module",
+    "components/settings/AssignmentRuleForm.jsx": "names the store only (picker, dropdown or a read whose result is not presented as a count); measured 24 Nov 2026: no absence claim in this module",
+    "components/settings/PostureDropAlertCard.jsx": "names the store only (picker, dropdown or a read whose result is not presented as a count); measured 24 Nov 2026: no absence claim in this module",
+    "components/settings/SlackAlertSettingsCard.jsx": "names the store only (picker, dropdown or a read whose result is not presented as a count); measured 24 Nov 2026: no absence claim in this module",
+    "components/shared/AIResponseModal.jsx": "names the store only (picker, dropdown or a read whose result is not presented as a count); measured 24 Nov 2026: no absence claim in this module",
+    "pages/Assets.jsx": "claim is about a SERVED store: cloud_assets holds 145 rows and 'No assets found' is the filtered-empty state (measured 24 Nov 2026)",
+    "pages/AttackVectorSimulatorPage.jsx": "PARTLY SETTLED: AttackPath has no store, but this page does not read one - it derives the graph from findings and incidents, so the sentence describes a computation result rather than a missing table. Needs a read of the graph builder before the wording is changed (measured 24 Nov 2026)",
+    "pages/BlueTeamCommandPage.jsx": "names the store only (picker, dropdown or a read whose result is not presented as a count); measured 24 Nov 2026: no absence claim in this module",
+    "pages/GDSSettingsPage.jsx": "names the store only (picker, dropdown or a read whose result is not presented as a count); measured 24 Nov 2026: no absence claim in this module",
+    "pages/IdentityCIEMPage.jsx": "names the store only (picker, dropdown or a read whose result is not presented as a count); measured 24 Nov 2026: no absence claim in this module",
+    "pages/IncidentResponsePage.jsx": "claim is about a SERVED store: incidents holds 2 rows; the invented task/timeline seeding that made this page fabricate history was removed 24 Nov 2026",
+    "pages/RedTeamCommandPage.jsx": "names the store only (picker, dropdown or a read whose result is not presented as a count); measured 24 Nov 2026: no absence claim in this module",
+    "pages/code/CodeSecurityDashboardPage.jsx": "claim is about a SERVED store: repositories holds 1 row, so 'No repositories connected yet' is a real empty state (measured 24 Nov 2026)",
+    "pages/code/SBOMDependenciesPage.jsx": "names the store only (picker, dropdown or a read whose result is not presented as a count); measured 24 Nov 2026: no absence claim in this module",
+    "pages/dashboards/ExecutiveDashboardPage.jsx": "claim is about a SERVED store: KPI is served at /executive/kpis, so 'No KPIs configured' is a real empty state; BoardReport and ExecutiveInsight are genuinely absent and are named elsewhere on the page (measured 24 Nov 2026)",
+    "pages/dashboards/OrganizationManagementPage.jsx": "names the store only (picker, dropdown or a read whose result is not presented as a count); measured 24 Nov 2026: no absence claim in this module",
+    "pages/forensics/ForensicEvidenceVaultPage.jsx": "already states the absence in its own prose (measured 24 Nov 2026); listed only because it still names the store",
+    "pages/platform/offensive/RedTeamPage.jsx": "names the store only (picker, dropdown or a read whose result is not presented as a count); measured 24 Nov 2026: no absence claim in this module",
+    "pages/settings/AgentFleetPage.jsx": "names the store only (picker, dropdown or a read whose result is not presented as a count); measured 24 Nov 2026: no absence claim in this module",
+    "pages/settings/AutoRemediationPage.jsx": "names the store only (picker, dropdown or a read whose result is not presented as a count); measured 24 Nov 2026: no absence claim in this module",
+    "pages/settings/FleetScalingPage.jsx": "already states the absence in its own prose (measured 24 Nov 2026); listed only because it still names the store",
+    "pages/settings/RiskScoringPage.jsx": "already states the absence in its own prose (measured 24 Nov 2026); listed only because it still names the store",
+    "pages/settings/SlaTargetsPage.jsx": "already states the absence in its own prose (measured 24 Nov 2026); listed only because it still names the store"
+  }
 }
