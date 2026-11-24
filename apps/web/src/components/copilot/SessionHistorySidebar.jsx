@@ -23,7 +23,7 @@ export default function SessionHistorySidebar() {
       {open && (
         <div style={{ marginTop: 8, maxHeight: 260, overflowY: "auto" }}>
           {sessions.length === 0 ? (
-            <p style={{ fontSize: 11, color: "#475569" }}>No sessions yet.</p>
+            <p style={{ fontSize: 11, color: "#475569" }}>{absentStoreReason("CopilotSession")}</p>
           ) : sessions.map(s => (
             <div key={s.id} style={{ padding: "6px 8px", borderRadius: 6, marginBottom: 4, background: "#0a0f1e", border: "1px solid #1e293b" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>

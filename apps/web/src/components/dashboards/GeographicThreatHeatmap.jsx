@@ -149,7 +149,7 @@ export default function GeographicThreatHeatmap() {
     return (
       <div className="text-center py-8">
         <Globe2 size={20} className="mx-auto text-slate-600 mb-2" />
-        <p className="text-xs text-slate-500">No threat records with geography are stored yet.</p>
+        <p className="text-xs text-slate-500">{absentStoreReason("NationalThreat")}</p>
       </div>
     );
   }

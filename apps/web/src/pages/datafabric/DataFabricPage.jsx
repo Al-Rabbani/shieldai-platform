@@ -141,7 +141,7 @@ export default function DataFabricPage() {
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <Section title="Data Catalog" icon={FolderTree}>
-              {catalogs.length === 0 ? <Empty msg="No catalogs configured" /> : (
+              {catalogs.length === 0 ? <Empty msg={absentStoreReason("DataCatalog")} /> : (
                 <div className="space-y-2">
                   {catalogs.map(c => (
                     <div key={c.id} className="rounded-lg p-3" style={{ background: "#0a0f1e", border: "1px solid #1F2937" }}>
@@ -161,7 +161,7 @@ export default function DataFabricPage() {
             </Section>
 
             <Section title="Data Lakes" icon={HardDrive}>
-              {lakes.length === 0 ? <Empty msg="No data lakes configured" /> : (
+              {lakes.length === 0 ? <Empty msg={absentStoreReason("DataLake")} /> : (
                 <div className="space-y-2">
                   {lakes.map(l => (
                     <div key={l.id} className="rounded-lg p-3" style={{ background: "#0a0f1e", border: "1px solid #1F2937" }}>

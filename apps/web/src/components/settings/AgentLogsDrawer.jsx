@@ -60,7 +60,7 @@ export default function AgentLogsDrawer({ agent, onClose }) {
             <section>
               <p className="text-[10px] uppercase font-bold text-slate-500 mb-2">Task history ({tasks.length})</p>
               {tasks.length === 0 ? (
-                <p className="text-[11px] text-slate-600">No tasks recorded for this agent yet.</p>
+                <p className="text-[11px] text-slate-600">{absentStoreReason("CopilotTask")}</p>
               ) : (
                 <div className="space-y-1.5">
                   {tasks.map((task) => (
@@ -84,7 +84,7 @@ export default function AgentLogsDrawer({ agent, onClose }) {
             <section>
               <p className="text-[10px] uppercase font-bold text-slate-500 mb-2">Audit events ({audit.length})</p>
               {audit.length === 0 ? (
-                <p className="text-[11px] text-slate-600">No audit events recorded for this agent yet.</p>
+                <p className="text-[11px] text-slate-600">{absentStoreReason("CopilotAuditLog")}</p>
               ) : (
                 <div className="space-y-1.5">
                   {audit.map((row) => (

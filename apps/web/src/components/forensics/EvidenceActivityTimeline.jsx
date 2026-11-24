@@ -86,7 +86,7 @@ export default function EvidenceActivityTimeline() {
           <p className="text-xs text-slate-500">
             {activeCount > 0
               ? "No activity matches these filters."
-              : "No activity recorded yet. Collecting, opening, verifying or exporting evidence records events here."}
+              : absentStoreReason("EvidenceActivity")}
           </p>
         </div>
       ) : (

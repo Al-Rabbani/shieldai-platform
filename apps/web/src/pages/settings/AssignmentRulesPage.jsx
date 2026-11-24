@@ -184,7 +184,7 @@ export default function AssignmentRulesPage() {
       {loading ? (
         <div className="w-6 h-6 border-2 border-t-blue-500 border-white/10 rounded-full animate-spin mx-auto my-16" />
       ) : rules.length === 0 ? (
-        <p className="text-xs text-slate-500 text-center py-10">No assignment rules yet. Create one to route findings automatically.</p>
+        <p className="text-xs text-slate-500 text-center py-10">{absentStoreReason("Team")}</p>
       ) : (
         <div className="space-y-2">
           {rules.map((rule) => (

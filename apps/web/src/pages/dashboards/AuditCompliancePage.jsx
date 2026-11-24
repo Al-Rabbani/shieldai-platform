@@ -116,7 +116,7 @@ export default function AuditCompliancePage() {
           </select>
         </div>
       }>
-        {filteredGaps.length === 0 ? <EmptyState message="No compliance gaps found" /> : (
+        {filteredGaps.length === 0 ? <EmptyState message={absentStoreReason("ComplianceGap")} /> : (
           <div className="space-y-2">
             {filteredGaps.map(gap => (
               <div key={gap.id} className="rounded-lg p-3 flex items-start gap-3" style={{ background: "#0a0f1e", border: "1px solid #1F2937" }}>

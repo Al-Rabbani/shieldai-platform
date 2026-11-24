@@ -27,7 +27,7 @@ export default function EngineerSlackList({ members, onSave }) {
   if (members.length === 0) {
     return (
       <p className="text-xs text-slate-500 py-4">
-        No team members yet. Add your security engineers in Organization settings first.
+        {absentStoreReason("Organization")}
       </p>
     );
   }

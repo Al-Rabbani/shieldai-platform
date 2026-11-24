@@ -135,7 +135,7 @@ export default function FleetPerformanceTab() {
           </ResponsiveContainer>
         </div>
         {agentDays.length === 0 && (
-          <p className="text-[10px] text-slate-500 mt-2">No autoscale runs recorded yet — the chart fills in as the scheduled run fires.</p>
+          <p className="text-[10px] text-slate-500 mt-2">{absentStoreReason("FleetScalingRun")}</p>
         )}
       </div>
 

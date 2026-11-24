@@ -105,7 +105,7 @@ export default function AlertsNotificationsPage() {
       </div>
 
       <SectionCard title="Notification Preferences">
-        {prefs.length === 0 ? <EmptyState message="No notification preferences configured" /> : (
+        {prefs.length === 0 ? <EmptyState message={absentStoreReason("NotificationPreference")} /> : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             {prefs.map(p => (
               <div key={p.id} className="rounded-lg p-3" style={{ background: "#0a0f1e", border: "1px solid #1F2937" }}>
