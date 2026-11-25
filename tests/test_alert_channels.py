@@ -29,8 +29,9 @@ def test_the_route_reports_every_channel_and_its_requirement():
 def test_the_page_reads_the_route_and_no_longer_claims_dispatches():
     src = PAGE.read_text()
     assert "Notifications Dispatched" not in src, "the page still counts an absent dispatch store"
-    assert "External alert channels" in src
-    assert "in-app inbox only" in src
+    # the tile was later moved onto the recorded deliveries; what must hold is that the page reads the real
+    # channel state and never invents a delivery count
+    assert "There is no dispatch store" in src
     assert "alertChannels()" in src
 
 
