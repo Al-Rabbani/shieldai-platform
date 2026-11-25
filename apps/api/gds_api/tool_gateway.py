@@ -147,7 +147,7 @@ async def _nuclei_scan(params: dict) -> dict:
 
 async def _semgrep_scan(params: dict) -> dict:
     """Run semgrep scan. params: path, rules."""
-    path = params.get("path", ".")
+    path = params.get("target") or params.get("path") or "."
     rules = params.get("rules", "auto")
     
     cmd = [_find_tool("semgrep"), "--json", "--config", rules, path]
@@ -215,9 +215,9 @@ async def _nikto_scan(params: dict) -> dict:
 
 async def _sqlmap_scan(params: dict) -> dict:
     """Run sqlmap scan. params: url, data."""
-    url = params.get("url", "")
+    url = params.get("target") or params.get("url") or ""
     if not url:
-        return {"success": False, "error": "url required"}
+        return {"success": False, "error": "target required (a URL)"}
     
     cmd = [_find_tool("sqlmap"), "-u", url, "--batch", "--output-dir=/tmp/sqlmap"]
     result = await _run_tool(cmd, timeout=600)
@@ -239,9 +239,9 @@ async def _masscan_scan(params: dict) -> dict:
 
 async def _subfinder_scan(params: dict) -> dict:
     """Run subfinder. params: domain."""
-    domain = params.get("domain", "")
+    domain = params.get("target") or params.get("domain") or ""
     if not domain:
-        return {"success": False, "error": "domain required"}
+        return {"success": False, "error": "target required (a domain)"}
     
     cmd = [_find_tool("subfinder"), "-d", domain, "-json"]
     result = await _run_tool(cmd, timeout=300)
@@ -270,11 +270,11 @@ async def _httpx_probe(params: dict) -> dict:
 
 async def _ffuf_scan(params: dict) -> dict:
     """Run ffuf. params: url, wordlist."""
-    url = params.get("url", "")
+    url = params.get("target") or params.get("url") or ""
     wordlist = params.get("wordlist", "/opt/tools/wordlists/directory-list-2.3-medium.txt")
     
     if not url:
-        return {"success": False, "error": "url required"}
+        return {"success": False, "error": "target required (a URL)"}
     
     cmd = [_find_tool("ffuf"), "-u", url + "/FUZZ", "-w", wordlist, "-json"]
     result = await _run_tool(cmd, timeout=600)
@@ -284,12 +284,12 @@ async def _ffuf_scan(params: dict) -> dict:
 
 async def _gobuster_scan(params: dict) -> dict:
     """Run gobuster. params: url, mode, wordlist."""
-    url = params.get("url", "")
+    url = params.get("target") or params.get("url") or ""
     mode = params.get("mode", "dir")
     wordlist = params.get("wordlist", "/opt/tools/wordlists/directory-list-2.3-medium.txt")
     
     if not url:
-        return {"success": False, "error": "url required"}
+        return {"success": False, "error": "target required (a URL)"}
     
     cmd = [_find_tool("gobuster"), mode, "-u", url, "-w", wordlist]
     result = await _run_tool(cmd, timeout=600)
@@ -299,9 +299,9 @@ async def _gobuster_scan(params: dict) -> dict:
 
 async def _wpscan_scan(params: dict) -> dict:
     """Run wpscan. params: url."""
-    url = params.get("url", "")
+    url = params.get("target") or params.get("url") or ""
     if not url:
-        return {"success": False, "error": "url required"}
+        return {"success": False, "error": "target required (a URL)"}
     
     cmd = [_find_tool("wpscan"), "--url", url, "--format", "json"]
     result = await _run_tool(cmd, timeout=600)
@@ -387,9 +387,9 @@ async def _authorised_target_refusal(params: dict, candidate: str) -> dict | Non
 async def _check_url_headers(params: dict) -> dict:
     """Check security headers. params: url."""
     import httpx
-    url = params.get("url", "")
+    url = params.get("target") or params.get("url") or ""
     if not url:
-        return {"success": False, "error": "url required"}
+        return {"success": False, "error": "target required (a URL)"}
     refusal = await _authorised_target_refusal(params, url)
     if refusal:
         return refusal
