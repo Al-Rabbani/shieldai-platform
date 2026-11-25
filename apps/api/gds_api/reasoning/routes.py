@@ -159,7 +159,13 @@ async def create_mission(req: MissionRequest, request: Request, user: CurrentUse
             ],
             "iterations": result.iterations,
             "duration_ms": result.duration_ms,
-            "error": result.error
+            "error": result.error,
+            # The memory accounting this mission actually applied. _with_standing_memory built
+            # standing_memory_count, attached it to the context, and then the route dropped the context
+            # entirely - so copilot_api documented a count no caller could ever read.
+            "goal_original": req.goal,
+            "standing_memory_count": _ctx.get("standing_memory_count", 0),
+            "standing_memory_error": _ctx.get("standing_memory_error"),
         }
     except Exception as e:
         logger.error(f"Mission error: {e}")
