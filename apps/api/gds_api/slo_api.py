@@ -536,18 +536,34 @@ async def build_report(db, tenant_id: str) -> dict[str, Any]:
     }
 
 
+def _whole(value: Any) -> str:
+    """A value rounded to a whole unit, for an alert message that has to survive being repeated.
+
+    The raiser dedupes on (type, message). A message carrying `6.1h` becomes `6.2h` on the next tick and pages again
+    for the same breach - measured 25 Nov 2026, two notifications for one approval-timeliness breach six minutes
+    apart. Whole units change only when the state actually moves a full point, and the exact figures stay on /slo.
+    """
+    try:
+        return f"{round(float(value))}"
+    except (TypeError, ValueError):
+        return str(value)
+
+
 def breach_alerts(report: dict[str, Any]) -> list[dict[str, str]]:
     """One alert per breached objective, or none.
 
     Deliberately silent about `at_risk` and `unmeasured`: an alert that fires on a number still inside its target
     teaches people to ignore the channel, and an unmeasured objective already says so on the page. A breach is the
     only state that means "we promised something and are not delivering it".
+
+    The message is built from state that changes slowly, because the raiser dedupes on the exact text. Values that
+    move on every measurement (a p95, a count of failed requests, the age of the oldest pending approval) are
+    deliberately absent: they belong on the page, where somebody reading them can also read the trend.
     """
     alerts: list[dict[str, str]] = []
     for objective in report.get("objectives") or []:
         if objective.get("status") != "breached":
             continue
-        actual = objective.get("actual")
         unit = objective.get("unit") or ""
         target = objective.get("target")
         detail = objective.get("detail") or {}
@@ -557,30 +573,25 @@ def breach_alerts(report: dict[str, Any]) -> list[dict[str, str]]:
             if failed:
                 because.append(", ".join(f"{count} {name}" for name, count in list(failed.items())[:4]))
             if detail.get("completed") is not None:
-                because.append(f"{detail['completed']} completed")
+                because.append(f"{_whole(detail['completed'])} completed")
         elif objective.get("id") == "approval_timeliness":
             if detail.get("decided") is not None:
-                because.append(f"{detail.get('within_threshold', 0)} of {detail['decided']} within "
-                               f"{detail.get('threshold_hours')}h")
-            if detail.get("oldest_pending_hours"):
-                because.append(f"oldest pending {detail['oldest_pending_hours']}h")
+                because.append(
+                    f"{detail.get('within_threshold', 0)} of {detail['decided']} decided within "
+                    f"{detail.get('threshold_hours')}h"
+                )
         elif objective.get("id") == "scanner_freshness":
             for key in ("silent", "overdue", "never_run"):
                 names = detail.get(key) or []
                 if names:
-                    because.append(f"{key.replace('_', ' ')}: {', '.join(names)}")
-        elif objective.get("id") == "api_availability":
-            if detail.get("failed_requests") is not None:
-                because.append(f"{detail['failed_requests']} of {detail.get('requests_counted')} answered 5xx")
-        elif objective.get("id") == "api_latency":
-            because.append(f"p95 {actual} {unit} against {target} {unit}")
+                    because.append(f"{key.replace('_', ' ')}: {', '.join(sorted(names))}")
         suffix = f" ({'; '.join(because)})" if because else ""
         alerts.append({
             "type": f"slo_breach:{objective.get('id')}",
             "severity": "high",
             "message": (
-                f"Service level breached: {objective.get('name')} is {actual}{unit} against a target of "
-                f"{target}{unit} over {objective.get('window')}{suffix}. Measured by GET /slo."
+                f"Service level breached: {objective.get('name')} is {_whole(objective.get('actual'))}{unit} against "
+                f"a target of {target}{unit} over {objective.get('window')}{suffix}. Measured by GET /slo."
             ),
         })
     return alerts

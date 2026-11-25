@@ -291,7 +291,7 @@ def test_a_breached_objective_raises_one_alert_naming_the_measurement():
     assert len(alerts) == 1
     assert alerts[0]["type"] == "slo_breach:mission_success"
     assert alerts[0]["severity"] == "high"
-    assert "89.14% against a target of 90.0%" in alerts[0]["message"]
+    assert "89% against a target of 90.0%" in alerts[0]["message"]
     assert "11 cloud_security_assessment" in alerts[0]["message"]
     assert "156 completed" in alerts[0]["message"]
 
@@ -325,3 +325,28 @@ def test_two_breaches_raise_two_alerts_with_distinct_types():
     )
     types = [alert["type"] for alert in breach_alerts(report)]
     assert types == ["slo_breach:mission_success", "slo_breach:approval_timeliness"]
+
+
+def test_the_message_does_not_carry_values_that_move_on_every_measurement():
+    """The raiser dedupes on (type, message). Measured 25 Nov 2026: an approval message carrying "oldest pending
+    6.1h" became "6.2h" six minutes later and paged a second time for the same breach."""
+    def approval(oldest):
+        return {"objectives": [{
+            "id": "approval_timeliness", "name": "Approval timeliness", "status": "breached",
+            "actual": 94.37, "unit": "%", "target": 95.0, "window": "30d",
+            "detail": {"decided": 71, "within_threshold": 67, "threshold_hours": 24, "oldest_pending_hours": oldest},
+        }]}
+
+    assert breach_alerts(approval(6.1))[0]["message"] == breach_alerts(approval(6.9))[0]["message"]
+    assert "6.1" not in breach_alerts(approval(6.1))[0]["message"]
+
+
+def test_a_moving_availability_detail_does_not_change_the_message():
+    def availability(failed):
+        return {"objectives": [{
+            "id": "api_availability", "name": "API availability", "status": "breached",
+            "actual": 98.2, "unit": "%", "target": 99.5, "window": "24h",
+            "detail": {"failed_requests": failed, "requests_counted": 12000},
+        }]}
+
+    assert breach_alerts(availability(216))[0]["message"] == breach_alerts(availability(240))[0]["message"]

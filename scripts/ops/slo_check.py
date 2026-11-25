@@ -84,7 +84,12 @@ def main() -> int:
              "--message", alert["message"], "--dedupe-minutes", DEDUPE_MINUTES],
             capture_output=True, text=True,
         )
-        if result.returncode == 0:
+        output = (result.stdout or "").strip()
+        if result.returncode == 0 and "suppressed duplicate" in output:
+            # The raiser returns 0 for a suppression, so reporting "raised" here would claim a page that did not
+            # happen - measured 25 Nov 2026, two consecutive runs both printed "raised" while the second was deduped.
+            print(f"slo_check: {alert['type']} already open, {output}")
+        elif result.returncode == 0:
             print(f"slo_check: raised {alert['type']}: {alert['message']}")
         else:
             failures += 1
