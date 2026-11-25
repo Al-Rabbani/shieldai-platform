@@ -51,3 +51,10 @@
 # dedupe and the 5/15/60 escalation ladder are the existing ones. Measured 25 Nov 2026: two objectives were breached
 # and nothing in the platform read them.
 */30 * * * * cd /opt/gds-os && /opt/gds-os/apps/api/venv/bin/python scripts/ops/slo_check.py >> /var/log/gds/slo-check.log 2>&1
+
+# An approval waiting for a human must be visible to the human while the decision is still possible. Measured 25 Nov
+# 2026: four critical scheduled exposure scans expired undecided, and the only notification about any of them was sent
+# at 24 hours, to the requester, after the action had already failed. Reminders at 12h and 20h of the same 24h window
+# the expiry job uses, to every active user whose role holds approvals:decide. Offset from the expiry job at :15 so the
+# two never race on the same row.
+5,20,35,50 * * * * cd /opt/gds-os && set -a && . /opt/.env 2>/dev/null && set +a && PYTHONPATH=apps/api ./apps/api/venv/bin/python scripts/ops/approval_reminders.py >> /var/log/gds-approval-reminders.log 2>&1

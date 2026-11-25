@@ -350,3 +350,30 @@ def test_a_moving_availability_detail_does_not_change_the_message():
         }]}
 
     assert breach_alerts(availability(216))[0]["message"] == breach_alerts(availability(240))[0]["message"]
+
+
+def test_an_expired_approval_counts_as_a_failure_and_is_named():
+    """Nobody decided, the window closed and the gated action did not run. Counting it as a late decision would blur
+    two different problems; excluding it would flatter the objective."""
+    now = datetime.now(timezone.utc)
+    rows = [
+        {"status": "approved", "created_at": now - timedelta(hours=2), "decided_at": now - timedelta(hours=1)},
+        {"status": "expired", "created_at": now - timedelta(hours=30), "decided_at": now - timedelta(hours=6)},
+    ]
+    payload = approval_objective(rows)
+    assert payload["actual"] == 50.0
+    assert payload["detail"]["expired_undecided"] == 1
+    assert payload["detail"]["late_decided"] == 0
+    assert "expired undecided" in payload["basis"].lower()
+
+
+def test_a_late_decision_is_counted_apart_from_an_expiry():
+    now = datetime.now(timezone.utc)
+    rows = [
+        {"status": "approved", "created_at": now - timedelta(hours=30), "decided_at": now - timedelta(hours=2)},
+        {"status": "expired", "created_at": now - timedelta(hours=30), "decided_at": now - timedelta(hours=6)},
+    ]
+    payload = approval_objective(rows)
+    assert payload["actual"] == 0.0
+    assert payload["detail"]["late_decided"] == 1
+    assert payload["detail"]["expired_undecided"] == 1

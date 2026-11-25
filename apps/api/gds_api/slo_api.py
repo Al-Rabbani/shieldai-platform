@@ -410,10 +410,14 @@ def approval_objective(rows: list[dict[str, Any]], window_days: int = 30,
     basis = (
         f"Decided approvals whose decision came within {threshold_hours} hours of the request, over the window. "
         f"The {threshold_hours} hours is this objective's own threshold: approvals carry no per-row deadline. "
-        "Pending approvals are excluded and reported separately with the age of the oldest."
+        "An approval that EXPIRED undecided is counted as a failure of this promise, not excluded: the request was "
+        "never decided and the action it gated did not run, which is worse than a late decision. Pending approvals "
+        "are excluded and reported separately with the age of the oldest."
     )
     decided, within = 0, 0
     pending = 0
+    expired_undecided = 0
+    late_decided = 0
     oldest_pending_hours: float | None = None
     now = datetime.now(timezone.utc)
     for row in rows:
@@ -429,8 +433,15 @@ def approval_objective(rows: list[dict[str, Any]], window_days: int = 30,
         if decided_at is None or created is None:
             continue
         decided += 1
+        if status == "expired":
+            # Nobody decided: the window closed and the gated action did not run. Named separately because "4 of 71
+            # were late" and "4 critical requests died undecided" are different problems with different fixes.
+            expired_undecided += 1
+            continue
         if (decided_at - created).total_seconds() <= threshold_hours * 3600.0:
             within += 1
+        else:
+            late_decided += 1
     actual = None if decided == 0 else within / decided
     reason = None if decided else f"no approval was decided in the last {window_days} days"
     return _objective(
@@ -440,6 +451,8 @@ def approval_objective(rows: list[dict[str, Any]], window_days: int = 30,
         detail={
             "decided": decided,
             "within_threshold": within,
+            "late_decided": late_decided,
+            "expired_undecided": expired_undecided,
             "pending_excluded": pending,
             "oldest_pending_hours": None if oldest_pending_hours is None else round(oldest_pending_hours, 1),
             "threshold_hours": threshold_hours,
@@ -580,6 +593,8 @@ def breach_alerts(report: dict[str, Any]) -> list[dict[str, str]]:
                     f"{detail.get('within_threshold', 0)} of {detail['decided']} decided within "
                     f"{detail.get('threshold_hours')}h"
                 )
+            if detail.get("expired_undecided"):
+                because.append(f"{detail['expired_undecided']} expired undecided")
         elif objective.get("id") == "scanner_freshness":
             for key in ("silent", "overdue", "never_run"):
                 names = detail.get(key) or []

@@ -71,6 +71,8 @@ function DetailRow({ objective }) {
   } else if (objective.id === "approval_timeliness") {
     if (detail.decided !== undefined) bits.push(`${detail.decided} decided`);
     if (detail.within_threshold !== undefined) bits.push(`${detail.within_threshold} within ${detail.threshold_hours}h`);
+    if (detail.late_decided) bits.push(`${detail.late_decided} decided late`);
+    if (detail.expired_undecided) bits.push(`${detail.expired_undecided} expired undecided, counted as failures`);
     if (detail.pending_excluded) bits.push(`${detail.pending_excluded} pending, excluded`);
     if (detail.oldest_pending_hours !== null && detail.oldest_pending_hours !== undefined) {
       bits.push(`oldest pending ${detail.oldest_pending_hours}h`);
