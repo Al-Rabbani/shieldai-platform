@@ -254,3 +254,32 @@ is working, and approving an offensive action is the owner's decision, not somet
 findings sampled have none, which the tool states. `malware_analysis` is blocked by an EXTERNAL dependency: abuse.ch
 now returns HTTP 401 Unauthorized for the MalwareBazaar query API without an Auth-Key (verified by direct probe; the
 code already documents this), so hash reputation needs a free abuse.ch Auth-Key before that role can work.
+
+## Malware hash reputation restored, 19 of 23 agents executing — 2026-11-25
+
+THE BLOCKER WAS A DEAD CREDENTIAL, NOT A BROKEN TOOL. `malware_analysis` was degraded because the MalwareBazaar
+lookup returned 403 `unknown_auth_key`. I first reported this as "abuse.ch now requires an Auth-Key", which was
+incomplete: the variable `MALWAREBAZAAR_AUTH_KEY` was ALREADY SET in /opt/.env with a 48-character value. The
+endpoint accepted the Auth-Key header method and rejected that specific key. Verified three ways: the header form
+returned 403 unknown_auth_key, the URL-path form returned 401, and no auth returned 401. So the key was stale or
+revoked at abuse.ch, not missing from our side.
+
+A SUBMITTED KEY THAT WAS THE SAME KEY. The first key supplied through the secure form fingerprinted identically to
+the one already installed (SHA-256 prefix f4084a5f051780dc, 48 chars, 3f0b...70), so nothing changed and abuse.ch
+still refused it. Rather than accept it, I compared fingerprints and asked for a genuinely new one, using a separate
+secret name so the stale value could not be resubmitted by accident.
+
+FIXED. The new key (48 chars, 4544...9a, SHA-256 prefix fc23dd572ccf107f) returns HTTP 200 with
+`query_status: hash_not_found` on direct probe. Backed up /opt/.env, replaced only the one line, verified the value on
+disk by fingerprint, restarted gds-os, health 200 after 8s.
+
+PROVED THROUGH GOVERNANCE, two hashes, both real answers:
+  * EICAR test hash -> malicious false, verdict `not_listed`.
+  * 094fd325... -> malicious true, verdict `listed`, with the matched MalwareBazaar record.
+
+RESULT. Fleet status: **19 online / 4 degraded / 0 unknown**.
+
+WHAT IS LEFT, AND WHY EACH IS A DECISION NOT A DEFECT. `red_team`, `penetration_testing_coordinator` and
+`defensive_remediation_autofix` hold offensive or write capabilities that require human approval by design; approving
+an offensive action against our own estate is the owner's call. `validation_retest` needs a finding whose type has a
+deterministic re-test (a pinned dependency advisory with a fixed version).
