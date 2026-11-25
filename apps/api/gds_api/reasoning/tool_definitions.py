@@ -445,6 +445,11 @@ _ALL_TOOL_DEFINITIONS = [
             "name": "remediation_plan_image_upgrade",
             "description": 'Plan an upgrade for a container image whose fixable findings live inside the image. Reads real findings, checks the registries and the running container, and returns the exact commands. Applies nothing.',
             "parameters": {"type": "object", "properties": {"image": {"type": "string", "description": "Image reference, e.g. minio/minio:latest"}}, "required": ["image"]},
+        },
+        {
+            "name": "remediation_apply_config_fix",
+            "description": 'Apply one known web-tier configuration fix and prove it against the live service. Idempotent, backs the file up, validates with nginx -t before reloading, reverts on failure, and re-tests the published endpoint, so it reports applied only when the change is measured to have taken effect.',
+            "parameters": {"type": "object", "properties": {"fix_key": {"type": "string", "enum": ["hide_api_docs", "nginx_server_tokens_off"], "description": "Which fix to apply"}}, "required": ["fix_key"]},
         }
     },
 ]
