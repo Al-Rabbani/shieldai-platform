@@ -490,6 +490,14 @@ app.include_router(scan_health_router)
 
 app.include_router(admin_identity_router)
 
+# Digital Warriors: the five-stage offensive/defensive campaign
+try:
+    from gds_api.warfare.routes import router as _warfare_router
+    app.include_router(_warfare_router)
+except Exception as _warfare_exc:  # noqa: BLE001
+    import logging as _lg
+    _lg.getLogger('gds.main').warning('warfare router not mounted: %s', _warfare_exc)
+
 # --- OpenAPI security declarations (P4 / B21) ------------------------------------------------
 # The API had no securitySchemes at all: 0 of 324 operations declared how they are authenticated,
 # so generated clients and the docs could not tell a public endpoint from a protected one. These
