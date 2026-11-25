@@ -15,44 +15,34 @@ import pytest
 def _load_host_environment() -> None:
     """Give the live-invariant tests the environment the platform actually runs with.
 
-    Measured 25 Nov 2026: 24 tests - tenant isolation, password storage, provider discovery, the authenticated
-    platform stream, the MSSP guard, network target authorisation and table isolation - skipped on EVERY deploy
-    because their variables were never set, while the gate reported green. Every one of those variables already
-    existed in /opt/.env, which the test process simply never read. Loading it here means the gate and a manual
-    run exercise the same guarantees. Where the file is unreadable it degrades to the old skip, never an error.
+    Two files, and the ORDER MATTERS in a way that bit me on 25 Nov 2026: /opt/.env carries the production
+    settings (DATABASE_URL as role `gds`, GDS_TENANT_ID, GDS_OWNER_USER_ID) and /opt/.env.test carries test-only
+    ones (GDS_TEST_DATABASE_URL, a DISPOSABLE database). My first version returned early whenever DATABASE_URL was
+    already present - which is exactly the deploy gate's case, because the gate sources /opt/.env before pytest -
+    so the test-only file never loaded and the four execution-claim tests kept skipping IN THE GATE while passing
+    in a bare manual run. The early return now guards only the production file; the test-only file is always read.
+
+    Where a file is unreadable this degrades to the old skip, never an error, so a developer without host access
+    or a CI runner with no database is not blocked.
     """
     import os
     import pathlib
 
-    if os.environ.get("DATABASE_URL"):
-        return
-    try:
-        raw = pathlib.Path("/opt/.env").read_text()
-    except OSError:
-        return
-    for line in raw.splitlines():
-        line = line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, _, value = line.partition("=")
-        os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
+    def _apply(path: str) -> None:
+        try:
+            raw = pathlib.Path(path).read_text()
+        except OSError:
+            return
+        for line in raw.splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, value = line.partition("=")
+            os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
 
-    # Test-only settings live in a separate file so the production environment never carries them. The one
-    # user today is GDS_TEST_DATABASE_URL, which points at a disposable database: the execution-claim tests
-    # create a unique schema there and drop it, so nothing can touch production tables. Absent file means the
-    # four contention tests keep their honest skip.
-    try:
-        raw = pathlib.Path("/opt/.env.test").read_text()
-    except OSError:
-        return
-    for line in raw.splitlines():
-        line = line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, _, value = line.partition("=")
-        os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
-
-
+    if not os.environ.get("DATABASE_URL"):
+        _apply("/opt/.env")
+    _apply("/opt/.env.test")
 _load_host_environment()
 
 

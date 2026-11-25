@@ -21,7 +21,14 @@ run_tests() {
     return 0
   fi
   echo "  [tests] running suite"
-  if bash -c 'set -a; . /opt/.env 2>/dev/null; set +a; cd '"$REPO"' && PYTHONPATH='"$REPO"'/apps/api ./apps/api/venv/bin/python -m pytest tests -q' >/tmp/deploy-tests.log 2>&1; then
+  # COVERAGE IS A RATCHET, NOT A TARGET: 39% measured on 25 Nov 2026 across 27991 statements, so the floor sits
+# just under it to stop regression. Raise the floor when the number rises; never lower it to make a red gate green.
+# Skipped entirely when the measurement tool is absent, so a fresh host is not blocked by a dev dependency.
+COV=""
+if ./apps/api/venv/bin/python -c 'import pytest_cov' >/dev/null 2>&1; then
+  COV="--cov=apps/api/gds_api --cov-report=term-missing:skip-covered --cov-fail-under=38"
+fi
+if bash -c 'set -a; . /opt/.env 2>/dev/null; set +a; cd '"$REPO"' && PYTHONPATH='"$REPO"'/apps/api ./apps/api/venv/bin/python -m pytest tests -q $COV' >/tmp/deploy-tests.log 2>&1; then
     echo "  [tests] $(tail -1 /tmp/deploy-tests.log)"
     return 0
   fi

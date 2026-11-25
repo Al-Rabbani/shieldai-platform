@@ -64,8 +64,18 @@ STAGES: tuple[dict[str, Any], ...] = (
 _STAGE_BY_KEY = {s["key"]: s for s in STAGES}
 
 
-def parallel_groups(stages: list[dict[str, Any]]) -> list[list[dict[str, Any]]]:
-    """Group stages into waves: everything whose dependencies are already satisfied runs together."""
+def parallel_groups(
+    stages: list[dict[str, Any]], max_parallel: int = MAX_PARALLEL_STAGES
+) -> list[list[dict[str, Any]]]:
+    """Group stages into waves: everything whose dependencies are already satisfied runs together.
+
+    A wave is SPLIT to the declared ceiling rather than left wide. The executor already caps real concurrency
+    with a semaphore, but the planner was free to emit a four-wide wave while reporting max_parallel=3, so the
+    plan it returned contradicted the limit it advertised. With five independent stages today the widest wave is
+    exactly three and nothing changes; the split only matters the moment a sixth independent stage is added,
+    which is precisely when nobody would notice.
+    """
+    ceiling = max(1, int(max_parallel))
     remaining = list(stages)
     done: set[str] = set()
     groups: list[list[dict[str, Any]]] = []
@@ -73,10 +83,12 @@ def parallel_groups(stages: list[dict[str, Any]]) -> list[list[dict[str, Any]]]:
         wave = [s for s in remaining if all(d in done for d in s["depends_on"])]
         if not wave:  # a cycle or a dependency outside this selection: run the rest in order rather than hang
             wave = [remaining[0]]
-        groups.append(wave)
-        for s in wave:
-            done.add(s["key"])
-            remaining.remove(s)
+        for start in range(0, len(wave), ceiling):
+            chunk = wave[start : start + ceiling]
+            groups.append(chunk)
+            for s in chunk:
+                done.add(s["key"])
+                remaining.remove(s)
     return groups
 
 

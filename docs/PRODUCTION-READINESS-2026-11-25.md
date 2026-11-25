@@ -922,26 +922,30 @@ actions, zero refused, engagement `completed` with a report summary that states 
 exploitation was attempted. The standing approvals the rule created were revoked afterwards, restoring the
 zero-standing baseline. Eight guards in tests/test_engagement_runner.py.
 
-## The deploy gate was skipping its own guarantees — 25 Nov 2026
+## CORRECTION: the gate was not skipping — my measurement was — 25 Nov 2026
 
-The gate ran the suite on every deploy and reported green. Measured: 24 tests skipped on EVERY run, and they
-were the ones that matter most — tenant isolation (5), password storage (2), provider discovery (7), the
-authenticated platform stream (1), the MSSP guard (1), network target authorisation (1), table isolation (3),
-and the execution-claim tests (4). Every one skipped with a reason like "no DATABASE_URL in this environment".
+An earlier entry here said the deploy gate ran green while skipping 24 tests. THAT WAS WRONG and it is corrected
+in place rather than deleted, because how the error happened is the useful part.
 
-The cause was not a missing database. `/opt/.env` already carried DATABASE_URL (role `gds`, so RLS applies),
-GDS_TENANT_ID, GDS_OWNER_USER_ID and SECURITY_ALERT_TENANT_ID. The test process simply never read it: the gate
-invokes pytest directly, and `tests/conftest.py` loaded nothing. So the platform's isolation and password
-guarantees were never executed by the gate that exists to prove them.
+`scripts/ops/deploy.sh` line 24 already did `set -a; . /opt/.env 2>/dev/null; set +a` before invoking pytest, and
+that line predates this work (verified against the parent of release d8b2ccd). So the gate had DATABASE_URL,
+GDS_TENANT_ID and GDS_OWNER_USER_ID all along and those 24 tests were running in the gate.
 
-FIX: `tests/conftest.py` now loads `/opt/.env` when the variables are absent, in one place, so the gate and a
-manual run exercise the same guarantees. Where the file is unreadable it degrades to the old skip rather than an
-error, so a developer without host access is not blocked.
+The 24 skips I reported were produced by MY OWN invocation - `PYTHONPATH=... pytest tests/ -q` with no environment
+- and I attributed them to the gate without reading the gate's own line. I had measured the skips, not their cause.
 
-RESULT, measured: the seven files that used to skip now run and pass (44 passed), and the full suite moved from
-1410 passed / 24 skipped to **1434 passed / 4 skipped**. The four remaining skips are legitimate: they need an
-ISOLATED PostgreSQL URL for execution-claim contention tests, which this host does not provide, and they say so.
+WHAT THE CHANGE IS STILL WORTH: any invocation that is not the gate - a developer by hand, a CI runner, any future
+tooling - silently skipped the platform's isolation and password guarantees. `tests/conftest.py` now loads
+/opt/.env when DATABASE_URL is absent, so every path behaves like the gate instead of only the gate behaving well.
 
+AND A BUG I INTRODUCED FIXING IT, found by finally running the gate's own command: the first version of that
+loader returned early whenever DATABASE_URL was already set, which is exactly the gate's case, so the test-only
+file /opt/.env.test was never read and the four execution-claim tests STILL skipped in the gate while passing in
+my bare run. The early return now guards only the production file; the test-only file is always applied. Proved
+under the gate's own command: **1444 passed, 2 skipped**, and the two are the auth-contract rate-limiter
+conversion, which says so.
+
+LESSON: reproduce the runner, not just the test. A suite result is only about the command you actually ran.
 ## A second approval-decision route, weaker than the real one — found and removed
 
 The same suite run printed a warning that had been scrolling past unread: "Duplicate Operation ID
@@ -982,3 +986,29 @@ RESULT: 4 passed in 1.42s, and the full suite is now **1438 passed, 0 skipped** 
 gate has run without skipping anything. Every skip reason recorded across this build (tenant isolation, password
 storage, provider discovery, the authenticated stream, the MSSP guard, target authorisation, table isolation and
 now claim contention) has been closed by supplying what the test actually needed, never by deleting the test.
+
+## Coverage is now measured, and gated — 25 Nov 2026
+
+The readiness list carried "no coverage gate (1,262 tests, none measured)" as a P1. The suite has grown to 1,446
+tests and had never been measured at all, so nobody could say which of the platform's 81,406 lines anything
+exercised.
+
+FIRST MEASUREMENT: **38.79% of 27,991 statements** (17,136 missed). That is a low number for a security product
+and it is now the platform's honest starting point rather than an unknown. The weakest modules are exactly the
+ones a reviewer would want strong: workflows/monitoring_activities.py 0%, workflows/monitoring_workflow.py 0%,
+worker_main.py 0%, tool_actions.py 12%, threat_actions.py 20%, workflows/activities.py 21%, warfare/campaign.py
+23%, tool_gateway.py 30%. The five-stage cyber-warfare engine - the flagship capability - is the thinnest
+security-relevant module with real logic.
+
+THE GATE IS A RATCHET, NOT A TARGET: deploy.sh runs the suite with `--cov-fail-under=38` whenever pytest-cov is
+installed, and skips the measurement cleanly when it is not, so a fresh host is never blocked by a dev dependency.
+The floor sits just under the measured number to stop regression. Raise it when the number rises; never lower it
+to turn a red gate green. Proved both ways: 38.79% passes the 38 floor, and the same run fails a 95 floor.
+
+EIGHT NEW GUARDS on the wave planner (tests/test_waves.py), because ordering in that engine is a safety property:
+management must see the assessment, remediation must see management, and the real five-stage plan is pinned
+byte-for-byte. One real defect fixed while writing them: `parallel_groups` could emit a wave wider than the
+`MAX_PARALLEL_STAGES` it advertised (the executor's semaphore capped actual concurrency, so the plan it returned
+contradicted the limit it reported). A wave is now split to the ceiling. With today's five stages the widest wave
+is exactly three, so the real plan is unchanged - the split matters the moment a sixth independent stage is added,
+which is precisely when nobody would notice.
