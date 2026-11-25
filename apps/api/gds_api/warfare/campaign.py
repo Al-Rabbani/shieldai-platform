@@ -331,7 +331,15 @@ async def run_campaign(*, tenant_id: str, user_id: str, target: Optional[str] = 
 
 async def resume_campaign(*, campaign_id: str, tenant_id: str, user_id: str,
                           target: Optional[str] = None) -> dict[str, Any]:
-    """Re-run the stages that are not done, reusing each stage's own mission so a granted approval is consumed."""
+    """Continue a campaign, in dependency waves, reusing each stage's own mission.
+
+    Two things make this useful rather than a re-run button:
+      * a stage reuses its stored mission_id, so an approval a human granted is consumed instead of a new
+        request being minted;
+      * a stage whose dependency only executed NOW is re-run too, because its earlier result was computed
+        without that input. That is the real handoff: management re-reads the register once assessment has
+        actually produced findings.
+    """
     session = await _session(tenant_id)
     try:
         campaign = (
@@ -354,22 +362,42 @@ async def resume_campaign(*, campaign_id: str, tenant_id: str, user_id: str,
     if not rows:
         return {"error": "campaign has no stages", "campaign_id": campaign_id}
 
+    by_key = {r["stage_key"]: r for r in rows}
+    stages = [_STAGE_BY_KEY[r["stage_key"]] for r in rows if r["stage_key"] in _STAGE_BY_KEY]
     shared: dict[str, Any] = {}
+    executed_now: set[str] = set()
     results: list[dict[str, Any]] = []
-    for row in rows:
-        if row["status"] == "executed":
-            results.append({"stage_key": row["stage_key"], "status": "executed", "note": "already done"})
+    skipped_already: list[dict[str, Any]] = []
+
+    for wave in parallel_groups(stages):
+        runnable = []
+        for stage in wave:
+            row = by_key[stage["key"]]
+            upstream_changed = any(d in executed_now for d in stage["depends_on"])
+            if row["status"] == "executed" and not upstream_changed:
+                skipped_already.append({"stage": stage["number"], "key": stage["key"],
+                                        "status": "executed", "note": "already done, dependencies unchanged"})
+                continue
+            runnable.append(stage)
+        if not runnable:
             continue
-        stage = _STAGE_BY_KEY.get(row["stage_key"])
-        if stage is None:
-            results.append({"stage_key": row["stage_key"], "status": "skipped", "note": "stage no longer defined"})
-            continue
-        results.append(
-            await _execute_stage(
-                tenant_id=tenant_id, user_id=user_id, campaign_id=campaign_id, stage=stage,
-                stage_row_id=str(row["id"]), mission_id=row["mission_id"],
-                target=target or campaign["target"], shared=shared,
-            )
-        )
-    final = await _finalise(tenant_id, campaign_id, results)
-    return {"campaign_id": campaign_id, "name": campaign["name"], "target": target or campaign["target"], **final}
+        semaphore = asyncio.Semaphore(MAX_PARALLEL_STAGES)
+
+        async def one(stage: dict):
+            async with semaphore:
+                row = by_key[stage["key"]]
+                return await _execute_stage(
+                    tenant_id=tenant_id, user_id=user_id, campaign_id=campaign_id, stage=stage,
+                    stage_row_id=str(row["id"]), mission_id=row["mission_id"],
+                    target=target or campaign["target"], shared=shared,
+                )
+
+        wave_results = await asyncio.gather(*(one(s) for s in runnable))
+        for r in wave_results:
+            if r["status"] == "executed":
+                executed_now.add(r["key"])
+        results.extend(wave_results)
+
+    final = await _finalise(tenant_id, campaign_id, results + skipped_already)
+    return {"campaign_id": campaign_id, "name": campaign["name"], "target": target or campaign["target"],
+            "rerun_after_upstream": sorted(executed_now), **final}
