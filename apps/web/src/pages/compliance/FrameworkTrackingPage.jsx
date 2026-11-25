@@ -39,7 +39,10 @@ const STATUS_FILTERS = [
 
 /* The engine's verdict, not a checkbox. */
 function controlState(item) {
-  const verdict = String(item.status || "").toLowerCase();
+  /* The route computes `verdict` (pass | fail | not_tested | not_applicable) and has no `status` field at all.
+   * Reading item.status here made every one of the 297 real controls fall through to "needs_evidence", so the page
+   * reported 0% passing on an estate that has verdicts. Measured 25 Nov 2026. */
+  const verdict = String(item.verdict || item.status || "").toLowerCase();
   if (verdict === "pass") return "passing";
   if (verdict === "fail") return "not_implemented";
   if (verdict === "not_applicable") return "not_applicable";

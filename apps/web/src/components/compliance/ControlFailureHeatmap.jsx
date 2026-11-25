@@ -22,6 +22,12 @@ function cellStyle(failing, total, maxFailing) {
   return { background: "rgba(153,27,27,0.85)", border: "1px solid #ef4444", color: "#fee2e2" };
 }
 
+/* The controls route computes `verdict`; it has no `status` field. Reading status made every control read as not
+ * failing, so this heatmap drew an all-clear on a real estate. Measured 25 Nov 2026. */
+function isFailing(item) {
+  return String(item.verdict || item.status || "").toLowerCase() === "fail" || item.status === "incomplete";
+}
+
 export default function ControlFailureHeatmap() {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -45,12 +51,12 @@ export default function ControlFailureHeatmap() {
         cells.push(cell);
       }
       cell.total += 1;
-      if (item.status === "incomplete") cell.failing += 1;
+      if (isFailing(item)) cell.failing += 1;
     });
     return {
       ...framework,
       cells: cells.sort((a, b) => b.failing / b.total - a.failing / a.total),
-      failing: scoped.filter((item) => item.status === "incomplete").length,
+      failing: scoped.filter((item) => isFailing(item)).length,
       total: scoped.length,
     };
   });
@@ -66,7 +72,7 @@ export default function ControlFailureHeatmap() {
     return items.filter((item) =>
       item.framework === selection.framework &&
       (item.category || "Uncategorised") === selection.category &&
-      item.status === "incomplete"
+      isFailing(item)
     );
   }
 
