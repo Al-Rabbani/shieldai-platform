@@ -125,7 +125,10 @@ async def _nuclei_scan(params: dict) -> dict:
     target = params.get("target", "localhost")
     templates = params.get("templates", "")
     
-    cmd = [_find_tool("nuclei"), "-u", target, "-json"]
+    # nuclei v3.11 removed -json; the JSONL flag is -jsonl (alias -j). Measured 25 Nov 2026: the stale
+    # flag made every nuclei run exit 2 with "flag provided but not defined: -json" and return zero
+    # findings, so the assessment role could not scan at all. The parser below already reads JSONL.
+    cmd = [_find_tool("nuclei"), "-u", target, "-jsonl"]
     if templates:
         cmd.extend(["-t", templates])
     
@@ -180,9 +183,33 @@ async def _nikto_scan(params: dict) -> dict:
     target = params.get("target", "localhost")
     port = params.get("port", "443")
     
-    cmd = [_find_tool("nikto"), "-h", target, "-p", port, "-Format", "json"]
+    # nikto has no json format (csv/htm/msf+/nbe/txt/xml only). Measured 25 Nov 2026: "-Format json" made
+    # every nikto run fail its format selection and return no findings, so a web server check looked clean
+    # when nothing had been parsed. XML is a real nikto format and is parsed into findings below.
+    cmd = [_find_tool("nikto"), "-h", target, "-p", port, "-Format", "xml", "-nointeractive"]
     result = await _run_tool(cmd, timeout=600)
     result["tool"] = "nikto"
+    findings: list[dict] = []
+    raw = result.get("stdout") or ""
+    start = raw.find("<")
+    if start >= 0:
+        try:
+            import xml.etree.ElementTree as ET
+
+            root = ET.fromstring(raw[start:])
+            for item in root.iter("item"):
+                findings.append(
+                    {
+                        "id": item.get("id"),
+                        "method": item.get("method"),
+                        "uri": item.get("uri"),
+                        "description": item.get("description"),
+                        "namelink": item.get("namelink"),
+                    }
+                )
+        except Exception as exc:  # noqa: BLE001 - an unparsed scan is not a clean scan
+            result["parse_error"] = str(exc)[:200]
+    result["findings"] = findings
     return result
 
 

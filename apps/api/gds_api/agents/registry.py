@@ -38,12 +38,15 @@ AGENT_REGISTRY: dict[str, AgentManifest] = {
             "by real semantic search, and recording real lessons from completed "
             "missions. Be precise about what you actually found or stored."
         ),
-        tool_names=("search_knowledge", "add_knowledge", "record_mission_lesson",
+        tool_names=(
+            "search_knowledge",
+            "add_knowledge",
+            "record_mission_lesson",
             "purge_mission_memory",
         ),
         team=Team.FOUNDATION,
         department="Knowledge & Memory",
-        risk_ceiling=RiskCeiling.R2,
+        risk_ceiling=RiskCeiling.R3,  # purge_mission_memory is high (R3); raised 25 Nov 2026
         memory_scopes=("relationship", "semantic"),
         allowed_capability_ids=(
             "knowledge.search",
@@ -64,13 +67,15 @@ AGENT_REGISTRY: dict[str, AgentManifest] = {
             "platform data (cost records, mission activity) and report factual metrics. "
             "Never estimate or invent a number that wasn't actually returned to you."
         ),
-        tool_names=("query_platform_metrics",
+        tool_names=(
+            "query_platform_metrics",
             "get_current_time",
         ),
         team=Team.FOUNDATION,
         department="Data Intelligence",
         risk_ceiling=RiskCeiling.R1,
-        allowed_capability_ids=("platform.metrics.read",
+        allowed_capability_ids=(
+            "platform.metrics.read",
             "platform.get_time",
         ),
     ),
@@ -346,14 +351,18 @@ AGENT_REGISTRY: dict[str, AgentManifest] = {
             "real open-incidents backlog - never claim an incident exists that wasn't "
             "actually created."
         ),
-        tool_names=("create_incident_from_findings", "list_open_incidents",
+        tool_names=(
+            "create_incident_from_findings",
+            "list_open_incidents",
             "check_credential_leaks",
             "detect_identity_threats",
         ),
         team=Team.BLUE,
         department="Incident Response",
         risk_ceiling=RiskCeiling.R2,
-        allowed_capability_ids=("incident.create", "incident.list_open",
+        allowed_capability_ids=(
+            "incident.create",
+            "incident.list_open",
             "security_tools.darkweb_check",
             "security_tools.identity_threats",
         ),
@@ -706,17 +715,24 @@ AGENT_REGISTRY: dict[str, AgentManifest] = {
             "pyproject.toml/package.json manifests - report only real matches, never a "
             "fabricated CI/CD pipeline status this project doesn't have."
         ),
-        tool_names=("scan_own_dependencies",
+        tool_names=(
+            "scan_own_dependencies",
             "read_repository",
             "read_repository_file",
             "search_repository",
             "get_repository_history",
             "list_repository_files",
+            "list_repository_branches",
+            "list_repository_tags",
+            "list_repository_worktrees",
+            "get_repository_metadata",
+            "diff_repository_refs",
         ),
         team=Team.BLUE,
         department="DevSecOps",
         risk_ceiling=RiskCeiling.R3,
-        allowed_capability_ids=("vulnerability.scan_dependencies",
+        allowed_capability_ids=(
+            "vulnerability.scan_dependencies",
             "repository.read",
             "repository.read_file",
             "repository.search",
@@ -946,7 +962,8 @@ AGENT_REGISTRY: dict[str, AgentManifest] = {
             "workflow required for a validated finding; never claim that a fix "
             "was applied or that a commit landed."
         ),
-        tool_names=("auto_fix_finding",
+        tool_names=(
+            "auto_fix_finding",
             "read_repository",
             "read_repository_file",
             "search_repository",
@@ -955,7 +972,8 @@ AGENT_REGISTRY: dict[str, AgentManifest] = {
         department="Remediation Engineering",
         risk_ceiling=RiskCeiling.R2,
         status=AgentStatus.DEGRADED,
-        allowed_capability_ids=("remediation.auto_fix_finding",
+        allowed_capability_ids=(
+            "remediation.auto_fix_finding",
             "repository.read",
             "repository.read_file",
             "repository.search",
@@ -1066,21 +1084,21 @@ AGENT_REGISTRY: dict[str, AgentManifest] = {
                         "You are the Attack Surface Reconnaissance Agent for GDS Security OS, on the offensive team. You only ever touch targets carrying a live AuthorizedTarget row. You enumerate subdomains, probe HTTP endpoints, discover content and fingerprint CMS platforms, and you report exactly what the tools returned, including what they failed to reach."
         ),
         tool_names=(
-                "subfinder_scan",
-                "httpx_probe",
-                "ffuf_scan",
-                "gobuster_scan",
-                "wpscan_scan",
-            ),
-        team=Team.BLUE if "attack_surface_recon" == "vulnerability_assessment" else Team.RED,
+            "subfinder_scan",
+            "httpx_probe",
+            "ffuf_scan",
+            "gobuster_scan",
+            "wpscan_scan",
+        ),
+        team=Team.PURPLE,
         department="Offensive Security",
         risk_ceiling=RiskCeiling.R3,
         allowed_capability_ids=(
-                "recon.subdomain_enum",
-                "recon.http_probe",
-                "network.content_discovery",
-                "network.cms_scan",
-            ),
+            "recon.subdomain_enum",
+            "recon.http_probe",
+            "network.content_discovery",
+            "network.cms_scan",
+        ),
         target_authorisation_required=True,
         operational_domain="Attack Surface Reconnaissance",
         mission_role=(
@@ -1110,14 +1128,14 @@ AGENT_REGISTRY: dict[str, AgentManifest] = {
                         "You are the Exploitation Specialist for GDS Security OS, on the offensive team. You confirm or refute a suspected injection vulnerability by running a real exploit against a target that carries a live AuthorizedTarget row, and you report the real evidence: parameter, payload, response and whether data was actually returned. You never claim exploitation you did not run."
         ),
         tool_names=(
-                "sqlmap_scan",
-            ),
+            "sqlmap_scan",
+        ),
         team=Team.BLUE if "exploitation_specialist" == "vulnerability_assessment" else Team.RED,
         department="Offensive Security",
         risk_ceiling=RiskCeiling.R4,
         allowed_capability_ids=(
-                "network.injection_scan",
-            ),
+            "network.injection_scan",
+        ),
         target_authorisation_required=True,
         operational_domain="Exploitation and Validation",
         mission_role=(
@@ -1146,26 +1164,26 @@ AGENT_REGISTRY: dict[str, AgentManifest] = {
                         "You are the Vulnerability Assessment Agent for GDS Security OS, on the defensive team. You run real scanners against authorised assets and real code, and you record only what they returned. You distinguish a clean scan from a scan that could not run, and you never report an unscanned asset as clean."
         ),
         tool_names=(
-                "nuclei_scan",
-                "nikto_scan",
-                "container_scan",
-                "iac_scan",
-                "sast_scan",
-                "dast_scan",
-                "generate_sbom",
-            ),
+            "nuclei_scan",
+            "nikto_scan",
+            "container_scan",
+            "iac_scan",
+            "sast_scan",
+            "dast_scan",
+            "generate_sbom",
+        ),
         team=Team.BLUE if "vulnerability_assessment" == "vulnerability_assessment" else Team.RED,
         department="Vulnerability Management",
         risk_ceiling=RiskCeiling.R3,
         allowed_capability_ids=(
-                "network.vulnerability_scan",
-                "network.web_server_scan",
-                "security_tools.container_scan",
-                "security_tools.iac_scan",
-                "security_tools.sast_scan",
-                "security_tools.dast_scan",
-                "security_tools.generate_sbom",
-            ),
+            "network.vulnerability_scan",
+            "network.web_server_scan",
+            "security_tools.container_scan",
+            "security_tools.iac_scan",
+            "security_tools.sast_scan",
+            "security_tools.dast_scan",
+            "security_tools.generate_sbom",
+        ),
         target_authorisation_required=False,
         operational_domain="Vulnerability Assessment",
         mission_role=(

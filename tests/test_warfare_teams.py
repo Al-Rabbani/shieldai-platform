@@ -48,11 +48,14 @@ def _owned():
 def test_the_two_teams_exist_with_real_members():
     red = [r for r, a in AGENT_REGISTRY.items() if str(a.team).endswith("RED")]
     blue = [r for r, a in AGENT_REGISTRY.items() if str(a.team).endswith("BLUE")]
-    assert len(red) >= 4, red
+    assert len(red) >= 3, red
     assert len(blue) >= 17, blue
-    for role in ("red_team", "attack_surface_recon", "exploitation_specialist",
-                 "penetration_testing_coordinator"):
+    for role in ("red_team", "exploitation_specialist", "penetration_testing_coordinator"):
         assert role in red, role
+    # recon tops out at R3 (its tools are "high"), and the registry guard requires a RED role to reach
+    # R4/R5, so it sits in the shared purple cell that feeds both teams rather than faking a ceiling.
+    purple = [r for r, a in AGENT_REGISTRY.items() if str(a.team).endswith("PURPLE")]
+    assert "attack_surface_recon" in purple, purple
     for role in ("vulnerability_assessment", "vulnerability_management", "blue_team",
                  "incident_response", "defensive_remediation_autofix", "validation_retest"):
         assert role in blue, role
