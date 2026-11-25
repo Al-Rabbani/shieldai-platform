@@ -10,8 +10,14 @@ SRC = (pathlib.Path(__file__).resolve().parents[1] / "apps" / "api" / "gds_api"
 
 
 def test_nuclei_uses_the_jsonl_flag_not_the_removed_json_flag():
+    import re
+
     assert '"-jsonl"' in SRC
-    assert '"-u", target, "-json"]' not in SRC
+    # scope the assertion to the nuclei command: httpx legitimately still takes -json
+    m = re.search(r'cmd = \[_find_tool\("nuclei"\).*?\]', SRC, re.S)
+    assert m is not None
+    assert "-jsonl" in m.group(0)
+    assert '"-json"' not in m.group(0)
 
 
 def test_nikto_uses_a_real_format_and_parses_it():
