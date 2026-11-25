@@ -133,7 +133,7 @@ ROLE_PERMISSIONS: dict[str, list[str]] = {
         "cloud:findings:read",
         "cloud:findings:suppress",
         "cloud:exceptions:read",
-    ],
+    , "copilot:orchestrate"],
     "auditor": [
         "audit:read",
         "evidence:read",
