@@ -38,7 +38,9 @@ AGENT_REGISTRY: dict[str, AgentManifest] = {
             "by real semantic search, and recording real lessons from completed "
             "missions. Be precise about what you actually found or stored."
         ),
-        tool_names=("search_knowledge", "add_knowledge", "record_mission_lesson"),
+        tool_names=("search_knowledge", "add_knowledge", "record_mission_lesson",
+            "purge_mission_memory",
+        ),
         team=Team.FOUNDATION,
         department="Knowledge & Memory",
         risk_ceiling=RiskCeiling.R2,
@@ -47,6 +49,7 @@ AGENT_REGISTRY: dict[str, AgentManifest] = {
             "knowledge.search",
             "knowledge.write_candidate",
             "knowledge.record_lesson",
+            "memory.purge",
         ),
     ),
     "data_intelligence": AgentManifest(
@@ -61,11 +64,15 @@ AGENT_REGISTRY: dict[str, AgentManifest] = {
             "platform data (cost records, mission activity) and report factual metrics. "
             "Never estimate or invent a number that wasn't actually returned to you."
         ),
-        tool_names=("query_platform_metrics",),
+        tool_names=("query_platform_metrics",
+            "get_current_time",
+        ),
         team=Team.FOUNDATION,
         department="Data Intelligence",
         risk_ceiling=RiskCeiling.R1,
-        allowed_capability_ids=("platform.metrics.read",),
+        allowed_capability_ids=("platform.metrics.read",
+            "platform.get_time",
+        ),
     ),
     "automation_workflow": AgentManifest(
         name="automation_workflow",
@@ -339,11 +346,17 @@ AGENT_REGISTRY: dict[str, AgentManifest] = {
             "real open-incidents backlog - never claim an incident exists that wasn't "
             "actually created."
         ),
-        tool_names=("create_incident_from_findings", "list_open_incidents"),
+        tool_names=("create_incident_from_findings", "list_open_incidents",
+            "check_credential_leaks",
+            "detect_identity_threats",
+        ),
         team=Team.BLUE,
         department="Incident Response",
         risk_ceiling=RiskCeiling.R2,
-        allowed_capability_ids=("incident.create", "incident.list_open"),
+        allowed_capability_ids=("incident.create", "incident.list_open",
+            "security_tools.darkweb_check",
+            "security_tools.identity_threats",
+        ),
         workforce="purple-cybersecurity-workforce",
         purple_role_id="purple-03",
         purple_role_name="Incident Response and DFIR Agent",
@@ -693,11 +706,28 @@ AGENT_REGISTRY: dict[str, AgentManifest] = {
             "pyproject.toml/package.json manifests - report only real matches, never a "
             "fabricated CI/CD pipeline status this project doesn't have."
         ),
-        tool_names=("scan_own_dependencies",),
+        tool_names=("scan_own_dependencies",
+            "read_repository",
+            "read_repository_file",
+            "search_repository",
+            "get_repository_history",
+            "list_repository_files",
+        ),
         team=Team.BLUE,
         department="DevSecOps",
         risk_ceiling=RiskCeiling.R3,
-        allowed_capability_ids=("vulnerability.scan_dependencies",),
+        allowed_capability_ids=("vulnerability.scan_dependencies",
+            "repository.read",
+            "repository.read_file",
+            "repository.search",
+            "repository.history",
+            "repository.list_files",
+            "repository.list_branches",
+            "repository.list_tags",
+            "repository.list_worktrees",
+            "repository.repository_metadata",
+            "repository.diff_between_refs",
+        ),
         workforce="purple-cybersecurity-workforce",
         purple_role_id="purple-16",
         purple_role_name="Application and Software Supply-Chain Security Agent",
@@ -916,12 +946,20 @@ AGENT_REGISTRY: dict[str, AgentManifest] = {
             "workflow required for a validated finding; never claim that a fix "
             "was applied or that a commit landed."
         ),
-        tool_names=("auto_fix_finding",),
+        tool_names=("auto_fix_finding",
+            "read_repository",
+            "read_repository_file",
+            "search_repository",
+        ),
         team=Team.BLUE,
         department="Remediation Engineering",
         risk_ceiling=RiskCeiling.R2,
         status=AgentStatus.DEGRADED,
-        allowed_capability_ids=("remediation.auto_fix_finding",),
+        allowed_capability_ids=("remediation.auto_fix_finding",
+            "repository.read",
+            "repository.read_file",
+            "repository.search",
+        ),
         workforce="purple-cybersecurity-workforce",
         purple_role_id="purple-17",
         purple_role_name="Defensive Remediation and Auto-Fix Agent",
@@ -1018,6 +1056,136 @@ AGENT_REGISTRY: dict[str, AgentManifest] = {
         owner="Purple Security Command / Rabbani AI Core",
         documentation_reference="docs/architecture/unified-purple-workforce.md#purple-07",
     ),
+    "attack_surface_recon": AgentManifest(
+        name="attack_surface_recon",
+        display_name="Attack Surface Reconnaissance Agent",
+        description=(
+                        "Maps the real external attack surface of an authorised target: real subdomain enumeration (subfinder), real HTTP probing and technology fingerprinting (httpx), real content and directory discovery (ffuf, gobuster) and real CMS fingerprinting (wpscan). Every result is a real response from the target, never an inferred or invented asset."
+        ),
+        system_prompt=(
+                        "You are the Attack Surface Reconnaissance Agent for GDS Security OS, on the offensive team. You only ever touch targets carrying a live AuthorizedTarget row. You enumerate subdomains, probe HTTP endpoints, discover content and fingerprint CMS platforms, and you report exactly what the tools returned, including what they failed to reach."
+        ),
+        tool_names=(
+                "subfinder_scan",
+                "httpx_probe",
+                "ffuf_scan",
+                "gobuster_scan",
+                "wpscan_scan",
+            ),
+        team=Team.BLUE if "attack_surface_recon" == "vulnerability_assessment" else Team.RED,
+        department="Offensive Security",
+        risk_ceiling=RiskCeiling.R3,
+        allowed_capability_ids=(
+                "recon.subdomain_enum",
+                "recon.http_probe",
+                "network.content_discovery",
+                "network.cms_scan",
+            ),
+        target_authorisation_required=True,
+        operational_domain="Attack Surface Reconnaissance",
+        mission_role=(
+                        "Stage 1 of the cyber warfare workflow (Vulnerability Assessment), offensive half: turn an authorised hostname into a real inventory of live endpoints and technologies that the assessment and exploitation stages then attack."
+        ),
+        objectives=(
+                "Enumerate real subdomains of an authorised domain",
+                "Probe live HTTP endpoints and fingerprint their technology",
+                "Discover real reachable paths and files",
+                "Fingerprint the CMS and its plugins where one is present",
+            ),
+        knowledge_domains=(
+                "subdomain enumeration",
+                "HTTP fingerprinting",
+                "content discovery",
+                "CMS identification",
+            ),
+    ),
+
+    "exploitation_specialist": AgentManifest(
+        name="exploitation_specialist",
+        display_name="Exploitation Specialist Agent",
+        description=(
+                        "Weaponised validation of a suspected injection flaw against an authorised target using real sqlmap execution. This is the only role permitted to run an injection exploit, and every run requires human approval because the capability is classified critical."
+        ),
+        system_prompt=(
+                        "You are the Exploitation Specialist for GDS Security OS, on the offensive team. You confirm or refute a suspected injection vulnerability by running a real exploit against a target that carries a live AuthorizedTarget row, and you report the real evidence: parameter, payload, response and whether data was actually returned. You never claim exploitation you did not run."
+        ),
+        tool_names=(
+                "sqlmap_scan",
+            ),
+        team=Team.BLUE if "exploitation_specialist" == "vulnerability_assessment" else Team.RED,
+        department="Offensive Security",
+        risk_ceiling=RiskCeiling.R4,
+        allowed_capability_ids=(
+                "network.injection_scan",
+            ),
+        target_authorisation_required=True,
+        operational_domain="Exploitation and Validation",
+        mission_role=(
+                        "Stage 5 of the cyber warfare workflow (Penetration Testing): prove exploitability rather than infer it, so the defensive team remediates a confirmed weakness instead of a guess. Always human-approved; never self-authorised."
+        ),
+        objectives=(
+                "Confirm or refute a suspected injection flaw with real exploitation",
+                "Capture real request/response evidence for the finding",
+                "Report the real blast radius of a confirmed injection",
+            ),
+        knowledge_domains=(
+                "SQL injection",
+                "exploit validation",
+                "evidence capture",
+                "rules of engagement",
+            ),
+    ),
+
+    "vulnerability_assessment": AgentManifest(
+        name="vulnerability_assessment",
+        display_name="Vulnerability Assessment Agent",
+        description=(
+                        "Runs the real assessment engines end to end: nuclei templates, nikto web server checks, container image scans, IaC scans, SAST, DAST and SBOM generation. This is the role that actually produces vulnerability findings rather than only reading them."
+        ),
+        system_prompt=(
+                        "You are the Vulnerability Assessment Agent for GDS Security OS, on the defensive team. You run real scanners against authorised assets and real code, and you record only what they returned. You distinguish a clean scan from a scan that could not run, and you never report an unscanned asset as clean."
+        ),
+        tool_names=(
+                "nuclei_scan",
+                "nikto_scan",
+                "container_scan",
+                "iac_scan",
+                "sast_scan",
+                "dast_scan",
+                "generate_sbom",
+            ),
+        team=Team.BLUE if "vulnerability_assessment" == "vulnerability_assessment" else Team.RED,
+        department="Vulnerability Management",
+        risk_ceiling=RiskCeiling.R3,
+        allowed_capability_ids=(
+                "network.vulnerability_scan",
+                "network.web_server_scan",
+                "security_tools.container_scan",
+                "security_tools.iac_scan",
+                "security_tools.sast_scan",
+                "security_tools.dast_scan",
+                "security_tools.generate_sbom",
+            ),
+        target_authorisation_required=False,
+        operational_domain="Vulnerability Assessment",
+        mission_role=(
+                        "Stage 1 of the cyber warfare workflow (Vulnerability Assessment), defensive half: produce real findings across host, web, container, infrastructure-as-code and application layers, plus the SBOM the supply-chain checks depend on."
+        ),
+        objectives=(
+                "Run real nuclei template scans against an authorised target",
+                "Run real web server checks and record each finding",
+                "Scan container images, IaC and source code for real defects",
+                "Generate a real SBOM so dependency risk can be assessed",
+            ),
+        knowledge_domains=(
+                "vulnerability scanning",
+                "nuclei templates",
+                "container security",
+                "IaC security",
+                "SBOM",
+            ),
+    ),
+
 }
 
 # Phase 14: the authoritative record of agents that are real in taxonomy/intent but
