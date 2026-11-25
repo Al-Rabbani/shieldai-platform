@@ -306,3 +306,45 @@ THE ESTATE IS ACTUALLY CLEAN RIGHT NOW. I ran the dependency watch by hand (scri
 CONCLUSION. `validation_retest` is degraded because there is no open, re-testable finding, not because the tool is
 broken. It will earn its receipt the first time the daily dependency watch creates a new pinned advisory. Fabricating
 a finding to give the agent a green tick would be exactly the dishonesty this platform exists to avoid.
+
+## Owner authorized all actions: the approval gate was unpassable, now proved — 2026-11-25, releases ff59b9c / 0444f8a / f54794d / fd9419e
+
+Sidique authorized the offensive and write capabilities ("I authorize!"). Chasing that authorization exposed a
+defect that made the whole approval system decorative.
+
+THE APPROVAL GATE COULD NEVER BE PASSED. `execute_governed_tool` called `evaluate_capability_request` on EVERY
+attempt. That mints a brand-new capability request each time, so the new request had no prior decision, minted
+another pending Approval, and never looked at the one a human had already granted. Measured: 13 approvals in
+`approved` state and not one could ever be consumed, so `red_team`, `penetration_testing_coordinator` and
+`defensive_remediation_autofix` were permanently unreachable no matter what the owner decided. The broker already
+had the correct path (`reevaluate_capability_request`, which loads the prior decision's Approval and allows when it
+is approved); nothing called it. Fixed by reusing the existing request while its approval is pending or granted, and
+minting a fresh one only when there is none (first attempt, or after a rejection so a deliberate retry still gets
+its own approval). Second defect in the same fix: the reuse picked the NEWEST request, whose approval was still
+pending, over the one actually granted - ordering now prefers a granted approval. tests/test_approval_reuse.py.
+
+THREE MORE BLOCKERS BEHIND IT, each found by running the thing rather than assuming:
+  * LIST-VALUED TARGETS. `coordinate_pentest_engagement` takes `targets` as a list; `_derive_target` only scanned
+    scalar keys, so the broker saw target_type=None and refused "The requested target type is not valid". The
+    derivation now reads list arguments too. tests/test_list_targets.py.
+  * MISSION NOT SUPPLIED. The same tool then refused MISSION_REQUIRED because `engagements.mission_id` is NOT NULL
+    and the wrapper never passed the mission it already held. The wrapper now supplies the governed mission and
+    actor (setdefault, so an explicit caller value still wins). tests/test_governed_context_payload.py.
+  * THE INSERT COULD NEVER SATISFY RLS. `engagement_targets` has FORCE RLS with
+    `tenant_id = current_setting('gds.tenant_id')`, and the insert omitted tenant_id entirely, so every engagement
+    failed with "new row violates row-level security policy". Fixed by inserting tenant_id.
+
+PROVED, REAL RESULTS:
+  * `red_team` -> assess_attack_surface on www.globaldigitalsecurity.io: nmap returned 22/tcp OpenSSH 8.9p1,
+    80/tcp nginx 1.18.0, 443/tcp ssl/http.
+  * `penetration_testing_coordinator` -> coordinate_pentest_engagement created engagement b11f6d34
+    "Q4 2026 external surface review" (status draft) with 2 targets, each bound to its AuthorizedTarget row and
+    its valid_until date (www to 19 Dec, app to 25 Dec). Draft only; starting execution stays a separate step.
+
+FLEET: **21 online / 2 degraded / 0 unknown**.
+
+THE TWO THAT REMAIN ARE "NOTHING TO DO", NOT BROKEN. `defensive_remediation_autofix` needs an open finding with a
+fixed_version to branch and commit a fix: there are 0, and the dependency watch just scanned 209 packages with 0
+affected. `validation_retest` needs an open finding with a pinned `pkg==version` target: the open OSV rows predate
+the current writer and store no version. Both will earn receipts the first time real work exists. Stale pending
+approvals from the failed attempts were closed so the queue reflects reality.
