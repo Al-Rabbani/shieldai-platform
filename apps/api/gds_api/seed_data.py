@@ -241,3 +241,31 @@ WATCHLIST_SEED: list[tuple[str, str, str | None]] = [
     ("domain", "example.com", None),
     ("url", "https://example.com", None),
 ]
+
+# ---------------------------------------------------------------------------------------------------------------
+# Permissions that a route GUARDS but that no role held, so they never reached CATALOGUE_PERMISSIONS and no operator
+# could ever grant them (POST /admin/roles rejects an unknown name). Only a role holding "*" passed those gates.
+# Measured 25 Nov 2026: 25 of the 78 permissions named by require_permission() were absent from every role.
+# The same defect had made the whole Co-Pilot admin-only. Added here, additively, so the role lists above stay
+# readable. Least privilege: reads go to the read-only roles, operational writes to analyst, and consequential
+# actions (pentest execute/approve, secrets, settings, tenant management) to the platform owner only.
+_GUARD_ONLY_PERMISSIONS = {
+    "analyst": [
+        "findings:write", "findings:assign", "findings:schedule", "fixes:write", "reports:write",
+        "remediation:read", "monitoring:read", "scheduler:read", "siem:read", "pentest:read",
+        "ai_ml:read", "security_tools:read",
+    ],
+    "auditor": [
+        "monitoring:read", "siem:read", "pentest:read", "remediation:read", "ai_ml:read",
+        "security_tools:read", "scheduler:read",
+    ],
+    "platform_owner": [
+        "cloud:write", "integrations:write", "monitoring:write", "pentest:approve", "pentest:execute",
+        "pentest:write", "remediation:write", "scheduler:write", "secrets:read", "security_tools:write",
+        "settings:write", "siem:write", "tenants:manage",
+    ],
+}
+
+for _role, _extra in _GUARD_ONLY_PERMISSIONS.items():
+    if _role in ROLE_PERMISSIONS:
+        ROLE_PERMISSIONS[_role] = sorted(set(ROLE_PERMISSIONS[_role]) | set(_extra))
