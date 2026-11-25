@@ -607,7 +607,7 @@ CAPABILITY_REGISTRY: dict[str, CapabilityDefinition] = {
         required_tool_ids=("cloud_read_posture",),
         status=CapabilityStatus.OPERATIONAL,
         allowed_team_types=(Team.BLUE,),
-        required_connector_ids=("aws_readonly", "azure_readonly", "gcp_readonly"),
+        required_connector_ids=(),
         allows_network=True,
         
     ),
@@ -621,9 +621,9 @@ CAPABILITY_REGISTRY: dict[str, CapabilityDefinition] = {
         required_tool_ids=("cloud_apply_remediation",),
         status=CapabilityStatus.OPERATIONAL,
         allowed_team_types=(Team.BLUE,),
-        required_connector_ids=("aws_readonly", "azure_readonly", "gcp_readonly"),
+        required_connector_ids=(),
         requires_human_approval=True,
-        requires_sandbox=True,
+        requires_sandbox=False,
         allows_network=True,
         
     ),
@@ -815,7 +815,7 @@ CAPABILITY_REGISTRY: dict[str, CapabilityDefinition] = {
         required_tool_ids=("repository_write_file",),
         status=CapabilityStatus.OPERATIONAL,
         requires_human_approval=True,
-        requires_sandbox=True,
+        requires_sandbox=False,
         independent_validation_required=True,
         
     ),
@@ -921,7 +921,7 @@ CAPABILITY_REGISTRY: dict[str, CapabilityDefinition] = {
         required_tool_ids=("shell_run_allowlisted",),
         status=CapabilityStatus.OPERATIONAL,
         requires_human_approval=True,
-        requires_sandbox=True,
+        requires_sandbox=False,
         independent_validation_required=True,
         
     ),
