@@ -80,10 +80,13 @@ def test_every_dependency_names_a_real_stage_and_runs_before_it():
 
 
 def test_management_receives_the_assessment_result_as_a_handoff():
-    """A downstream stage must be given what upstream really produced, not just run after it."""
+    """A downstream stage must be told what upstream really produced - but never by substituting a tool
+    argument after approval: the execution binding refuses a request whose parameters changed."""
     import pathlib
 
     src = (pathlib.Path(__file__).resolve().parents[1] / "apps" / "api" / "gds_api" / "warfare"
            / "campaign.py").read_text()
-    assert 'args["_upstream"] = handoff' in src
+    assert 'handoff_text = " | upstream: "' in src
     assert "shared[stage[\"key\"]] = {" in src
+    assert 'args["_upstream"]' not in src, "the handoff must not be smuggled into the bound parameters"
+    assert "handoff_text" in src.split("purpose=")[1][:200]
