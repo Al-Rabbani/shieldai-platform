@@ -164,7 +164,10 @@ async def execute_governed_tool(
     Returning a dict keeps the agent loop's own contract (it renders tool results to the model), while
     a missing identity or an unmapped tool is reported explicitly and never executed.
     """
-    from gds_api.capabilities.broker import evaluate_capability_request
+    from gds_api.capabilities.broker import (
+        evaluate_capability_request,
+        reevaluate_capability_request,
+    )
     from gds_api.capabilities.gateway import execute_capability_request
     from gds_api.db import async_session_factory
     from gds_api.tenant_binding import bind_tenant
@@ -213,21 +216,62 @@ async def execute_governed_tool(
     payload = dict(args or {})
     async with async_session_factory() as session:
         await bind_tenant(session, tid)
-        evaluation = await evaluate_capability_request(
-            session,
-            tenant_id=tid,
-            user_id=uid,
-            mission_id=mid,
-            requesting_agent_id=requesting_agent_id,
-            supervising_agent_id=None,
-            capability_key=capability_key,
-            requested_tool_id=tool_name,
-            target_type=target_type,
-            target_reference=target_reference,
-            target_scope=target_reference,
-            purpose=(purpose or f"reasoning agent {agent_id} requested {tool_name}")[:200],
-            requested_parameters=payload,
-        )
+        # An approval is granted against ONE persisted capability request. Measured 25 Nov 2026: this wrapper
+        # called evaluate_capability_request on every attempt, which mints a NEW request each time, so the new
+        # request had no prior decision, minted another pending Approval, and never looked at the one a human had
+        # already granted. 13 approvals were approved and none could ever be consumed, which made every
+        # approval-gated capability permanently unreachable. Reuse the existing request while its approval is
+        # pending or granted; only mint a fresh one when there is none (first attempt, or after a rejection, so a
+        # deliberate retry still gets its own approval).
+        from sqlalchemy import text as _sql_text
+
+        reuse_request_id = (
+            await session.execute(
+                _sql_text(
+                    """
+                    SELECT cr.id
+                    FROM capability_requests cr
+                    JOIN LATERAL (
+                        SELECT d.approval_id
+                        FROM capability_decisions d
+                        WHERE d.request_id = cr.id
+                        ORDER BY d.decided_at DESC
+                        LIMIT 1
+                    ) d ON TRUE
+                    JOIN approvals a ON a.id = d.approval_id
+                    WHERE cr.tenant_id = :tid
+                      AND cr.mission_id = :mid
+                      AND cr.capability_key = :ck
+                      AND cr.requested_tool_id = :tool
+                      AND a.status IN ('pending', 'approved')
+                    ORDER BY cr.requested_at DESC
+                    LIMIT 1
+                    """
+                ),
+                {"tid": str(tid), "mid": str(mid), "ck": capability_key, "tool": tool_name},
+            )
+        ).scalar()
+
+        if reuse_request_id is not None:
+            evaluation = await reevaluate_capability_request(
+                session, tenant_id=tid, request_id=reuse_request_id
+            )
+        else:
+            evaluation = await evaluate_capability_request(
+                session,
+                tenant_id=tid,
+                user_id=uid,
+                mission_id=mid,
+                requesting_agent_id=requesting_agent_id,
+                supervising_agent_id=None,
+                capability_key=capability_key,
+                requested_tool_id=tool_name,
+                target_type=target_type,
+                target_reference=target_reference,
+                target_scope=target_reference,
+                purpose=(purpose or f"reasoning agent {agent_id} requested {tool_name}")[:200],
+                requested_parameters=payload,
+            )
         if evaluation.decision != "ALLOW":
             return {
                 "success": False,
