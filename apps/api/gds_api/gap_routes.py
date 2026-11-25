@@ -335,31 +335,15 @@ def create_gap_routers(get_db):
             "min_role": min_role,
         }
 
-    # ===== 6. Approvals =====
-    approvals_router = APIRouter(prefix="/approvals", tags=["Approvals"])
-
-    @approvals_router.get("")
-    async def list_approvals(
-        status: Optional[str] = None,
-        user: CurrentUser = Depends(get_current_user),
-        session: AsyncSession = Depends(get_db),
-    ):
-        tid = _tenant_id(user)
-        query = "SELECT * FROM approvals WHERE tenant_id = :tenant_id"
-        params = {"tenant_id": tid}
-        if status:
-            query += " AND status = :status"
-            params["status"] = status
-        query += " ORDER BY created_at DESC LIMIT 50"
-        result = await session.execute(text(query), params)
-        rows = result.fetchall()
-        cols = result.keys()
-        return [dict(zip(cols, row)) for row in rows]
-
+    # GET /approvals used to be defined HERE as well, on this same router, gated only on get_current_user and
+    # returning a raw 50 row page. The real route lives in gds_api.approvals (gated on approvals:read, typed
+    # response, ordered by created_at). Both routers are mounted, so FastAPI logged a duplicate operation id and
+    # which implementation answered depended on mount order, which is luck rather than design. Removed 25 Nov 2026;
+    # the empty router stays so the mount list and its callers are unchanged.
     # POST /approvals/{approval_id}/decide used to be defined HERE as well, on this same router, with the
     # decision read as a QUERY parameter, guarded only by get_current_user, and recording no decider, no standing
     # window and no audit row. Both routers are mounted, so FastAPI logged a duplicate operation id and the two
     # definitions disagreed about what deciding an approval means. The real route lives in gds_api.approvals
     # (body-based, gated on approvals:decide, records decided_by_user_id, standing and audit). Removed 25 Nov 2026.
     return (ciem_router, cloud_router, agents_router, security_tools_router,
-            policy_router, approvals_router)
+            policy_router)

@@ -9,6 +9,7 @@ import {
   Map, Skull, Zap, Shield, KeyRound, Dna, Radio, Briefcase, Biohazard, Network,
   LayoutDashboard, ShieldCheck, Building2, Plug, Fingerprint, Database, Target, Radar, Wrench, SlidersHorizontal,
   Inbox, FolderDown, BellRing, CalendarDays, Gauge, BookOpen, BookMarked, Workflow, Timer, History, TrendingUp, Brain,
+  Activity,
 } from "lucide-react";
 
 const SECTIONS = [
@@ -95,6 +96,7 @@ const SECTIONS = [
   ]},
   { label: "PLATFORM", items: [
     { icon: Cpu, label: "Agent Fleet", path: "/settings/agents" },
+    { icon: Activity, label: "Service Levels", path: "/operations/slo" },
     { icon: Gauge, label: "Fleet Autoscaling", path: "/settings/fleet-scaling" },
     { icon: Zap, label: "Auto-Remediation", path: "/settings/auto-remediation" },
     { icon: BellRing, label: "Escalation Rules", path: "/settings/escalation" },

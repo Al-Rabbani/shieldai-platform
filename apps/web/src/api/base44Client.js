@@ -1172,3 +1172,9 @@ export default base44;
 export async function scanHealth() {
   return request('/scan/health');
 }
+
+/* Service level objectives: five measured objectives with their basis, budget and blind spots. Its own export
+ * rather than an entity name, because it joins Prometheus, scan_runs, missions and approvals in one answer. */
+export async function sloStatus() {
+  return request('/slo');
+}

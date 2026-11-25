@@ -488,6 +488,10 @@ app.include_router(tenant_branding_router)
 from gds_api.scan_health_api import router as scan_health_router  # item 46
 app.include_router(scan_health_router)
 
+# Service level objectives: the platform's own measured service level
+from gds_api.slo_api import router as slo_router  # noqa: E402
+app.include_router(slo_router)
+
 app.include_router(admin_identity_router)
 
 # Digital Warriors: the five-stage offensive/defensive campaign

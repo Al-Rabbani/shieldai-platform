@@ -1056,3 +1056,70 @@ and labels the mechanism as inference, because the fix does not depend on it.
 
 Guard: `tests/test_revoke_after_commit.py` - the revoke must use RETURNING and no statement may follow its commit.
 Suite 1448 passed, 0 skipped.
+
+## Service levels, measured, and the two objectives that are not being met — 25 Nov 2026
+
+The platform sells SLA tiers to MSSP customers and had no statement of its own service level anywhere in the
+product. `GET /slo` now answers it from telemetry that already existed: the API's Prometheus counters, `scan_runs`,
+`missions` and `approvals`. Five objectives, each with its measurement, its basis and its blind spots.
+
+MEASURED LIVE on the GDS tenant, 25 Nov 2026 20:35 UTC:
+
+| Objective | Scope | Window | Target | Actual | Status |
+|---|---|---|---|---|---|
+| API availability | platform | 24h | 99.5% | 100.0% (11,763 requests, 0 answered 5xx) | met |
+| API responsiveness (p95) | platform | 24h | 800 ms | 176.5 ms | met |
+| Scanner freshness | tenant | now | 100% | 100% (7 of 7) | met |
+| Mission success | tenant | 7d | 90% | **86.19%** (156 completed, 25 failed) | **breached** |
+| Approval timeliness | tenant | 30d | 95% | **94.37%** (67 of 71 within 24h) | **breached** |
+
+TWO DEFECTS FOUND BY BUILDING IT, both in the flattering direction:
+
+1. **The latency objective was measuring a bucket that does not exist.** The first version asked for
+   `bucket{le="0.8"}`. The histogram's boundaries are fixed (0.005 to 10.0) and there is no 800 ms bucket, so the
+   query returned nothing, nothing became 0, and the page reported **0.0% of requests under 800 ms against a 95%
+   target** while the same response carried a p95 of 176 ms. It now states latency as a p95 with a
+   lower-is-better direction, which the histogram can answer exactly, and the contradiction is gone.
+2. **The mission denominator was counting the test harness.** With every mission in the denominator the objective
+   read 62.9%, because 67 of the runs were the `*_proof` families and `warfare_stage` rows created while verifying
+   the platform. Internal runs and campaign stages are now excluded, and the exclusion is named and counted in the
+   response (`internal_runs_excluded: 67`, with a per-type breakdown) so the number cannot be quietly improved by
+   reclassifying work. Cancelled missions are excluded and counted for the same reason.
+
+WHAT THE TWO BREACHES ARE: mission success is 86.19% over seven days. The failures are concentrated and named in
+the response: `cloud_security_assessment` 11, `remediation_apply` 6, `(untyped)` 3, `port_scan` 3,
+`penetration_test` 1, `vulnerability_assessment` 1. The cloud assessment failures carry
+`CloudDiscoveryStartError: This capability requires a specific agent; it cannot be requested directly`, and the
+`remediation_apply` failures were closed by the mission reaper after 120 minutes with no outcome ever recorded.
+Both are real and neither is fixed by this change. Approval timeliness is 94.37%: four of 71 decisions took longer
+than 24 hours.
+
+A MISSING MEASUREMENT IS NOT A PASS. `unmeasured` is a distinct status with a reason attached, the overall status
+degrades to `unmeasured` rather than `met`, and Prometheus being unreachable renders as "not measured" on the page.
+The response also states the first Prometheus sample it holds and the longest window it can honestly assert, so a
+24 hour objective on six days of history says so instead of implying a month of compliance.
+
+BUILT: `apps/api/gds_api/slo_api.py` (mounted at `/slo`, gated on `monitoring:read`), `pages/SloPage.jsx` at
+`/v2/operations/slo` with a PLATFORM nav entry, `sloStatus()` in the web adapter. 24 tests in `tests/test_slo.py`
+pin the evaluator, the unmeasured states, the threshold direction and both denominator exclusions.
+
+PROVED: the route answers 401 anonymously; with a scoped API key holding only `monitoring:read` it answers 200 and
+the numbers above; the key was then revoked. Blind spots declared in the response, because a status page that hides
+its own limits is the thing this page exists to avoid: requests that never reached the API (nginx 502/504, host
+down) are outside availability, latency excludes time in nginx and the network, and a scanner that ran but wrote no
+run row reads as never run.
+
+STILL OPEN on this item: nothing alerts when an objective is breached. The endpoint reports; the notification path
+for SLO breach is not wired, and is the next step on it.
+
+## The same duplicate route, one method over: GET /approvals — 25 Nov 2026
+
+A pytest warning was scrolling past on every run: `Duplicate Operation ID list_approvals_approvals_get for function
+list_approvals at gap_routes.py`. It is the same defect that was found on `POST /approvals/{id}/decide` earlier
+today, on the sibling method. Two implementations existed for `GET /approvals`: the real one in `gds_api.approvals`
+gated on `approvals:read`, typed, ordered; and one in `gap_routes` gated only on `get_current_user`, returning a raw
+50 row page. Only mount order decided which answered, which is luck rather than design.
+
+Removed the duplicate and the router it left behind. Guard unchanged: `tests/test_readiness_protocols.py` still
+requires every legacy router to be gated or to resolve a tenant, and it caught the empty router this left, which is
+why the router is gone rather than emptied. No duplicate operation ids remain in openapi.
