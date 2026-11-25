@@ -25,30 +25,19 @@ Every line below was measured against the live platform. Releases are the `GDS_R
 
 ## Still open
 
-1. **Stripe card entry.** Needs one deliberate low-value live transaction and an immediate refund. Both webhook
-   branches are proved (25 Nov: a signed `invoice.payment_succeeded` wrote a real `billing_payments` row at £399/GBP
-   and was cleaned up); only the card entry itself needs a person with a card. Only live keys are configured.
-2. **Owner MFA enrolment** — due Thursday 26 November 14:49 UTC. Owner-only: enrolling a factor he does not hold
-   would lock him out. If he misses it, `scripts/ops/mfa-break-glass.sh` grants a 1–24 hour window (built and proved
-   25 Nov, fails closed if it cannot write its audit row).
-3. **GitHub PAT revocation** — ✅ CLOSED 25 Nov 04:20 UTC, verified 401. Was owner-only. Measured 25 Nov: the token in `/opt/.env` is **still live** (`GET
-   https://api.github.com/user` returns 200 as `AI-Rabbani000`). It is out of `.git/config`, but a classic PAT can
-   only be revoked in GitHub's settings by its owner.
-4. **35 modules still name an unserved store**, each with a recorded reason and 0 unresolved. 23 name it only
-   (picker/dropdown), 6 already state the absence, 5 make a claim about a *served* store, 1 partly settled.
-5. **Voice: the API and the browser's own format are proved, a physical microphone is not.** 25 Nov: the spoken MP3
-   was transcoded to webm/opus — what `MediaRecorder` actually sends — and transcribed back word for word
-   (whisper-1, $0.000465). The remaining unknown is hardware, not code.
+Everything that was on this list as a build item is now closed. What remains is hardware and one design boundary.
 
-6. **Alert delivery is configured but has never been proved to deliver.** `GET /alerts/channels` (added 25 Nov)
-   reports what the serving process actually has: **email and Slack configured** (`RESEND_API_KEY`,
-   `SLACK_WEBHOOK_URL`, `ALERT_EMAIL_TO` are set), Teams and PagerDuty not configured. No delivery has ever been
-   recorded — `notification_dispatches` has no table, so nothing records an attempt. The next step is one deliberate
-   alert delivered to a real channel and recorded, not another status endpoint.
+1. **A physical microphone has never been used.** The API, the browser's own webm/opus format and the round trip are
+   proved; the remaining unknown is a person speaking into a device. Not a code item.
+2. **The Co-Pilot's memory is operator-stated only, by design.** Proved 25 Nov (release `3723c00`): a memory recorded
+   through `/v2/copilot/memory` reaches the model and shapes the answer, the mission reports how many it used, and
+   another tenant's memory is neither counted nor applied. But nothing records a memory from a mission's own
+   outcome, so the Co-Pilot does not yet learn from work it has done. That is the next honest gap in "give the
+   Co-Pilot a brain", and it needs a rule for what is safe to remember automatically before it is built.
 
-Closed since the list above was written: the neutralised probe account was purged (5 test missions and their
-children, deepest-first); `invoice.payment_succeeded` proved; the webm/opus voice leg proved; the MFA break-glass
-built.
+Closed since the previous list: alert delivery (a real email and a real Slack message, both recorded); the Stripe
+card entry (a real £1 live payment, refunded); owner MFA enrolment (04:20 UTC, 10 recovery codes); the GitHub PAT
+(revoked, 401); the absent-store queue (measured, four defects fixed, ten missing imports found).
 
 ## GitHub PAT revocation — CLOSED 2026-11-25 04:20 UTC
 
@@ -140,3 +129,31 @@ throw): /v2/executive-dashboard reads "no insight store; insights are generated 
 store; reports are exported, not saved"; /v2/code reads "no licence store; SBOM ingestion never ran, so there is
 nothing to licence-scan"; /v2/compliance reads "no gap store; gaps are derived from failing controls". Probe purged,
 5 users, login 401.
+
+## Co-Pilot standing memory — proved, reported, and scoped — 2026-11-25, release 3723c00
+
+The store, the three routes and the claim all existed before this pass: `copilot_memory`, `GET/POST/DELETE
+/copilot/memory`, and a comment in `copilot_api.py` saying a mission "prefixes the goal with up to 20 recorded
+memories ... and reports standing_memory_count on the mission context". The table held **0 rows**, so none of it had
+ever run.
+
+PROVED LIVE with a scoped API key (sha256 of a `gds_` key against `api_keys.key_hash`, no throwaway user): a memory
+recorded through `POST /copilot/memory` came back on `GET /copilot/memory`, and a mission answer ended with the
+literal mark the preference demanded. Recorded memory really does reach the model.
+
+DEFECT FOUND BY THE PROOF: the response carried `standing_memory_count: None`. `_with_standing_memory` built the count
+onto a context dict and the route then returned a fixed dict that never included it, so the documented count could
+not be read by any caller and no page could say whether an answer had been shaped by memory. The response now carries
+`standing_memory_count`, `standing_memory_error` (stated as None, never omitted) and `goal_original`, because the goal
+sent to the engine is prefixed with the memory block and the caller should still get back what it asked.
+
+TENANT SCOPE PROVED, NOT ASSUMED: with a decoy memory belonging to a different tenant in the table, a mission on this
+tenant reported count 1, applied its own mark, and neither counted, applied nor echoed the decoy.
+
+THE OPERATOR LOOP PROVED IN A BROWSER at `/v2/copilot/memory` on a probe (analyst role): the page read "HELD 0", a
+preference recorded through the form came back "Recorded." with source "stated by a person", the Forget button
+returned "Forgot ui_proof_key" and HELD 0 again. The page states its own boundaries: nothing is inferred from a
+mission, no transcript is kept, and one tenant only.
+
+`tests/test_standing_memory.py` (4 tests) drives the route with a fake bridge and pins the count, the zero case, the
+failure being carried rather than hidden, and the original goal surviving the prefix.
