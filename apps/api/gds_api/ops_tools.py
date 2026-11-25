@@ -523,3 +523,122 @@ async def remediation_plan_image_upgrade(params: dict) -> dict:
                          "until then the finding stays open"),
         "blocker": (None if resolvable else _blocker_text(repo, registries, refused)),
     }
+
+
+# -----------------------------------------------------------------------------------------------------------
+# Config remediation that APPLIES and VERIFIES.
+#
+# Measured 25 Nov 2026: the five-stage campaign could plan a fix but never apply one. Container images are a
+# dead end here (every vendor tag is already the newest published, and the minio image carries no package
+# manager), so the fixable population that IS in reach is the web tier's own configuration. Each fix below is
+# idempotent, backs the file up, validates the config before reloading, reverts on failure, and re-tests the
+# live endpoint afterwards - a fix that cannot be verified is not reported as applied.
+# -----------------------------------------------------------------------------------------------------------
+
+NGINX_SITE = "/etc/nginx/sites-enabled/gds-os"
+NGINX_CONF = "/etc/nginx/nginx.conf"
+
+_DOCS_DENY = """    location ~ ^/(docs|redoc|openapi\\.json)$ {
+        return 404;
+    }"""
+
+_DOCS_ENDPOINTS = (
+    "https://api.globaldigitalsecurity.io/docs",
+    "https://api.globaldigitalsecurity.io/redoc",
+    "https://api.globaldigitalsecurity.io/openapi.json",
+    "https://app.globaldigitalsecurity.io/docs",
+    "https://app.globaldigitalsecurity.io/openapi.json",
+)
+
+
+def _http_status(url: str) -> int:
+    import urllib.error
+    import urllib.request
+
+    try:
+        with urllib.request.urlopen(url, timeout=10) as r:
+            return r.status
+    except urllib.error.HTTPError as exc:
+        return exc.code
+    except Exception:  # noqa: BLE001
+        return 0
+
+
+async def remediation_apply_config_fix(payload: dict | None = None, **kw) -> dict:
+    """Handlers receive one positional payload dict, like every other tool in this registry."""
+    payload = payload or {}
+    fix_key = payload.get("fix_key") or kw.get("fix_key")
+    apply = payload.get("apply", kw.get("apply", True))
+    if not fix_key:
+        return {"success": False, "error": "fix_key is required",
+                "supported": ["hide_api_docs", "nginx_server_tokens_off"]}
+    """Apply one known config fix, verify it against the live service, and say what actually changed."""
+    import pathlib
+    import shutil
+    import subprocess
+
+    def run(*cmd):
+        return subprocess.run(cmd, capture_output=True, text=True)
+
+    if fix_key == "hide_api_docs":
+        site = pathlib.Path(NGINX_SITE)
+        text = site.read_text()
+        already = "location ~ ^/(docs|redoc|openapi" in text
+        changed = False
+        if not already and apply:
+            backup = str(site) + ".bak-remediation"
+            shutil.copy2(site, backup)
+            # insert the refusal in front of the API host's catch-all and in place of the app host's proxy
+            anchor = "    location / {\n        proxy_pass http://127.0.0.1:8000;\n"
+            if anchor not in text:
+                return {"success": False, "error": "api catch-all not found; refusing to guess at the layout"}
+            text = text.replace(anchor, _DOCS_DENY + "\n\n" + anchor, 1)
+            site.write_text(text)
+            test = run("nginx", "-t")
+            if test.returncode != 0:
+                shutil.copy2(backup, site)
+                return {"success": False, "error": f"nginx -t refused the change, reverted: {test.stderr[-300:]}"}
+            if run("systemctl", "reload", "nginx").returncode != 0:
+                shutil.copy2(backup, site)
+                run("systemctl", "reload", "nginx")
+                return {"success": False, "error": "reload failed, reverted"}
+            changed = True
+        statuses = {u: _http_status(u) for u in _DOCS_ENDPOINTS}
+        verified = all(code == 404 for code in statuses.values())
+        return {
+            "success": verified,
+            "fix": fix_key,
+            "applied": changed,
+            "already_in_place": already,
+            "verification": statuses,
+            "note": ("the API schema is refused on every published host"
+                     if verified else "at least one schema endpoint is still reachable"),
+            "findings_templates": ["openapi", "swagger-api", "redoc-api-docs"],
+        }
+
+    if fix_key == "nginx_server_tokens_off":
+        conf = pathlib.Path(NGINX_CONF)
+        text = conf.read_text()
+        if "server_tokens off;" in text:
+            changed = False
+        elif apply:
+            backup = str(conf) + ".bak-remediation"
+            shutil.copy2(conf, backup)
+            conf.write_text(text.replace("\t# server_tokens off;", "\tserver_tokens off;", 1))
+            test = run("nginx", "-t")
+            if test.returncode != 0:
+                shutil.copy2(backup, conf)
+                return {"success": False, "error": f"nginx -t refused the change, reverted: {test.stderr[-300:]}"}
+            run("systemctl", "reload", "nginx")
+            changed = True
+        else:
+            return {"success": False, "fix": fix_key, "applied": False, "note": "not enabled and apply is false"}
+        banner = run("bash", "-lc", "curl -sI --max-time 10 https://app.globaldigitalsecurity.io/ | grep -i '^server:'")
+        header = banner.stdout.strip()
+        verified = bool(header) and "nginx/" not in header.lower()
+        return {"success": verified, "fix": fix_key, "applied": changed, "server_header": header,
+                "note": "the banner names the product but not the version" if verified else "version still advertised",
+                "findings_templates": ["nginx-version"]}
+
+    return {"success": False, "error": f"unknown fix_key {fix_key!r}",
+            "supported": ["hide_api_docs", "nginx_server_tokens_off"]}

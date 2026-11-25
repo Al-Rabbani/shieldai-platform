@@ -718,3 +718,43 @@ TWO REAL LIMITS, STATED RATHER THAN DRESSED UP:
   2. Stage 1's finding count varies run to run (23 here, 25 earlier). That is a live scanner against a live
      host, not a fixture.
 
+
+## Remediation that APPLIES a fix, and why the container backlog cannot be applied — 25 Nov 2026
+
+The five-stage campaign could produce a verified plan and never apply anything. This closes that with a real
+applied and verified fix, and records precisely why the largest fixable population cannot be applied here.
+
+THE CONTAINER BACKLOG IS EXTERNALLY BLOCKED, MEASURED RATHER THAN ASSUMED. 653 of the open findings carry a
+fixed_version and all of them live inside container images: qdrant 129, the bundled mc 105, dockerize 97,
+temporal 94, minio 69, plus binaries. Three measurements close the obvious routes:
+  - Every image is already at its newest published tag. `docker pull` reports "Image is up to date" for
+    qdrant, nats, neo4j and temporal, and minio's registry answers 404/401. So there is no newer vendor image
+    to move to. (My first digest comparison said otherwise because it compared the local platform manifest
+    digest against the registry's multi-arch INDEX digest; `docker pull` is the authoritative answer.)
+  - minio/minio:latest carries NO package manager at all (no microdnf, dnf, yum or rpm), so it cannot be
+    patched from inside.
+  - nats:latest scans clean (0 critical/high), so the register's "nats-server" rows belong to a different
+    image. Trivy was validated first against minio, where it returns exactly the register's 136 critical/high
+    and 130 fixable, so a silent zero is not mistaken for a clean image.
+
+THE FIXABLE POPULATION THAT IS IN REACH IS THE WEB TIER'S OWN CONFIG, and it was genuinely exposed:
+openapi.json, /docs and /redoc answered 200 on BOTH published hosts, and nginx advertised its exact version.
+Built `remediation.apply_config_fix` (R2, tool `remediation_apply_config_fix`) with two fixes:
+  - hide_api_docs: refuses ^/(docs|redoc|openapi\.json)$ with 404 on both hosts. The schema enumerates every
+    route, parameter and permission the platform exposes, which is a map for an attacker.
+  - nginx_server_tokens_off: stops the banner naming the version.
+Each fix is idempotent, backs the file up, runs nginx -t BEFORE reloading, reverts on failure, and re-tests
+the live endpoint afterwards. A fix that cannot be verified is never reported as applied.
+
+PROVED LIVE: all five schema endpoints now 404, the platform still serves (app 200, /v2/ 200, api /health
+200), and the Server banner reads "nginx" with no version. Verified with the SCANNER, not just curl: nuclei
+re-run of the same templates (swagger-api, openapi, nginx-version) returned 0 findings. Then the capability
+was run through governance as defensive_remediation_autofix, and 6 findings were closed with the evidence
+recorded on the row (remediation_applied, verified_by, verified_at): openapi x2, swagger-api x2,
+redoc-api-docs, nginx-version. 8 open nuclei findings remain, including nginx-eol (needs an nginx upgrade, not
+a config change), cors-misconfig and ssh-sha1-hmac-algo, which are the next config fixes in this class.
+
+CAPABILITY COUNT: 73 (was 72). Guards in tests/test_remediation.py, including one that fails if the handler
+signature stops accepting the positional payload the gateway sends - the exact bug that made the first run
+return "takes 0 positional arguments but 1 was given" for every call.
+

@@ -274,6 +274,7 @@ AGENT_REGISTRY: dict[str, AgentManifest] = {
             "devsecops",
             "defensive_remediation_autofix",
             "validation_retest",
+            "remediation_apply_config_fix",
         ),
         repository_permissions=("none",),
         workspace_permissions=("none",),

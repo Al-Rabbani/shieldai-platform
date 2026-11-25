@@ -182,6 +182,23 @@ CAPABILITY_REGISTRY: dict[str, CapabilityDefinition] = {
         requires_sandbox=False,
         requires_human_approval=False,
     ),
+    "remediation.apply_config_fix": CapabilityDefinition(
+        stable_key="remediation.apply_config_fix",
+        display_name="Apply Verified Config Fix",
+        description="Apply one known web-tier configuration fix and prove it against the live service. Every fix is "
+                    "idempotent, backs the file up, validates with nginx -t before reloading, reverts on failure, "
+                    "and re-tests the published endpoint afterwards, so a fix is only reported applied when it is "
+                    "measured to have taken effect. Measured 25 Nov 2026: the campaign could plan a remediation but "
+                    "never apply one, and the fixable container images are already at their newest published tag.",
+        category="remediation",
+        risk_class=RiskClass.R2,
+        side_effect_type=SideEffectType.WRITE_INTERNAL,
+        required_tool_ids=("remediation_apply_config_fix",),
+        status=CapabilityStatus.OPERATIONAL,
+        allowed_team_types=(Team.BLUE, Team.PURPLE),
+        requires_sandbox=False,
+        requires_human_approval=False,
+    ),
     "finding.store": CapabilityDefinition(
         stable_key="finding.store",
         display_name="Store Scanner Finding",
