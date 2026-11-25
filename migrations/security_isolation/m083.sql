@@ -30,6 +30,7 @@ CREATE TABLE IF NOT EXISTS warfare_campaign_stages (
     findings_count integer,
     result_summary text,
     detail jsonb,
+    mission_id text,
     started_at timestamptz,
     completed_at timestamptz
 );

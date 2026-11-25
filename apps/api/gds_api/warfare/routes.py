@@ -64,6 +64,20 @@ async def start_campaign(req: CampaignRequest, user: CurrentUser = Depends(get_c
     )
 
 
+@router.post("/campaign/{campaign_id}/resume")
+async def resume(campaign_id: str, req: Optional[CampaignRequest] = None,
+                 user: CurrentUser = Depends(get_current_user)):
+    """Continue a campaign after an approval was granted, reusing each stage's own mission."""
+    from gds_api.warfare.campaign import resume_campaign
+
+    return await resume_campaign(
+        campaign_id=campaign_id,
+        tenant_id=_tenant(user),
+        user_id=_uid(user),
+        target=(req.target if req else None),
+    )
+
+
 @router.get("/campaigns")
 async def list_campaigns(limit: int = 20, user: CurrentUser = Depends(get_current_user)):
     async with async_session_factory() as session:
