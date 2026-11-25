@@ -17,6 +17,8 @@ CAPABILITY_NOT_MAPPED rather than guessing a key that might authorize more than 
 """
 from __future__ import annotations
 
+import ipaddress
+
 import json
 import logging
 import uuid
@@ -105,6 +107,48 @@ def resolve_requesting_agent(agent_id: str | None) -> str | None:
     return key if key in AGENT_REGISTRY else None
 
 
+def _derive_target(args: dict[str, Any], capability: Any) -> tuple[str | None, str | None]:
+    """Choose the target type and reference a capability expects, from the tool's own arguments.
+
+    WHY THIS EXISTS: measured 25 Nov 2026 - execute_governed_tool passed target_type=None and
+    target_reference=None unconditionally, so the broker refused every capability that declares a target
+    ("The requested target type is not valid for this capability") and NO agent could run a targeted tool:
+    port inventory, vulnerability scan, headers check and DAST were all unreachable, leaving only the
+    non-targeted reads such as list_open_findings. The gate was correct; the caller never supplied a target.
+
+    The reference is reduced to a host so it matches the AuthorizedTarget row, which stores a host
+    ("www.example.com") rather than a URL.
+    """
+    allowed = tuple(getattr(capability, "target_types", ()) or ())
+    if not allowed or allowed == ("none",):
+        return None, None
+    value = None
+    for key in (
+        "target", "target_url", "url", "domain", "host", "hostname", "ip",
+        "endpoint", "base_url", "target_reference",
+    ):
+        candidate = (args or {}).get(key)
+        if isinstance(candidate, str) and candidate.strip():
+            value = candidate.strip()
+            break
+    if not value:
+        return None, None
+    host = value.split("://", 1)[1] if "://" in value else value
+    host = host.split("/", 1)[0].split("?", 1)[0].split("#", 1)[0]
+    if host.count(":") == 1:  # strip a single :port but leave an IPv6 literal intact
+        host = host.split(":", 1)[0]
+    try:
+        ipaddress.ip_address(host)
+        candidates = ("ip", "host", "domain")
+    except ValueError:
+        candidates = (
+            ("web_application", "url", "domain", "host")
+            if "://" in value
+            else ("domain", "host", "web_application", "url", "ip")
+        )
+    return next((c for c in candidates if c in allowed), None), host
+
+
 async def execute_governed_tool(
     *,
     tenant_id: Any,
@@ -151,6 +195,9 @@ async def execute_governed_tool(
         }
 
     capability_key = resolve_capability_for_tool(tool_name)
+    from gds_api.capabilities.catalog import CAPABILITY_REGISTRY
+    capability = CAPABILITY_REGISTRY.get(capability_key)
+    target_type, target_reference = _derive_target(dict(args or {}), capability)
     if capability_key is None:
         return {
             "success": False,
@@ -175,9 +222,9 @@ async def execute_governed_tool(
             supervising_agent_id=None,
             capability_key=capability_key,
             requested_tool_id=tool_name,
-            target_type=None,
-            target_reference=None,
-            target_scope=None,
+            target_type=target_type,
+            target_reference=target_reference,
+            target_scope=target_reference,
             purpose=(purpose or f"reasoning agent {agent_id} requested {tool_name}")[:200],
             requested_parameters=payload,
         )
