@@ -106,3 +106,37 @@ rows deleted. Details in docs/runbooks/customer-onboarding.md section 5.1.
 Note for anyone repeating this: the platform's /billing/checkout accepts only starter/professional/enterprise,
 so the cheapest self-serve proof is £399. A £1 proof requires creating a test price directly in Stripe and
 passing the tenant in metadata, which is what was done here.
+
+## Absent-store queue closed — 2026-11-25, release b7cf5e6
+
+The queue was measured before anything was edited. Of its 35 modules: 23 only NAME an unserved store (a picker, or
+a read never presented as a count), 6 already stated the absence in their own prose, 5 make their claim about a
+SERVED store (cloud_assets 145, incidents 2, repositories 1, KPI at /executive/kpis), 1 derives its graph from
+findings. Naming an unserved store is not a defect; rendering its emptiness as a value is.
+
+FOUR REAL DEFECTS FIXED:
+- ExecutiveDashboardPage rendered "No executive insights generated" and "No board reports generated" as empty
+  states over ExecutiveInsight and BoardReport, neither of which has a table.
+- IncidentTimelineView returned "No timeline events recorded yet." for every incident, because IncidentTimeline has
+  no store: the reader was told the investigation history was empty rather than absent.
+- CodeSecurityDashboardPage collapsed an empty LicenseRisk list to nothing (licenseRisks.length > 0 && ...), and
+  silence about licence risk reads as no licence risk.
+- AttackVectorSimulatorPage fetched AuthorizationPolicy into state on every load and never rendered it; removed.
+
+TEN MORE MODULES WERE LATENTLY BROKEN AND NOBODY KNEW: every module converted in the earlier absent-store passes
+called absentStoreReason(...) without importing it. The call sits inside an empty-branch conditional, so it only
+evaluates when the panel is actually empty, which is why builds, tests and browser checks against tenants WITH data
+all looked correct. Each would have thrown a ReferenceError and blanked its route on the first empty panel:
+SessionHistorySidebar, GeographicThreatHeatmap, EvidenceActivityTimeline, AgentLogsDrawer, EngineerSlackList,
+FleetPerformanceTab, AlertsNotificationsPage, AuditCompliancePage, DataFabricPage, AssignmentRulesPage.
+
+THIS PASS CAUGHT ITSELF DOING IT: the first cut inserted the calls before adding the import and the helper skipped
+the import because the name was already in the file. Build green, tests green, /v2/executive-dashboard rendered a
+blank body. tests/test_absent_queue_closed.py now asserts that every module calling absentStoreReason also imports
+it, and asserts no queue entry still claims an outstanding defect.
+
+VERIFIED BY RENDERING on a throwaway tenant whose panels are genuinely empty (the exact condition that used to
+throw): /v2/executive-dashboard reads "no insight store; insights are generated per answer" and "no board-report
+store; reports are exported, not saved"; /v2/code reads "no licence store; SBOM ingestion never ran, so there is
+nothing to licence-scan"; /v2/compliance reads "no gap store; gaps are derived from failing controls". Probe purged,
+5 users, login 401.
