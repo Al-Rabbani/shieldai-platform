@@ -90,44 +90,10 @@ export const AGENT_TIERS = {
   restricted: { label: "RESTRICTED", color: COPILOT_RED, icon: "🔒" },
 };
 
-// 35 AI Super Agents - v8.0 Fleet
-export const AGENT_FLEET = [
-  { id: "agent-001", name: "AI Sovereign Commander", role: "copilot_command", tier: "sovereign", capabilities: ["Strategic Command", "Multi-Agent"], functions: 86, commands: 32 },
-  { id: "agent-002", name: "AI GASCI Orchestrator", role: "threat_hunting", tier: "sovereign", capabilities: ["AI Brain", "Reasoning"], functions: 78, commands: 28 },
-  { id: "agent-003", name: "AI CISO Intelligence", role: "executive_intelligence", tier: "sovereign", capabilities: ["Executive", "Risk Intel"], functions: 65, commands: 24 },
-  { id: "agent-004", name: "AI National Security Advisor", role: "incident_response", tier: "sovereign", capabilities: ["Sovereign Defense", "Critical Infra"], functions: 72, commands: 26 },
-  { id: "agent-005", name: "AI SOC Director", role: "security_operations", tier: "command", capabilities: ["SOC Ops", "Triage"], functions: 58, commands: 22 },
-  { id: "agent-006", name: "AI Threat Hunter", role: "threat_hunting", tier: "command", capabilities: ["Proactive Hunting", "IOC"], functions: 52, commands: 20 },
-  { id: "agent-007", name: "AI Incident Commander", role: "incident_response", tier: "command", capabilities: ["IR Orchestration", "Containment"], functions: 55, commands: 21 },
-  { id: "agent-008", name: "AI Digital Forensics Director", role: "incident_response", tier: "command", capabilities: ["Forensics", "Evidence"], functions: 48, commands: 18 },
-  { id: "agent-009", name: "AI Cloud Security Director", role: "cloud_security", tier: "command", capabilities: ["CSPM", "Cloud Threats"], functions: 62, commands: 24 },
-  { id: "agent-010", name: "AI Infrastructure Security Agent", role: "cloud_security", tier: "command", capabilities: ["Infrastructure", "ASM"], functions: 56, commands: 22 },
-  { id: "agent-011", name: "AI CNAPP Director", role: "cloud_security", tier: "command", capabilities: ["CNAPP", "Cloud Native"], functions: 54, commands: 21 },
-  { id: "agent-012", name: "AI Identity Security Director", role: "identity_security", tier: "command", capabilities: ["Identity", "IAM"], functions: 50, commands: 19 },
-  { id: "agent-013", name: "AI Zero Trust Architect", role: "identity_security", tier: "command", capabilities: ["Zero Trust", "JIT"], functions: 48, commands: 18 },
-  { id: "agent-014", name: "AI CIEM Director", role: "identity_security", tier: "command", capabilities: ["CIEM", "Entitlements"], functions: 46, commands: 17 },
-  { id: "agent-015", name: "AI Vulnerability Director", role: "vulnerability_mgmt", tier: "command", capabilities: ["Vuln Mgmt", "Prioritization"], functions: 52, commands: 20 },
-  { id: "agent-016", name: "AI Autonomous Remediation Director", role: "vulnerability_mgmt", tier: "command", capabilities: ["Auto-Fix", "Remediation"], functions: 50, commands: 19 },
-  { id: "agent-017", name: "AI Attack Surface Director", role: "vulnerability_mgmt", tier: "command", capabilities: ["ASM", "Exposure"], functions: 48, commands: 18 },
-  { id: "agent-018", name: "AI DevSecOps Director", role: "devsecops", tier: "command", capabilities: ["DevSecOps", "CI/CD"], functions: 54, commands: 21 },
-  { id: "agent-019", name: "AI Application Security Director", role: "devsecops", tier: "command", capabilities: ["AppSec", "SAST/DAST"], functions: 52, commands: 20 },
-  { id: "agent-020", name: "AI Threat Intelligence Director", role: "threat_hunting", tier: "command", capabilities: ["Threat Intel", "CTI"], functions: 48, commands: 18 },
-  { id: "agent-021", name: "AI Predictive Risk Director", role: "risk_intelligence", tier: "specialist", capabilities: ["Risk Forecasting", "Predictive"], functions: 42, commands: 16 },
-  { id: "agent-022", name: "AI Dark Web Monitor", role: "threat_hunting", tier: "specialist", capabilities: ["Dark Web", "Credentials"], functions: 38, commands: 14 },
-  { id: "agent-023", name: "AI Red Team Director", role: "authorized_pentesting", tier: "specialist", capabilities: ["Red Team", "Attack Sim"], functions: 45, commands: 17 },
-  { id: "agent-024", name: "AI Purple Team Director", role: "authorized_pentesting", tier: "specialist", capabilities: ["Purple Team", "Detection Validation"], functions: 44, commands: 16 },
-  { id: "agent-025", name: "AI Compliance Director", role: "compliance_automation", tier: "specialist", capabilities: ["Compliance", "Evidence"], functions: 46, commands: 18 },
-  { id: "agent-026", name: "AI Regulatory Intelligence Director", role: "compliance_automation", tier: "specialist", capabilities: ["Regulatory", "Policy"], functions: 42, commands: 16 },
-  { id: "agent-027", name: "AI Audit Director", role: "compliance_automation", tier: "specialist", capabilities: ["Audit", "Reporting"], functions: 40, commands: 15 },
-  { id: "agent-028", name: "AI Global Risk Director", role: "risk_intelligence", tier: "specialist", capabilities: ["Enterprise Risk", "GRC"], functions: 44, commands: 17 },
-  { id: "agent-029", name: "AI Chief CISO Intelligence Agent", role: "executive_intelligence", tier: "specialist", capabilities: ["CISO Advisory", "Strategic"], functions: 48, commands: 18 },
-  { id: "agent-030", name: "AI Security Director LLM", role: "knowledge_retrieval", tier: "specialist", capabilities: ["LLM Security", "AI Gov"], functions: 36, commands: 14 },
-  { id: "agent-031", name: "AI Identity Director AI Agents", role: "identity_security", tier: "specialist", capabilities: ["Agent Identity", "RBAC"], functions: 38, commands: 15 },
-  { id: "agent-032", name: "AI Digital Trust Director", role: "executive_intelligence", tier: "specialist", capabilities: ["Trust & Safety", "Brand"], functions: 40, commands: 16 },
-  { id: "agent-033", name: "AI MSSP Operations Director", role: "security_operations", tier: "specialist", capabilities: ["MSSP", "Multi-Tenant"], functions: 52, commands: 20 },
-  { id: "agent-034", name: "AI Workflow Orchestration Director", role: "workflow_automation", tier: "restricted", capabilities: ["Workflow", "SOAR"], functions: 68, commands: 24 },
-  { id: "agent-035", name: "AI Knowledge Memory Director", role: "knowledge_retrieval", tier: "restricted", capabilities: ["Memory", "RAG", "Graph"], functions: 56, commands: 22 },
-];
+// The hardcoded AGENT_FLEET (35 agents with invented function and command counts) was removed on
+// 25 Nov 2026. The fleet comes from GET /agents, which serves the real registry. Nothing live imported
+// this array: its only consumers were pages/gds/GDSCoPilotPlatformPage and PlatformFunctionMap, both retired.
+
 
 // 86 Platform Functions by 26 Categories
 export const PLATFORM_FUNCTIONS = {
