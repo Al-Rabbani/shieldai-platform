@@ -1,0 +1,37 @@
+"""The Alerts page must not draw a delivery pipeline it does not have.
+
+MEASURED 25 Nov 2026: notification_dispatches has no table, so the page's "Notifications Dispatched" tile read 0 and
+its sublabel read "0 delivered" - a zero over an absent store that reads as a quiet week rather than a missing pipe.
+At the same time NO external alert channel was configured on the host (no SLACK_WEBHOOK_URL, TEAMS_WEBHOOK_URL,
+PAGERDUTY_INTEGRATION_KEY, RESEND_API_KEY or ALERT_EMAIL_TO), so a critical finding could only reach the in-app inbox
+and nothing in the product said so. GET /alerts/channels now reports the real state and the tile reads it.
+"""
+import pathlib
+
+ROOT = pathlib.Path(__file__).resolve().parents[1]
+ROUTES = ROOT / "apps/api/gds_api/alerts/routes.py"
+ADAPTER = ROOT / "apps/web/src/api/base44Client.js"
+PAGE = ROOT / "apps/web/src/pages/dashboards/AlertsNotificationsPage.jsx"
+
+
+def test_the_route_reports_every_channel_and_its_requirement():
+    src = ROUTES.read_text()
+    assert 'router.get("/channels")' in src, "the channel-state route is gone"
+    for channel in ("in_app", "email", "slack", "teams", "pagerduty"):
+        assert f'"channel": "{channel}"' in src, f"{channel} is no longer reported"
+    assert "external_configured" in src
+    # the note must state the in-app-only case rather than staying silent
+    assert "reaches the in-app inbox only" in src
+
+
+def test_the_page_reads_the_route_and_no_longer_claims_dispatches():
+    src = PAGE.read_text()
+    assert "Notifications Dispatched" not in src, "the page still counts an absent dispatch store"
+    assert "External alert channels" in src
+    assert "in-app inbox only" in src
+    assert "alertChannels()" in src
+
+
+def test_the_adapter_exposes_the_channel_state():
+    src = ADAPTER.read_text()
+    assert "alertChannels:" in src and "/alerts/channels" in src

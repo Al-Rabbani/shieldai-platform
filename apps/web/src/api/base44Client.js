@@ -918,6 +918,9 @@ export const base44 = {
      * roughly $0.07 measured, takes 30-60s, and streams nothing. */
     orchestrateMission: (goal, options = {}) =>
       request('/copilot/mission/orchestrate', { method: 'POST', body: { goal, allow_writes: !!options.allow_writes } }),
+    /* Which alert channels are actually configured. A critical finding can reach the in-app inbox only when
+     * no external channel is set, and the Alerts page must say so rather than draw a zero. */
+    alertChannels: () => request('/alerts/channels'),
     scheduler: () => request('/copilot/scheduler'),
     pauseSchedule: (name) => request(`/copilot/scheduler/${encodeURIComponent(name)}/pause`, { method: 'POST', body: {} }),
     resumeSchedule: (name) => request(`/copilot/scheduler/${encodeURIComponent(name)}/resume`, { method: 'POST', body: {} }),

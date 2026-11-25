@@ -107,6 +107,64 @@ async def create_rule(
     }
 
 
+@router.get("/channels")
+async def alert_channels(
+    user: CurrentUser = Depends(get_current_user),
+) -> dict[str, Any]:
+    """Which alert channels are actually configured on this host.
+
+    MEASURED 25 Nov 2026: none of the external ones were. alerts/dispatch.py can post to Slack, Teams, PagerDuty and
+    Resend, but every credential it needs was unset, so a critical finding could only reach the in-app inbox. Nothing
+    in the product said so, and the Alerts page rendered "0 dispatched / 0 delivered" from a NotificationDispatch
+    store that does not exist - a zero that read as a quiet week rather than a missing pipe.
+    """
+    import os
+
+    channels = [
+        {
+            "channel": "in_app",
+            "configured": True,
+            "needs": "nothing",
+            "note": "Written to the notifications table and read at /notifications.",
+        },
+        {
+            "channel": "email",
+            "configured": bool(os.environ.get("RESEND_API_KEY") and os.environ.get("ALERT_EMAIL_TO")),
+            "needs": "RESEND_API_KEY and ALERT_EMAIL_TO",
+            "note": "Sent through Resend from alerts@globaldigitalstreams.com.",
+        },
+        {
+            "channel": "slack",
+            "configured": bool(os.environ.get("SLACK_WEBHOOK_URL")),
+            "needs": "SLACK_WEBHOOK_URL",
+            "note": "An incoming-webhook URL for one channel.",
+        },
+        {
+            "channel": "teams",
+            "configured": bool(os.environ.get("TEAMS_WEBHOOK_URL")),
+            "needs": "TEAMS_WEBHOOK_URL",
+            "note": "A Microsoft Teams incoming-webhook URL.",
+        },
+        {
+            "channel": "pagerduty",
+            "configured": bool(os.environ.get("PAGERDUTY_INTEGRATION_KEY")),
+            "needs": "PAGERDUTY_INTEGRATION_KEY",
+            "note": "An Events API v2 integration key.",
+        },
+    ]
+    external = [c["channel"] for c in channels if c["configured"] and c["channel"] != "in_app"]
+    return {
+        "channels": channels,
+        "external_configured": external,
+        "reachable_by_a_human_outside_the_product": bool(external),
+        "note": (
+            "No external channel is configured, so an alert reaches the in-app inbox only."
+            if not external
+            else "External delivery is configured for: " + ", ".join(external) + "."
+        ),
+    }
+
+
 @router.get("/rules")
 async def list_rules(
     entity_type: str | None = None,

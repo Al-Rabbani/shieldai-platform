@@ -6,6 +6,7 @@ import { Bell, AlertTriangle, ArrowUp, Settings } from "lucide-react";
 export default function AlertsNotificationsPage() {
   const [rules, setRules] = useState([]);
   const [dispatches, setDispatches] = useState([]);
+  const [channels, setChannels] = useState(null);
   const [escalations, setEscalations] = useState([]);
   const [prefs, setPrefs] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -14,10 +15,12 @@ export default function AlertsNotificationsPage() {
     Promise.all([
       base44.entities.AlertRule.list().catch(() => []),
       base44.entities.NotificationDispatch.list("-sent_at", 20).catch(() => []),
+      base44.platform.alertChannels().catch(() => null),
       base44.entities.EscalationPolicy.list().catch(() => []),
       base44.entities.NotificationPreference.list().catch(() => []),
-    ]).then(([r, d, e, p]) => {
-      setRules(r); setDispatches(d); setEscalations(e); setPrefs(p); setLoading(false);
+      base44.platform.alertChannels().catch(() => null),
+    ]).then(([r, d, e, p, ch]) => {
+      setRules(r); setDispatches(d); setEscalations(e); setPrefs(p); setChannels(ch); setLoading(false);
     });
   }, []);
 
@@ -30,7 +33,7 @@ export default function AlertsNotificationsPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatTile icon={Bell} label="Alert Rules" value={rules.length} sublabel={`${activeRules} active`} accent="#3b82f6" />
         <StatTile icon={AlertTriangle} label="Active Rules" value={activeRules} sublabel={`${rules.length - activeRules} disabled`} accent="#10b981" />
-        <StatTile icon={ArrowUp} label="Notifications Dispatched" value={dispatches.length} sublabel={`${dispatches.filter(d => d.status === "delivered").length} delivered`} accent="#f59e0b" />
+        <StatTile icon={ArrowUp} label="External alert channels" value={channels ? channels.external_configured.length : "\u2014"} sublabel={channels ? (channels.external_configured.length === 0 ? "in-app inbox only" : channels.external_configured.join(", ")) : "not measured"} accent="#f59e0b" />
         <StatTile icon={Settings} label="Escalation Policies" value={escalations.length} sublabel={`${escalations.filter(e => e.is_active).length} active`} accent="#8b5cf6" />
       </div>
 
@@ -61,7 +64,7 @@ export default function AlertsNotificationsPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <SectionCard title="Recent Notifications">
-          {dispatches.length === 0 ? <EmptyState message="No notifications dispatched" /> : (
+          {dispatches.length === 0 ? <EmptyState message="There is no dispatch store on this platform, so nothing here records a delivery. An alert that fires reaches the in-app inbox at /notifications." /> : (
             <div className="space-y-2">
               {dispatches.map(d => (
                 <div key={d.id} className="rounded-lg p-3 flex items-start gap-3" style={{ background: "#0a0f1e", border: "1px solid #1F2937" }}>
