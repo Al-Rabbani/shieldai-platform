@@ -544,3 +544,39 @@ STATE AFTER THIS PASS: 26 roles, 77 tools, 70 capabilities, every operational ca
 all nine new tools are registered, risk-tagged and described to the model, 1,363 tests pass with 24 skipped, health
 200. 25 of 26 roles hold an executed governed receipt; only exploitation_specialist remains (RED, sqlmap, needs an
 approval and an injection-capable target).
+
+## All 26 roles now hold an executed receipt, and six scanners were calling the wrong parameter — 563cb09
+
+Owner instruction: proceed to the next item. Three gaps were open: engineering.commit never exercised, two roles
+(attack_surface_recon, exploitation_specialist) with no executed receipt, and no way to close them.
+
+THE REAL DEFECT WAS IN THE CONTRACT, NOT THE TOOLS. My first governed calls failed with "domain required" and
+"url required" while the reasoning schema for both tools declares `target`. So I scanned every tool: for each
+tool with a schema, does the handler actually read each declared required parameter? SIX OF TWELVE SECURITY
+SCANNERS DID NOT - semgrep_scan (reads path), sqlmap_scan (url), subfinder_scan (domain), ffuf_scan (url),
+gobuster_scan (url), wpscan_scan (url). A model following its own schema would have failed 100% of the time, and
+so would any campaign stage that passed `target`. The tools were fine; the promise was wrong. All six now read
+`target` first and keep their native key as a fallback, and tests/test_tool_schema_matches_handler.py fails the
+build if a declared required parameter is ever unread again. Mismatches: 6 -> 0.
+
+PROVED WITH REAL WORK ON THE AUTHORISED ESTATE (www.globaldigitalsecurity.io):
+  * attack_surface_recon ran subfinder_scan and httpx_probe.
+  * exploitation_specialist ran sqlmap_scan (R4, approval granted then retried on the same mission) and returned
+    the real sqlmap 1.10.7 banner and verdict.
+  * engineering.commit WAS EXERCISED AGAINST A REAL COMMIT: repository_write_file wrote
+    docs/governed-commit-proof.txt (created=True), then engineering_commit committed through governance and
+    returned sha 563cb09f7ec1cee5eb4acdffcb9f348c2b32857b, which git log confirms as 563cb09.
+RESULT: 26 of 26 roles hold an executed governed receipt in 24h (was 25), and 1,365 tests pass.
+
+A SILENT-ZERO I CAUGHT IN MY OWN PROOF. subfinder returned success=True with an empty list and 592 stderr lines.
+It had genuinely run for 19.6 seconds and found nothing - because I asked it to enumerate subdomains OF
+www.globaldigitalsecurity.io. Enumerating the registrable root returned app, www and api. An empty list reads as
+"no subdomains exist", which is the same silent-zero class as the nuclei -json and nikto JSON bugs. subfinder_scan
+now derives the registrable root (handling co.uk-style suffixes), records enumerated_scope and scope_widened, and
+when it finds nothing says explicitly that the sources had nothing to report rather than implying absence. Proved
+live: target www.globaldigitalsecurity.io -> scope globaldigitalsecurity.io, widened=True, count=3, returning
+api./app./www.
+
+STILL OPEN AND HONEST: cloud.apply_remediation has never changed anything because the credential is read-only, so
+it returns the real AccessDenied; a write-capable IAM role is needed before that capability is more than a
+truthful refusal.

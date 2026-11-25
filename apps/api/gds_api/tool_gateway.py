@@ -237,25 +237,67 @@ async def _masscan_scan(params: dict) -> dict:
     return result
 
 
+def _registrable_root(host: str) -> str:
+    """The registrable root of a host, so enumeration runs at the right scope.
+
+    Measured 25 Nov 2026: subfinder_scan("www.globaldigitalsecurity.io") returned an empty list while the
+    root domain returned app/www/api. An empty list reads as "no subdomains exist", which is the silent-zero
+    trap; the scope was simply too narrow.
+    """
+    h = host.strip().lower()
+    for prefix in ("https://", "http://"):
+        if h.startswith(prefix):
+            h = h[len(prefix):]
+    h = h.split("/")[0].split(":")[0]
+    labels = [x for x in h.split(".") if x]
+    two_part = {"co.uk", "org.uk", "ac.uk", "gov.uk", "com.au", "co.za", "com.br", "co.nz", "co.in"}
+    if len(labels) >= 3 and ".".join(labels[-2:]) in two_part:
+        return ".".join(labels[-3:])
+    if len(labels) >= 2:
+        return ".".join(labels[-2:])
+    return h
+
+
 async def _subfinder_scan(params: dict) -> dict:
-    """Run subfinder. params: domain."""
+    """Passive subdomain enumeration, run at the registrable root so the scope is never too narrow."""
+    import asyncio as _asyncio
+    import os as _os
+    import shutil as _shutil
+
     domain = params.get("target") or params.get("domain") or ""
     if not domain:
         return {"success": False, "error": "target required (a domain)"}
-    
-    cmd = [_find_tool("subfinder"), "-d", domain, "-json"]
-    result = await _run_tool(cmd, timeout=300)
-    subdomains = []
-    for line in result["stdout"].split("\n"):
-        if line.strip().startswith("{"):
-            try:
-                data = json.loads(line)
-                subdomains.append(data.get("host", ""))
-            except:
-                pass
-    result["subdomains"] = subdomains
-    result["tool"] = "subfinder"
-    return result
+    root = _registrable_root(domain)
+    binary = _shutil.which("subfinder") or "/opt/tools/bin/subfinder"
+    if not _os.path.exists(binary):
+        return {"success": False, "error": "subfinder is not installed on this host"}
+    try:
+        proc = await _asyncio.create_subprocess_exec(
+            binary, "-d", root, "-silent",
+            stdout=_asyncio.subprocess.PIPE, stderr=_asyncio.subprocess.PIPE,
+        )
+        out, err = await _asyncio.wait_for(proc.communicate(), timeout=180)
+    except Exception as exc:  # noqa: BLE001
+        return {"success": False, "error": f"subfinder could not run: {type(exc).__name__}"}
+    text_out = out.decode("utf-8", "replace")
+    subs = [ln.strip() for ln in text_out.splitlines() if ln.strip()]
+    stderr_text = err.decode("utf-8", "replace")
+    note = None
+    if not subs:
+        note = (f"passive sources returned no subdomains for {root}. An empty result means the sources had "
+                f"nothing to report, not that none exist; a keyed provider or an active scan is needed for more")
+    return {
+        "success": True,
+        "tool": "subfinder",
+        "target": domain,
+        "enumerated_scope": root,
+        "scope_widened": root != domain.lower().strip(),
+        "subdomains": subs,
+        "count": len(subs),
+        "note": note,
+        "exit_code": proc.returncode,
+        "stderr_tail": stderr_text[-400:],
+    }
 
 
 async def _httpx_probe(params: dict) -> dict:
