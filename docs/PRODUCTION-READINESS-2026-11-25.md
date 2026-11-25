@@ -516,3 +516,31 @@ TWO REAL OPERATIONAL FINDINGS FOR THE OWNER, neither a test failure:
   * requirements.txt pins torch==2.14.1+cpu, which is not resolvable from PyPI without the PyTorch CPU index,
     so pip-audit cannot audit the pinned set at all ("No matching distribution found"). Deploys work because
     installs handle it separately, but any tooling that resolves requirements.txt directly will fail.
+
+## The four tests my own change broke, and what each one was really telling me — 6de567c
+
+Adding nine tools and three roles turned four tests red. None was noise; three exposed a real defect.
+
+1. test_capability_tool_registration PARSES THE SOURCE, it does not import it. It reads the TOOL_REGISTRY dict
+   LITERAL with ast, so the nine tools I had appended via TOOL_REGISTRY.update() at the end of the module were
+   invisible to it. The test was right and my registration style was wrong: a tool that exists only through a
+   runtime update cannot be statically verified before deploy. The nine now live inside the literal.
+2. test_governed_tool_reach found the genuinely important one: THE REASONING MODEL HAD NO SCHEMA FOR ANY OF THE
+   NINE. Agents owned them, the broker could authorise them, and the model could never have called one, because
+   gds_api/reasoning/tool_definitions.py had no function definition for them. Nine real OpenAI-format schemas
+   added (name, description, parameters with enums and required fields). Undescribed reachable tools back to 32.
+3. test_fleet_assessment raised KeyError 'attack_surface_recon': bridge/fleet_assessment.assessment_plan indexes
+   MISSION_CONTRACTS[agent_id] directly, and the three new roles had no contract, so the fleet assessment would
+   have crashed in production for any caller. Contracts added for vulnerability_assessment, attack_surface_recon
+   and exploitation_specialist.
+4. Two frozen numbers (len(AGENT_REGISTRY)==23, len(assessment_plan())==23) were replaced with the structural
+   intent: at least 26 roles, and one plan row per registered agent.
+
+A MISTAKE I MADE AND REPAIRED: my first patch script wrote tool_definitions.py BEFORE parsing it, so a block with a
+missing comma went to disk and broke the module import. Caught by running the tests immediately, located with
+git diff against the last good commit (the element before my block ended without a comma), fixed, re-parsed.
+
+STATE AFTER THIS PASS: 26 roles, 77 tools, 70 capabilities, every operational capability has a tool and an owner,
+all nine new tools are registered, risk-tagged and described to the model, 1,363 tests pass with 24 skipped, health
+200. 25 of 26 roles hold an executed governed receipt; only exploitation_specialist remains (RED, sqlmap, needs an
+approval and an injection-capable target).
