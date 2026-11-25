@@ -858,7 +858,7 @@ carrying a report** - so none had ever completed. Nothing swept them: the route 
 counterpart that closes it when the caller dies, the process restarts mid-run, or a script executes a tool
 without closing the mission it opened.
 
-BUILT: `gds_api/reasoning/mission_reaper.py` plus `POST /reasoning/missions/reap`, scheduled every 30 minutes in
+BUILT: `gds_api/reasoning/mission_reaper.py`, scheduled every 30 minutes in
 `config/cron/root.crontab` (the source of truth). It closes only what is provably abandoned: status `running`,
 older than the threshold, and with NO report, so a mission that recorded an outcome but stayed running is left
 alone to be seen rather than silently buried. Each closed mission records why, distinguishably from a real
@@ -874,3 +874,10 @@ PROVED LIVE: dry run at a 60-minute threshold reported 67 candidates and closed 
 `running` fell from 73 to 6, which are the missions younger than the threshold and were correctly left alone. A
 reaped mission was then read back and carries the reason. Four guards in `tests/test_reaper.py`, including that
 the function is definer-owned and not executable by PUBLIC.
+
+NO HTTP ROUTE, DELIBERATELY. My first version exposed `POST /reasoning/missions/reap` so the sweep was
+"reachable". That was wrong twice: the catalogue has `missions:create` and `missions:read` and no
+`missions:write`, and more importantly the sweep closes missions across EVERY tenant, so any authenticated
+tenant user could have triggered a destructive cross-tenant maintenance action. It is a scheduled job and it
+stays one; the route was removed and the four tests that had started failing at collection (they import the
+route module) went green again.
