@@ -638,3 +638,50 @@ the real AccessDenied; it needs a write-capable IAM role. pip check reports semg
 opentelemetry-api, pyjwt, wcmatch) conflicting with the platform's newer versions; semgrep 1.187.0 runs fine
 as a CLI (2 real findings on a test file), so this is cosmetic today but would matter if semgrep were ever
 imported rather than executed.
+
+## Approvals that can actually be reused, and one authorisation gap closed — 25 Nov 2026
+
+The five-stage campaign could not run unattended past any approval-gated stage. Two separate defects, one of
+them a security hole, sat behind that.
+
+THE SECURITY HOLE: the reuse query matched tenant, capability and tool but NOT the target or the requesting
+agent. An approval granted for one host could therefore be reused for another: reevaluate_capability_request
+would re-check the OLD target while the wrapper executed the caller's NEW one. Reuse is now bound to
+`cr.requesting_agent_id IS NOT DISTINCT FROM :agent` and `cr.target_reference IS NOT DISTINCT FROM :tref`.
+Proved live: an approved scan of www.globaldigitalsecurity.io is still refused for
+app.globaldigitalsecurity.io, which requires its own approval.
+
+THE BLOCKER: reuse was pinned to `cr.mission_id = :mid`, so an approval could only ever be consumed by the
+mission that minted it. Every new campaign minted fresh requests, and the 33 approved approvals already in the
+table were unreachable. Measured on the way through, in order, each one a real gate:
+  1. The grant script reported "No approval" for a row that existed: approvals is FORCE RLS and the script
+     bound no tenant. It now binds one, and says when it cannot see rather than implying absence.
+  2. The standing row existed but the query returned nothing: the LATERAL took the most recent decision of ANY
+     kind, and a newer decision with a NULL approval_id (a policy refusal, which needs no human approval) made
+     the inner join drop the request. It now takes the most recent decision that carries an approval.
+  3. Allowing the reuse query to return another mission's request made every run fail the execution chain's
+     binding check, because a decision is bound to the mission that executes it. FIVE separate mission checks
+     stand behind that (binding, claim, execution grant), and loosening them would have dismantled a coherent
+     invariant. So the two concerns are now separate queries: APPROVAL_REUSE_SQL stays inside one mission, and
+     STANDING_CARRY_SQL finds a live standing approval so the NEW mission gets its OWN approval, recorded with
+     `standing_source_approval_id` naming the approval that carried it.
+  4. The carry never fired because the broker leaves `approval_id` unset on an approval-gated evaluation, so the
+     approval had to be resolved from the request's own decision rows.
+  5. Then it still never fired: db.py uses NullPool, so a commit inside evaluation leaves the session on a
+     fresh unbound connection, and an unbound read of these FORCE-RLS tables returns nothing, which looks
+     exactly like "no standing approval exists". The tenant is now bound immediately before the carry read.
+
+PROVED LIVE, end to end: with a one-hour standing approval on the approved nuclei request for
+www.globaldigitalsecurity.io, a scan launched from a BRAND-NEW mission executed with no new human approval and
+returned 25 real findings (success true). The same standing approval did NOT authorise
+app.globaldigitalsecurity.io, which still answered REQUIRE_APPROVAL. The proof grant was then revoked, so no
+standing authorisation is left live.
+
+HOW TO USE IT: `scripts/ops/grant_standing.py --approval <uuid> --hours N --reason "..."` (max 720 hours,
+reason required), `--list` to see what stands, `--revoke <uuid>` to withdraw. It prints exactly the tool,
+target, agent and capability it now authorises. Every reuse still writes its own capability_decisions row, so
+each execution is recorded separately rather than hidden behind the original approval.
+
+MIGRATIONS: m085 (approvals.standing, standing_until, standing_granted_by_user_id, standing_reason + index),
+m086 (approvals.standing_source_approval_id). Tests: tests/test_standing_approvals.py (7, executing both real
+queries against real rows), plus the existing reuse test updated to the separated design. 11 pass.

@@ -24,6 +24,11 @@ import logging
 import uuid
 from datetime import UTC, datetime
 from typing import Any
+from gds_api.reasoning.approval_scope import (
+    APPROVAL_REUSE_SQL as _APPROVAL_REUSE_SQL,
+    PENDING_APPROVAL_SQL as _PENDING_APPROVAL_SQL,
+    STANDING_CARRY_SQL as _STANDING_CARRY_SQL,
+)
 
 _logger = logging.getLogger(__name__)
 
@@ -251,28 +256,9 @@ async def execute_governed_tool(
 
         reuse_request_id = (
             await session.execute(
-                _sql_text(
-                    """
-                    SELECT cr.id
-                    FROM capability_requests cr
-                    JOIN LATERAL (
-                        SELECT d.approval_id
-                        FROM capability_decisions d
-                        WHERE d.request_id = cr.id
-                        ORDER BY d.decided_at DESC
-                        LIMIT 1
-                    ) d ON TRUE
-                    JOIN approvals a ON a.id = d.approval_id
-                    WHERE cr.tenant_id = :tid
-                      AND cr.mission_id = :mid
-                      AND cr.capability_key = :ck
-                      AND cr.requested_tool_id = :tool
-                      AND a.status IN ('pending', 'approved')
-                    ORDER BY (a.status = 'approved') DESC, cr.requested_at DESC
-                    LIMIT 1
-                    """
-                ),
-                {"tid": str(tid), "mid": str(mid), "ck": capability_key, "tool": tool_name},
+                _sql_text(_APPROVAL_REUSE_SQL),
+                {"tid": str(tid), "mid": str(mid), "ck": capability_key, "tool": tool_name,
+                    "agent": requesting_agent_id, "tref": target_reference},
             )
         ).scalar()
 
@@ -296,6 +282,46 @@ async def execute_governed_tool(
                 purpose=(purpose or f"reasoning agent {agent_id} requested {tool_name}")[:200],
                 requested_parameters=payload,
             )
+        if evaluation.decision == "REQUIRE_APPROVAL":
+            _pending_approval_id = evaluation.approval_id
+            if _pending_approval_id is None:
+                # The broker leaves approval_id unset on an approval-gated evaluation, so the approval this
+                # request is waiting on has to be resolved from its own decision rows.
+                _pending_approval_id = (await session.execute(
+                    _sql_text(_PENDING_APPROVAL_SQL), {"rid": str(evaluation.request_id)}
+                )).scalar()
+            # A live standing approval covering exactly this tenant, capability, tool, agent and target
+            # authorises THIS mission's own request, so an authorised action can run unattended. Measured
+            # 25 Nov 2026: reusing the original request across missions is refused by five separate
+            # mission-bound checks (binding, claim, execution grant), and loosening them would weaken the
+            # invariant that a decision belongs to the mission that executes it. Carrying the approval
+            # forward keeps that invariant and still records a real approval per execution, naming the
+            # standing approval it came from.
+            # RLS: db.py uses NullPool, so a commit inside evaluation can leave this session on a fresh
+            # unbound connection. An unbound read of capability_requests/approvals returns nothing, which
+            # looks exactly like "no standing approval exists".
+            await bind_tenant(session, str(tid))
+            carried = (await session.execute(
+                _sql_text(_STANDING_CARRY_SQL),
+                {"tid": str(tid), "ck": capability_key, "tool": tool_name,
+                 "agent": requesting_agent_id, "tref": target_reference},
+            )).mappings().first()
+            if carried is not None and _pending_approval_id is not None:
+                await session.execute(
+                    _sql_text(
+                        "UPDATE approvals SET status = 'approved', decided_at = now(), "
+                        "decided_by_user_id = :by, standing_source_approval_id = :src "
+                        "WHERE id = :id AND status = 'pending'"
+                    ),
+                    {"id": str(_pending_approval_id), "by": carried["decided_by_user_id"],
+                     "src": str(carried["standing_approval_id"])},
+                )
+                await session.commit()
+                await bind_tenant(session, str(tid))
+                evaluation = await reevaluate_capability_request(
+                    session, tenant_id=tid, request_id=evaluation.request_id
+                )
+
         if evaluation.decision != "ALLOW":
             return {
                 "success": False,
