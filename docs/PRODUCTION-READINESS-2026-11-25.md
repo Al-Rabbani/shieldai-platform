@@ -1177,3 +1177,49 @@ recorded as high-severity acknowledgeable notifications.
 
 STILL OPEN: approval timeliness at 94.37% is a real breach and nothing fixes it by being measured. Four of 71
 approvals took longer than 24 hours, and the queue now escalates the breach rather than the individual approval.
+
+## Service levels, part 3: the approval breach was a silence, and the silence is fixed — 25 Nov 2026
+
+The approval-timeliness objective read 94.37% and I said the fix was to make the four late decisions faster. Tracing
+the rows showed the problem was not speed. All four were `expired`, not decided: critical scheduled exposure scans of
+`www.globaldigitalstreams...` that waited 24.25 to 24.94 hours and then expired, and the action they gated never ran.
+The only notification about any of them was sent by `expire_stale_approvals.py` at the 24 hour mark, to the
+**requester**, after the window had closed. Nobody holding `approvals:decide` was ever told an approval existed.
+
+That is the defect: an approval waiting for a human was invisible to every human able to answer it, until it was too
+late to matter. A faster decision is impossible if the request is never seen.
+
+WHAT WAS BUILT. `scripts/ops/approval_reminders.py`, every 15 minutes at `5,20,35,50` in `config/cron/root.crontab`
+(offset from the expiry job at `:15` so the two never race on one row). It finds pending approvals that have crossed
+12 or 20 hours of the same 24 hour window `expire_stale_approvals` uses (a test asserts the two constants agree) and
+notifies every active user in the tenant whose role actually holds `approvals:decide`, which is the permission the
+decision route itself requires. If nobody holds it, the requester is told that instead, because an approval nobody is
+able to decide is a governance defect rather than a waiting request.
+
+Two details were built to be right rather than merely present:
+- the message names the approval and the threshold but never the current age, because the pager dedupes on exact text
+  and a moving value re-pages on every tick (the SLO alerts learned that the same day);
+- the HIGHEST crossed threshold is reported, so a job that first sees a request at 21 hours does not open with "12
+  hours" and then immediately open a second reminder for 20.
+
+Notifications carry `requires_ack`, so the existing 5/15/60 escalation ladder re-delivers them. No second delivery path
+was created.
+
+PROVED LIVE: one reminder raised for a 13 hour old approval to the only user in the tenant holding
+`approvals:decide`, with an `approval.reminder` audit event naming the threshold, the age and that deciders exist; a
+second run suppressed it by exact message. 5 tests in `tests/test_approval_reminders.py`.
+
+THE OBJECTIVE STOPS BLURRING TWO FAILURES. An approval that expired undecided is counted as a failure of the promise
+AND named separately from a late decision, because "4 of 71 were late" and "4 critical requests died undecided" need
+different fixes. `late_decided` and `expired_undecided` are separate fields, the page renders both, and the basis
+states that expiries are counted rather than excluded.
+
+THE NUMBER MOVED DOWN AND THAT IS MINE TO EXPLAIN. It now reads **77.01%** (67 of 87) because 16 standing-approval
+proof requests expired today alongside the 4 real scans. They were 8.8 hours old and would have expired on their own
+within 12 hours, so expiring them brought the same measurement forward rather than changing it. They could not be
+deleted to tidy the figure: `capability_decisions` references them, which proves they were minted through the real
+governance path and are records, not fixtures.
+
+STILL OPEN: 7 approvals are pending right now, the oldest 8.3 hours, and the 12 hour reminder will reach the owner at
+about 03:30 UTC. If he does not decide, they expire at 24 hours exactly as the four did, with the difference that this
+time he was asked.
