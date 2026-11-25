@@ -366,9 +366,15 @@ async def _registry_tags(repo: str) -> dict:
             except Exception as exc:  # noqa: BLE001
                 found[name] = {"reachable": False, "error": type(exc).__name__}
                 continue
+            if resp.status_code in (401, 403):
+                # "refused" is not "absent": an authenticated registry may well carry the image.
+                found[name] = {"reachable": True, "has_image": None, "auth_required": True,
+                               "status": resp.status_code,
+                               "message": "this registry requires authentication; it could not be checked anonymously"}
+                continue
             if resp.status_code != 200 or not isinstance(body, dict):
                 found[name] = {"reachable": True, "has_image": False, "status": resp.status_code,
-                               "message": (body or {}).get("message")}
+                               "message": (body or {}).get("message") or (body or {}).get("detail")}
                 continue
             tags = body.get("results") or body.get("tags") or []
             found[name] = {
@@ -404,6 +410,23 @@ def _container_config(image: str) -> dict:
         "cmd": (data.get("Config") or {}).get("Cmd"),
         "env_count": len((data.get("Config") or {}).get("Env") or []),
     }
+
+
+def _blocker_text(repo: str, registries: dict, refused: list) -> str:
+    """Say exactly why no candidate tag could be verified. Refused is not the same as absent."""
+    parts = []
+    for name, info in registries.items():
+        if info.get("has_image") is True:
+            continue
+        if info.get("auth_required"):
+            parts.append(f"{name} requires authentication")
+        elif info.get("reachable") is False:
+            parts.append(f"{name} was unreachable ({info.get('error')})")
+        else:
+            parts.append(f"{name} has no such image ({info.get('status')})")
+    tail = ("; the running container keeps working from its local image, but the image cannot be verified as "
+            "re-pullable, which is an availability risk independent of the CVEs")
+    return f"no candidate tag could be verified for {repo}: " + "; ".join(parts) + tail
 
 
 @_tool("low", "Plan a container image upgrade from real findings, registry and container state. Applies nothing.")
@@ -462,7 +485,8 @@ async def remediation_plan_image_upgrade(params: dict) -> dict:
 
     registries = await _registry_tags(repo)
     container = _container_config(image)
-    resolvable = [k for k, v in registries.items() if v.get("has_image")]
+    resolvable = [k for k, v in registries.items() if v.get("has_image") is True]
+    refused = [k for k, v in registries.items() if v.get("auth_required")]
     newest = next((registries[k].get("newest") for k in resolvable if registries[k].get("newest")), None)
 
     commands = []
@@ -497,8 +521,5 @@ async def remediation_plan_image_upgrade(params: dict) -> dict:
         "plan_commands": commands,
         "verification": ("re-run the container scan and confirm the fixable count for this image drops to 0; "
                          "until then the finding stays open"),
-        "blocker": (None if resolvable else
-                    f"{repo} is not published on any registry this platform can reach, so an upgrade cannot be "
-                    "planned against a verified source; the image also cannot be re-pulled, which is an "
-                    "availability risk independent of the CVEs"),
+        "blocker": (None if resolvable else _blocker_text(repo, registries, refused)),
     }
