@@ -296,6 +296,27 @@ async def get_engagement(
     return await _engagement_out(db, row)
 
 
+@router.post("/engagements/{engagement_id}/execute")
+async def execute_engagement_route(
+    engagement_id: str,
+    techniques: str | None = None,
+    current_user: CurrentUser = Depends(require_permission("redteam:manage")),
+) -> dict:
+    """Run an authorised engagement. Every target is re-checked against its authorisation at run time."""
+    from gds_api.pentest.engagement_runner import execute_engagement
+
+    wanted = [t.strip() for t in techniques.split(",") if t.strip()] if techniques else None
+    result = await execute_engagement(
+        engagement_id=engagement_id,
+        tenant_id=current_user.tenant_id,
+        actor_id=current_user.user_id,
+        techniques=wanted,
+    )
+    if result.get("error"):
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, result)
+    return result
+
+
 @router.post("/engagements", response_model=EngagementOut)
 async def create_engagement(
     body: EngagementCreateRequest,

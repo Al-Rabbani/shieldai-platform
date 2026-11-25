@@ -881,3 +881,43 @@ NO HTTP ROUTE, DELIBERATELY. My first version exposed `POST /reasoning/missions/
 tenant user could have triggered a destructive cross-tenant maintenance action. It is a scheduled job and it
 stays one; the route was removed and the four tests that had started failing at collection (they import the
 route module) went green again.
+
+## The pentest engagement executes, and says what it refused — 25 Nov 2026
+
+A draft engagement was a plan nothing could run: there was no execution route at all. Engagement b11f6d34
+("Q4 2026 external surface review", techniques recon + vulnerability_scan, both hosts bound to their own
+authorisations) now runs end to end through `gds_api/pentest/engagement_runner.py` and
+`POST /red-team/engagements/{id}/execute`.
+
+THE DESIGN IS REFUSAL, NOT ENTHUSIASM:
+  * EVERY TARGET IS RE-CHECKED AT RUN TIME against `authorized_targets`: status active, `valid_from` passed,
+    `valid_until` not passed. An engagement created while a target was valid must not run after it expires. One
+    unusable target refuses the WHOLE run and names itself, because a half-run engagement is worse than none.
+  * ONLY THE TECHNIQUES THE ENGAGEMENT ALLOWS, and only ones this platform implements. A technique with no tool
+    is reported as not_run with the reason, never silently skipped and never faked.
+  * EVERY ACTION GOES THROUGH `execute_governed_tool`, so each one is a capability request with a decision and
+    an execution receipt. Nothing calls a scanner directly.
+  * THE APPROVAL RULE IS NARROW: an offensive capability demands approval, and the runner may derive that
+    approval from the engagement ONLY when the SAME human authorised both the engagement and the target. The
+    approval row still records that human as decider, with `standing_until` set to the target's own expiry, so
+    it is an auditable authorisation rather than a bypass.
+  * IT CANNOT EXPLOIT: external surface review only.
+
+THREE DEFECTS FOUND ONLY BY RUNNING IT AGAINST THE REAL ESTATE, none visible to a green suite:
+  1. ONE ROLE FOR EVERY TECHNIQUE. The first run drove all five actions through `penetration_testing_coordinator`
+     and governance answered "This agent is not authorised to request this capability" for the header check.
+     Each tool belongs to a different role (headers -> api_application_security, dns -> red_team,
+     nuclei -> vulnerability_assessment); the runner now maps tool to role and a guard asserts every planned
+     tool has an owning role.
+  2. THE AUTHORISER COLUMNS WERE NOT SELECTED, so the engagement-authorisation rule could never fire: both the
+     engagement and the target queries omitted `authorized_by_user_id`, the comparison was always false, and
+     every offensive action sat in "awaiting a human" while three approvals had already been granted.
+  3. NOTHING BOUNDED A SCANNER. A nuclei run against one target took 3.5 minutes and the first cap (240s)
+     abandoned it mid-run; there is now a per-tool cap (420s) and a hung tool is recorded as refused with
+     "did not return within Ns and was abandoned" instead of holding the engagement open.
+
+PROVED LIVE on b11f6d34, in two runs because the first abandoned the scans: recon_dns_enumeration on the app
+domain (3 real findings), security_headers_check on both hosts, then nuclei_scan on both hosts. Five governed
+actions, zero refused, engagement `completed` with a report summary that states the counts and says no
+exploitation was attempted. The standing approvals the rule created were revoked afterwards, restoring the
+zero-standing baseline. Eight guards in tests/test_engagement_runner.py.
