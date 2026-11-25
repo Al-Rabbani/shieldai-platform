@@ -2,9 +2,11 @@
 
 MEASURED 25 Nov 2026: notification_dispatches has no table, so the page's "Notifications Dispatched" tile read 0 and
 its sublabel read "0 delivered" - a zero over an absent store that reads as a quiet week rather than a missing pipe.
-At the same time NO external alert channel was configured on the host (no SLACK_WEBHOOK_URL, TEAMS_WEBHOOK_URL,
-PAGERDUTY_INTEGRATION_KEY, RESEND_API_KEY or ALERT_EMAIL_TO), so a critical finding could only reach the in-app inbox
-and nothing in the product said so. GET /alerts/channels now reports the real state and the tile reads it.
+The page also implied a delivery pipeline without reporting which channels exist. CORRECTION (25 Nov 2026): my first
+measurement said no external channel was configured; that was wrong. Grepping /opt/.env from a loop reported all five
+unset, while the SERVING PROCESS has RESEND_API_KEY, SLACK_WEBHOOK_URL and ALERT_EMAIL_TO set and GET /alerts/channels
+reports email and slack as configured. Teams and PagerDuty are genuinely unset. Read the process environment
+(/proc/<pid>/environ), not a grep of the env file, before claiming a channel is missing. GET /alerts/channels now reports the real state and the tile reads it.
 """
 import pathlib
 

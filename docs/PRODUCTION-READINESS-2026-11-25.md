@@ -40,6 +40,12 @@ Every line below was measured against the live platform. Releases are the `GDS_R
    was transcoded to webm/opus — what `MediaRecorder` actually sends — and transcribed back word for word
    (whisper-1, $0.000465). The remaining unknown is hardware, not code.
 
+6. **Alert delivery is configured but has never been proved to deliver.** `GET /alerts/channels` (added 25 Nov)
+   reports what the serving process actually has: **email and Slack configured** (`RESEND_API_KEY`,
+   `SLACK_WEBHOOK_URL`, `ALERT_EMAIL_TO` are set), Teams and PagerDuty not configured. No delivery has ever been
+   recorded — `notification_dispatches` has no table, so nothing records an attempt. The next step is one deliberate
+   alert delivered to a real channel and recorded, not another status endpoint.
+
 Closed since the list above was written: the neutralised probe account was purged (5 test missions and their
 children, deepest-first); `invoice.payment_succeeded` proved; the webm/opus voice leg proved; the MFA break-glass
 built.
