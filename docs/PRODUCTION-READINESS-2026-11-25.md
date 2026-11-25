@@ -958,3 +958,27 @@ That is luck, not design: a reordering would have silently substituted the weake
 governance action, and the two definitions already disagreed in the OpenAPI document. The duplicate is removed
 and the removal is commented in place; `list_approvals` on that router is untouched. The duplicate operation-id
 warning is gone and the live route is the gated one.
+
+## The last four skips are closed — the claim guarantee is now exercised — 25 Nov 2026
+
+After the gate was given its environment, four tests still skipped: the execution-claim tests in
+`tests/integration/test_execution_claim_postgres.py`, which need an ISOLATED PostgreSQL URL. They are not
+decoration. They are the only tests that prove a capability request can be executed exactly once under
+contention: twenty concurrent decisions claim one request, nineteen are refused `execution_already_claimed`, a
+new decision cannot replay a prior execution in any terminal state, a wrong tenant cannot claim and the right one
+then can, and a decision cannot be substituted between requests.
+
+WHAT WAS BUILT: a disposable database `gds_claim_test` (owner `gds`) and `/opt/.env.test` (mode 600) holding one
+key, `GDS_TEST_DATABASE_URL`, derived from the production DSN with the async driver named and only the database
+replaced, so no password was written anywhere new. `tests/conftest.py` loads that file AFTER `/opt/.env` and
+only via `setdefault`, so the production environment never carries a test-only setting, and a host without the
+file keeps the honest skip instead of erroring.
+
+WHY THIS IS SAFE: the tests create a uniquely named schema (`gds_claim_test_<uuid>`) inside that database, build
+only `capability_requests` and `capability_decisions` in it, extract the real `_claim_execution` function from
+`gateway.py` by AST, and drop the schema with CASCADE afterwards. They cannot see or touch a production table.
+
+RESULT: 4 passed in 1.42s, and the full suite is now **1438 passed, 0 skipped** — the first time this platform's
+gate has run without skipping anything. Every skip reason recorded across this build (tenant isolation, password
+storage, provider discovery, the authenticated stream, the MSSP guard, target authorisation, table isolation and
+now claim contention) has been closed by supplying what the test actually needed, never by deleting the test.

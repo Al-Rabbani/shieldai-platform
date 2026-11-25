@@ -37,6 +37,21 @@ def _load_host_environment() -> None:
         key, _, value = line.partition("=")
         os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
 
+    # Test-only settings live in a separate file so the production environment never carries them. The one
+    # user today is GDS_TEST_DATABASE_URL, which points at a disposable database: the execution-claim tests
+    # create a unique schema there and drop it, so nothing can touch production tables. Absent file means the
+    # four contention tests keep their honest skip.
+    try:
+        raw = pathlib.Path("/opt/.env.test").read_text()
+    except OSError:
+        return
+    for line in raw.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
+
 
 _load_host_environment()
 
