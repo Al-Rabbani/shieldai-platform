@@ -157,3 +157,57 @@ mission, no transcript is kept, and one tenant only.
 
 `tests/test_standing_memory.py` (4 tests) drives the route with a fake bridge and pins the count, the zero case, the
 failure being carried rather than hidden, and the original goal surviving the prefix.
+
+## Agents connected, alive, and proved to execute — 2026-11-25, releases e30b9ce + 0f9e37f
+
+THE CLAIM: agents were registered but none was alive, and they could not use their tools.
+
+WHAT WAS TRUE. `agent_heartbeats` held exactly ONE row, for `blue_team`, observed 18 Nov 16:14. Nothing ever beat, so
+`/agents/fleet/status` reported `unknown` for 22 of 23 roles. That is not a broken agent; it is an unobservable one,
+and an agent that cannot be observed alive cannot be operated.
+
+WHAT WAS NOT TRUE. The wiring was already complete: all 38 agent-to-tool pairs resolve to a declared capability
+(measured, zero dead ends) and all 21 tool names the model is shown map to real registry functions through
+TOOL_NAME_MAP. Three tools were genuinely broken and are fixed: semgrep was absent (now 1.187.0), sqlmap could not
+start because its shebang wants `python` (now 1.10.7), masscan could not load libpcap (repaired). All twelve
+binaries now run.
+
+CORRECTION TO MY OWN MEASUREMENT. I first reported "7 of 12 binaries missing". That was wrong: nuclei, subfinder,
+httpx, gobuster and sqlmap were already in `/opt/tools/bin`, which is the FIRST directory tool_gateway._find_tool
+checks; my `command -v` simply did not look there. I also reported HEARTBEAT_SIGNING_KEY unset; it was set, and I had
+grepped the wrong variable name. Both were measurement errors, not platform faults.
+
+BUILT — LIVENESS. `scripts/ops/agent_heartbeat.py` beats a signed heartbeat for every registered role. The health
+signal is DERIVED, never hardcoded: for each role it resolves every declared tool and checks that any binary the tool
+shells out to actually exists, reporting `ok` only when all of that holds and `degraded` with the exact reason
+otherwise. It records through the platform's own `agent_heartbeats.ingest`, so the HMAC, tenant key, replay
+protection and digest are the real ones. Scheduled in `config/cron/root.crontab` every 2 minutes because
+FRESH_WITHIN_SECONDS is 180. Proved: 23/23 roles beat, 0 degraded, beat age 1m47s inside the fresh window, 23
+distinct agents.
+
+BUILT — THE DEFECT THAT MADE TARGETED TOOLS UNREACHABLE. `execute_governed_tool` passed `target_type=None` and
+`target_reference=None` unconditionally. The broker validates the type against the capability's declared
+`target_types`, so EVERY capability with a target was refused with "The requested target type is not valid for this
+capability": port inventory, vulnerability scan, headers check and DAST were unreachable from any agent, leaving only
+non-targeted reads such as list_open_findings. The gate was correct; the caller never supplied a target. Fixed with
+`_derive_target()`, which reads the target from the tool's own arguments, reduces a URL to its host so it matches the
+AuthorizedTarget row, and only chooses a type the capability actually declares (it will not coerce a URL into an IP).
+8 tests in tests/test_target_derivation.py.
+
+PROVED LIVE AFTER THE FIX, all through the governed path with real receipts:
+  * `network_security` -> `port_inventory_scan` on www.globaldigitalsecurity.io: real nmap 7.80, host up, 8 closed
+    ports, rDNS srv1869692.hstgr.cloud.
+  * `api_application_security` -> `check_url_security_headers`: real HTTP check, score 5/5, live HSTS, CSP, XFO,
+    XCTO and Referrer-Policy.
+  * `blue_team` -> `list_open_findings`: 847 open (330 high, 511 medium, 2 low, 4 info, 0 critical).
+  * `blue_team` -> `triage_finding` refused with an honest argument error (needs the integer finding id), which is
+    input validation working, not a defect.
+
+RESULT. Fleet status went from 5 online / 18 degraded / 0 unknown to **7 online / 16 degraded / 0 unknown**, with
+executed receipts now covering vulnerability_management 72, threat_hunting 13, network_security 5,
+executive_advisor 4, risk_business_intelligence 2, blue_team 1, api_application_security 1.
+
+STILL OPEN, STATED PLAINLY. The 16 remaining roles are degraded because they have done no governed work in 24 hours;
+the mechanism is now proved, so each needs real work routed to it. `app.globaldigitalsecurity.io` is a REVOKED
+AuthorizedTarget (www.globaldigitalsecurity.io is the active one), so checks against the app hostname are refused
+until the owner re-authorises it; that is a security decision, not a bug to flip.
