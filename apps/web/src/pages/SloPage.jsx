@@ -65,6 +65,9 @@ function DetailRow({ objective }) {
     if (detail.internal_runs_excluded) {
       bits.push(`${detail.internal_runs_excluded} internal proof or stage runs, excluded`);
     }
+    Object.entries(detail.non_taxonomy_runs_by_type || {}).forEach(([type, count]) =>
+      bits.push(`${count} ${type}, not a declared mission type, excluded`),
+    );
   } else if (objective.id === "approval_timeliness") {
     if (detail.decided !== undefined) bits.push(`${detail.decided} decided`);
     if (detail.within_threshold !== undefined) bits.push(`${detail.within_threshold} within ${detail.threshold_hours}h`);

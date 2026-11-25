@@ -1123,3 +1123,57 @@ gated on `approvals:read`, typed, ordered; and one in `gap_routes` gated only on
 Removed the duplicate and the router it left behind. Guard unchanged: `tests/test_readiness_protocols.py` still
 requires every legacy router to be gated or to resolve a tenant, and it caught the empty router this left, which is
 why the router is gone rather than emptied. No duplicate operation ids remain in openapi.
+
+## Service levels, part 2: the breach traced to its real causes, and the alert that now fires — 25 Nov 2026
+
+The first version of this item said the mission-success breach was caused by `cloud_security_assessment` failing 11
+times with "capability requires a specific agent" and `remediation_apply` recording no outcome. Tracing both was
+worth doing because one of those statements was wrong.
+
+`cloud_security_assessment`, 11 failures, all on 20 Nov between 11:15 and 11:17. The defect was real and was fixed
+the same day: `cloud/discovery.py` now attributes a console-initiated run to `requesting_agent_id="security_architecture"`
+(the agent that actually holds `cloud.discover_environment`) and handles `CancelledError`, which is a `BaseException`
+and had been leaving missions running when a client timed out. PROVED LIVE, 25 Nov 20:55: a discovery against the real
+AWS account `696616821372` returned 200, job `a1781df7`, status completed at 20:59, **144 assets discovered**. The
+family is healthy; the 11 rows are history that leaves the 7-day window on 27 Nov.
+
+`remediation_apply`, 6 failures, all on 25 Nov 15:54 to 16:16. **`remediation_apply` is not a mission type.** The
+taxonomy declares 23 and that is not one of them, and `POST /missions` already fails closed on an undeclared type
+(`validate_mission_type_known`), so no API call can create such a row. Those six came from a proof script inserting
+directly, and the reaper then closed them, correctly, for having no outcome. The reaper was not the defect. My own
+scaffolding was.
+
+THAT FINDING GENERALISED, WHICH IS THE ACTUAL FIX. Auditing the 7-day window by type showed `port_scan` (27 completed,
+3 failed) is not a declared type either. The objective now excludes any mission whose type the taxonomy does not
+declare, and names and counts every one of them in the response:
+
+| Type | Rows | Why it is out |
+|---|---|---|
+| `*_proof`, `warfare_stage` | 67 | internal verification runs and campaign stages |
+| `port_scan` | 39 | not one of the 23 declared mission types |
+| `remediation_apply` | 17 | not one of the 23 declared mission types |
+| `(untyped)` | 119 | **counted** - the column is optional and the API accepts it, so it is real work |
+
+A NULL type is deliberately NOT excluded. The column is nullable, `POST /missions` accepts it, and excluding untyped
+rows would be the quiet denominator edit this whole file exists to prevent.
+
+THE NUMBER MOVED UP, AND THAT MUST BE SAID. Mission success reads **88.24%** (120 completed, 16 failed) against
+86.19% before the exclusion, still breached against a 90% target. The scaffolding rows that left the denominator had a
+worse record than the work that stayed (38 completed against 47 outcomes), so removing them flattered the objective by
+two points while making it more honest about what it measures. Both numbers are in the record for that reason.
+
+ALERTING, WHICH WAS THE STATED OPEN ITEM. `scripts/ops/slo_check.py`, every 30 minutes in `config/cron/root.crontab`,
+calls `slo_api.build_report`, the same function the route serves, so the alert and the page cannot disagree. It is
+silent on `at_risk` and on `unmeasured` on purpose: an alert that fires inside its own target teaches people to ignore
+the channel, and turning "Prometheus was unreachable" into a page would wake somebody as if a promise had been broken.
+A breach is handed to `gds-raise-alert.py`, so delivery, the 30 minute dedupe and the 5/15/60 escalation ladder are
+the existing ones rather than a second notification path.
+
+PROVED LIVE at 21:00:33: `slo_check` measured five objectives, found two breached, and raised
+`slo_breach:mission_success` ("Mission success is 88.24% against a target of 90.0% over 7d (11
+cloud_security_assessment, 3 (untyped), 1 penetration_test, 1 vulnerability_assessment; 120 completed)") and
+`slo_breach:approval_timeliness` ("94.37% against 95.0% over 30d (67 of 71 within 24h; oldest pending 6.1h)"), both
+recorded as high-severity acknowledgeable notifications.
+
+STILL OPEN: approval timeliness at 94.37% is a real breach and nothing fixes it by being measured. Four of 71
+approvals took longer than 24 hours, and the queue now escalates the breach rather than the individual approval.

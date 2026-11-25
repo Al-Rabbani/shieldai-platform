@@ -45,3 +45,9 @@
 
 # Close missions that were opened and never finished (measured: 73 abandoned on 25 Nov 2026)
 */30 * * * * cd /opt/gds-os && PYTHONPATH=/opt/gds-os/apps/api /opt/gds-os/apps/api/venv/bin/python -c "import asyncio;from gds_api.reasoning.mission_reaper import reap_stale_missions;print(asyncio.run(reap_stale_missions()))" >> /var/log/gds/mission-reaper.log 2>&1
+
+# A service level that is breached must be said out loud, not only visible to whoever opens /slo. The checker calls
+# slo_api.build_report (the same function the route serves) and hands any breach to gds-raise-alert.py, so delivery,
+# dedupe and the 5/15/60 escalation ladder are the existing ones. Measured 25 Nov 2026: two objectives were breached
+# and nothing in the platform read them.
+*/30 * * * * cd /opt/gds-os && /opt/gds-os/apps/api/venv/bin/python scripts/ops/slo_check.py >> /var/log/gds/slo-check.log 2>&1

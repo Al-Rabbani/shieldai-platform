@@ -32,6 +32,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import text
 
 from gds_api.db import get_db
+from gds_api.mission_taxonomy import MISSION_TYPES
 from gds_api.scan_health_api import _verdict
 from gds_api.security import CurrentUser, require_permission
 
@@ -316,40 +317,58 @@ def scanner_objective(schedules: list[dict[str, Any]], last_runs: dict[str, date
 _INTERNAL_MISSION_TYPES = ("warfare_stage",)
 
 
-def _is_internal_mission(mission_type: str | None) -> bool:
-    """A run the platform started to prove something to itself, not work an operator asked for.
+def _exclusion_reason(mission_type: str | None) -> str | None:
+    """Why a mission row is not operator work, or None when it is.
 
-    Campaign stages and the `*_proof` families are scaffolding: a stage is one step of a campaign that has its own
-    record, and a proof run exists to verify a capability. Counting them would let the size of the test harness
-    decide the service level, in both directions.
+    Three kinds of row reach this table without being a mission an operator or a schedule asked for:
+
+    - campaign stages, one step of a campaign that has its own record;
+    - the `*_proof` families, runs that exist to verify a capability;
+    - any type the taxonomy does not declare. `POST /missions` already fails closed on an unknown type
+      (validate_mission_type_known), so a row like `remediation_apply` can only have been written by a script
+      inserting directly, which is scaffolding by definition.
+
+    A NULL type is NOT excluded: the column is legitimately optional and the API accepts it, so an untyped row is a
+    real mission whose type nobody recorded. Excluding it would be the kind of quiet denominator edit this file
+    exists to prevent.
     """
     if not mission_type:
-        return False
-    return mission_type.endswith("_proof") or mission_type in _INTERNAL_MISSION_TYPES
+        return None
+    if mission_type in _INTERNAL_MISSION_TYPES or mission_type.endswith("_proof"):
+        return "internal"
+    if mission_type not in MISSION_TYPES:
+        return "non_taxonomy"
+    return None
 
 
 def mission_objective(rows: list[dict[str, Any]], window_days: int = 7) -> dict[str, Any]:
     """Completed operator missions as a share of those that reached an outcome.
 
     Cancelled missions are excluded and counted: a cancellation is a decision, not an outcome the platform produced,
-    and folding it into the denominator would let cancelling failures improve the number. Internal proof runs and
-    campaign stages are excluded too, and both exclusions are named and counted in the detail so the number cannot
-    be quietly improved by reclassifying work.
+    and folding it into the denominator would let cancelling failures improve the number. Internal proof runs,
+    campaign stages and rows whose type the taxonomy does not declare are excluded too, and every exclusion is named
+    and counted in the detail so the number cannot be quietly improved by reclassifying work.
     """
     basis = (
         "Completed divided by completed plus failed, over the window, for missions an operator or schedule asked "
-        "for. Cancelled missions, internal `*_proof` runs and campaign stages are excluded and counted separately: "
-        "a cancellation is a decision, and the proof families exist to verify the platform rather than to serve a "
-        "customer."
+        "for. Cancelled missions, internal `*_proof` runs, campaign stages and rows whose type the taxonomy does "
+        "not declare are excluded and counted separately: a cancellation is a decision, the proof families exist "
+        "to verify the platform rather than to serve a customer, and an undeclared type can only come from a "
+        "direct insert."
     )
     completed = failed = cancelled = 0
     failed_by_type: dict[str, int] = {}
-    excluded_by_type: dict[str, int] = {}
+    internal_by_type: dict[str, int] = {}
+    non_taxonomy_by_type: dict[str, int] = {}
     for row in rows:
         status = (row.get("status") or "").lower()
         mission_type = row.get("mission_type") or "(untyped)"
-        if _is_internal_mission(row.get("mission_type")):
-            excluded_by_type[mission_type] = excluded_by_type.get(mission_type, 0) + 1
+        reason = _exclusion_reason(row.get("mission_type"))
+        if reason == "internal":
+            internal_by_type[mission_type] = internal_by_type.get(mission_type, 0) + 1
+            continue
+        if reason == "non_taxonomy":
+            non_taxonomy_by_type[mission_type] = non_taxonomy_by_type.get(mission_type, 0) + 1
             continue
         if status == "completed":
             completed += 1
@@ -370,8 +389,10 @@ def mission_objective(rows: list[dict[str, Any]], window_days: int = 7) -> dict[
             "failed": failed,
             "cancelled_excluded": cancelled,
             "failed_by_type": dict(sorted(failed_by_type.items(), key=lambda kv: -kv[1])),
-            "internal_runs_excluded": sum(excluded_by_type.values()),
-            "internal_runs_by_type": dict(sorted(excluded_by_type.items(), key=lambda kv: -kv[1])),
+            "internal_runs_excluded": sum(internal_by_type.values()),
+            "internal_runs_by_type": dict(sorted(internal_by_type.items(), key=lambda kv: -kv[1])),
+            "non_taxonomy_runs_excluded": sum(non_taxonomy_by_type.values()),
+            "non_taxonomy_runs_by_type": dict(sorted(non_taxonomy_by_type.items(), key=lambda kv: -kv[1])),
         },
         unmeasured_reason=reason,
     )
@@ -463,14 +484,13 @@ def overall_status(objectives: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-@router.get("")
-async def service_levels(
-    current_user: CurrentUser = Depends(require_permission("monitoring:read")),
-    db=Depends(get_db),
-) -> dict[str, Any]:
-    """The platform's service level objectives, each with its measurement, basis and status."""
-    tenant = str(current_user.tenant_id)
-    await db.execute(text("SELECT set_config('gds.tenant_id', :t, false)"), {"t": tenant})
+async def build_report(db, tenant_id: str) -> dict[str, Any]:
+    """The whole answer, from a bound session.
+
+    Factored out of the route so the cron checker measures exactly what the page shows. Two implementations of "what
+    is our service level" would drift, and the one nobody looks at would be the one alerting.
+    """
+    await db.execute(text("SELECT set_config('gds.tenant_id', :t, false)"), {"t": tenant_id})
     now = datetime.now(timezone.utc)
 
     api_objectives, measurement = await _api_objectives()
@@ -508,9 +528,68 @@ async def service_levels(
 
     return {
         "generated_at": now.isoformat(),
-        "tenant_id": tenant,
+        "tenant_id": tenant_id,
         "overall": overall_status(objectives),
         "measurement": measurement,
         "objectives": objectives,
         "blind_spots": _BLIND_SPOTS,
     }
+
+
+def breach_alerts(report: dict[str, Any]) -> list[dict[str, str]]:
+    """One alert per breached objective, or none.
+
+    Deliberately silent about `at_risk` and `unmeasured`: an alert that fires on a number still inside its target
+    teaches people to ignore the channel, and an unmeasured objective already says so on the page. A breach is the
+    only state that means "we promised something and are not delivering it".
+    """
+    alerts: list[dict[str, str]] = []
+    for objective in report.get("objectives") or []:
+        if objective.get("status") != "breached":
+            continue
+        actual = objective.get("actual")
+        unit = objective.get("unit") or ""
+        target = objective.get("target")
+        detail = objective.get("detail") or {}
+        because = []
+        if objective.get("id") == "mission_success":
+            failed = detail.get("failed_by_type") or {}
+            if failed:
+                because.append(", ".join(f"{count} {name}" for name, count in list(failed.items())[:4]))
+            if detail.get("completed") is not None:
+                because.append(f"{detail['completed']} completed")
+        elif objective.get("id") == "approval_timeliness":
+            if detail.get("decided") is not None:
+                because.append(f"{detail.get('within_threshold', 0)} of {detail['decided']} within "
+                               f"{detail.get('threshold_hours')}h")
+            if detail.get("oldest_pending_hours"):
+                because.append(f"oldest pending {detail['oldest_pending_hours']}h")
+        elif objective.get("id") == "scanner_freshness":
+            for key in ("silent", "overdue", "never_run"):
+                names = detail.get(key) or []
+                if names:
+                    because.append(f"{key.replace('_', ' ')}: {', '.join(names)}")
+        elif objective.get("id") == "api_availability":
+            if detail.get("failed_requests") is not None:
+                because.append(f"{detail['failed_requests']} of {detail.get('requests_counted')} answered 5xx")
+        elif objective.get("id") == "api_latency":
+            because.append(f"p95 {actual} {unit} against {target} {unit}")
+        suffix = f" ({'; '.join(because)})" if because else ""
+        alerts.append({
+            "type": f"slo_breach:{objective.get('id')}",
+            "severity": "high",
+            "message": (
+                f"Service level breached: {objective.get('name')} is {actual}{unit} against a target of "
+                f"{target}{unit} over {objective.get('window')}{suffix}. Measured by GET /slo."
+            ),
+        })
+    return alerts
+
+
+@router.get("")
+async def service_levels(
+    current_user: CurrentUser = Depends(require_permission("monitoring:read")),
+    db=Depends(get_db),
+) -> dict[str, Any]:
+    """The platform's service level objectives, each with its measurement, basis and status."""
+    return await build_report(db, str(current_user.tenant_id))

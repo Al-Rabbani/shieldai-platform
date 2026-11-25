@@ -17,6 +17,7 @@ from datetime import datetime, timedelta, timezone
 
 from gds_api.slo_api import (
     _objective,
+    breach_alerts,
     approval_objective,
     evaluate_higher,
     evaluate_lower,
@@ -144,8 +145,8 @@ def test_no_registered_scanners_is_unmeasured_not_a_perfect_score():
 # ------------------------------------------------------------------ mission success
 def test_mission_success_counts_completed_against_completed_plus_failed():
     rows = [
-        {"status": "completed", "mission_type": "port_scan"},
-        {"status": "completed", "mission_type": "port_scan"},
+        {"status": "completed", "mission_type": "threat_hunt"},
+        {"status": "completed", "mission_type": "threat_hunt"},
         {"status": "failed", "mission_type": "cloud_security_assessment"},
     ]
     payload = mission_objective(rows)
@@ -156,9 +157,9 @@ def test_mission_success_counts_completed_against_completed_plus_failed():
 def test_cancelled_missions_are_excluded_and_still_counted():
     """Cancelling a failing mission must not be able to improve the number, and must not vanish either."""
     rows = [
-        {"status": "completed", "mission_type": "port_scan"},
-        {"status": "failed", "mission_type": "port_scan"},
-        {"status": "cancelled", "mission_type": "port_scan"},
+        {"status": "completed", "mission_type": "threat_hunt"},
+        {"status": "failed", "mission_type": "threat_hunt"},
+        {"status": "cancelled", "mission_type": "threat_hunt"},
     ]
     payload = mission_objective(rows)
     assert payload["actual"] == 50.0
@@ -167,7 +168,7 @@ def test_cancelled_missions_are_excluded_and_still_counted():
 
 def test_internal_proof_runs_and_campaign_stages_are_excluded_and_named():
     rows = [
-        {"status": "completed", "mission_type": "port_scan"},
+        {"status": "completed", "mission_type": "threat_hunt"},
         {"status": "failed", "mission_type": "standing_proof"},
         {"status": "failed", "mission_type": "warfare_stage"},
     ]
@@ -177,8 +178,54 @@ def test_internal_proof_runs_and_campaign_stages_are_excluded_and_named():
     assert payload["detail"]["internal_runs_by_type"] == {"standing_proof": 1, "warfare_stage": 1}
 
 
+def test_a_type_the_taxonomy_does_not_declare_is_excluded_and_named():
+    """`remediation_apply` is not one of the 23 mission types, so POST /missions could never have created it: the row
+    came from a direct insert. Counting scaffolding as failed operator work is the same error as counting it as
+    completed work."""
+    rows = [
+        {"status": "completed", "mission_type": "threat_hunt"},
+        {"status": "failed", "mission_type": "remediation_apply"},
+    ]
+    payload = mission_objective(rows)
+    assert payload["actual"] == 100.0
+    assert payload["detail"]["non_taxonomy_runs_excluded"] == 1
+    assert payload["detail"]["non_taxonomy_runs_by_type"] == {"remediation_apply": 1}
+
+
+def test_an_untyped_mission_is_counted_because_the_column_is_optional():
+    """mission_type is nullable and the API accepts None, so an untyped row is real work whose type nobody recorded.
+    Excluding it would quietly improve the number."""
+    rows = [
+        {"status": "completed", "mission_type": "threat_hunt"},
+        {"status": "failed", "mission_type": None},
+    ]
+    payload = mission_objective(rows)
+    assert payload["actual"] == 50.0
+    assert payload["detail"]["failed_by_type"] == {"(untyped)": 1}
+    assert payload["detail"]["non_taxonomy_runs_excluded"] == 0
+
+
+def test_port_scan_is_not_a_declared_mission_type_so_its_rows_are_scaffolding():
+    """Measured 25 Nov 2026: `port_scan` is NOT one of the 23 mission types, so no API call can create one. The three
+    port_scan rows in the register came from scripts inserting directly."""
+    from gds_api.mission_taxonomy import MISSION_TYPES
+    from gds_api.slo_api import _exclusion_reason
+
+    assert "port_scan" not in MISSION_TYPES
+    assert _exclusion_reason("port_scan") == "non_taxonomy"
+
+
+def test_the_exclusion_list_comes_from_the_taxonomy_not_a_second_copy():
+    from gds_api.mission_taxonomy import MISSION_TYPES
+    from gds_api.slo_api import _exclusion_reason
+
+    for declared in MISSION_TYPES:
+        assert _exclusion_reason(declared) is None, declared
+    assert _exclusion_reason("not_a_mission_type") == "non_taxonomy"
+
+
 def test_mission_objective_with_no_outcome_is_unmeasured():
-    payload = mission_objective([{"status": "cancelled", "mission_type": "port_scan"}])
+    payload = mission_objective([{"status": "cancelled", "mission_type": "threat_hunt"}])
     assert payload["status"] == "unmeasured"
 
 
@@ -226,3 +273,55 @@ def test_all_met_is_met_and_anything_unmeasured_is_not_reported_as_met():
     assert overall_status([{"status": "met"}, {"status": "met"}])["status"] == "met"
     assert overall_status([{"status": "met"}, {"status": "unmeasured"}])["status"] == "unmeasured"
     assert overall_status([{"status": "at_risk"}])["status"] == "at_risk"
+
+
+# ------------------------------------------------------------------ alerting
+def _report(*objectives):
+    return {"objectives": list(objectives)}
+
+
+def test_a_breached_objective_raises_one_alert_naming_the_measurement():
+    report = _report({
+        "id": "mission_success", "name": "Mission success", "status": "breached",
+        "actual": 89.14, "unit": "%", "target": 90.0, "window": "7d",
+        "detail": {"completed": 156, "failed": 19,
+                   "failed_by_type": {"cloud_security_assessment": 11, "remediation_apply": 6}},
+    })
+    alerts = breach_alerts(report)
+    assert len(alerts) == 1
+    assert alerts[0]["type"] == "slo_breach:mission_success"
+    assert alerts[0]["severity"] == "high"
+    assert "89.14% against a target of 90.0%" in alerts[0]["message"]
+    assert "11 cloud_security_assessment" in alerts[0]["message"]
+    assert "156 completed" in alerts[0]["message"]
+
+
+def test_a_met_or_at_risk_or_unmeasured_objective_raises_nothing():
+    """An alert that fires on a number still inside its target teaches people to ignore the channel."""
+    report = _report(
+        {"id": "api_availability", "status": "met"},
+        {"id": "api_latency", "status": "at_risk"},
+        {"id": "approval_timeliness", "status": "unmeasured", "unmeasured_reason": "no decisions"},
+    )
+    assert breach_alerts(report) == []
+
+
+def test_a_silent_scanner_is_named_in_the_alert():
+    report = _report({
+        "id": "scanner_freshness", "name": "Scanner freshness", "status": "breached",
+        "actual": 71.43, "unit": "%", "target": 100.0, "window": "now",
+        "detail": {"silent": ["container_cve_watch"], "overdue": [], "never_run": []},
+    })
+    message = breach_alerts(report)[0]["message"]
+    assert "silent: container_cve_watch" in message
+
+
+def test_two_breaches_raise_two_alerts_with_distinct_types():
+    report = _report(
+        {"id": "mission_success", "name": "Mission success", "status": "breached", "actual": 1.0,
+         "unit": "%", "target": 90.0, "window": "7d", "detail": {}},
+        {"id": "approval_timeliness", "name": "Approval timeliness", "status": "breached", "actual": 2.0,
+         "unit": "%", "target": 95.0, "window": "30d", "detail": {}},
+    )
+    types = [alert["type"] for alert in breach_alerts(report)]
+    assert types == ["slo_breach:mission_success", "slo_breach:approval_timeliness"]
