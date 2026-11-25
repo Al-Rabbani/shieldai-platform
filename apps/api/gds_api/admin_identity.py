@@ -294,7 +294,7 @@ async def patch_user(
     )
     await db.commit()
 
-    refreshed = (
+    revoked = (
         await db.execute(
             text(
                 """
@@ -306,7 +306,7 @@ async def patch_user(
             {"tid": str(current_user.tenant_id), "uid": str(user_id)},
         )
     ).fetchone()
-    return UserOut(**_row(refreshed))
+    return UserOut(**_row(revoked))
 
 
 # ---------------------------------------------------------------- roles
@@ -538,13 +538,27 @@ async def revoke_api_key(
     if not existing:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "No such key in this tenant.")
 
-    await db.execute(
-        text(
-            "UPDATE api_keys SET revoked_at = coalesce(revoked_at, now()) "
-            "WHERE tenant_id = :tid AND id = :kid"
-        ),
-        {"tid": str(current_user.tenant_id), "kid": str(key_id)},
-    )
+    # RETURNING, so the response is built from the write itself. The previous version read the row back AFTER
+    # commit and that read returned nothing, so fetchone() was None and the route answered 500 for a revoke that
+    # had in fact SUCCEEDED - the key really did stop authenticating (401 immediately afterwards) and the audit row
+    # was written. MEASURED 25 Nov 2026. The mechanism is a pooled connection, not a transaction-local setting:
+    # _bind calls set_config('gds.tenant_id', :tid, false), which is session-scoped on the CONNECTION, and a
+    # statement issued after commit can land on a different pooled connection that never received the binding.
+    # api_keys is FORCE-RLS, so an unbound read sees zero rows rather than an error. Labelled as inference: what
+    # is proved is the behaviour, and the fix removes the read instead of relying on the explanation.
+    revoked = (
+        await db.execute(
+            text(
+                "UPDATE api_keys SET revoked_at = coalesce(revoked_at, now()) "
+                "WHERE tenant_id = :tid AND id = :kid "
+                "RETURNING id, name, key_prefix, coalesce(scopes, '[]'::jsonb) AS scopes, "
+                "created_at, last_used_at, revoked_at, (revoked_at IS NULL) AS is_active"
+            ),
+            {"tid": str(current_user.tenant_id), "kid": str(key_id)},
+        )
+    ).fetchone()
+    if not revoked:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No such key in this tenant.")
     await db.execute(
         text(
             """
@@ -561,19 +575,8 @@ async def revoke_api_key(
     )
     await db.commit()
 
-    refreshed = (
-        await db.execute(
-            text(
-                """
-                SELECT id, name, key_prefix, coalesce(scopes, '[]'::jsonb) AS scopes,
-                       created_at, last_used_at, revoked_at, (revoked_at IS NULL) AS is_active
-                FROM api_keys WHERE tenant_id = :tid AND id = :kid
-                """
-            ),
-            {"tid": str(current_user.tenant_id), "kid": str(key_id)},
-        )
-    ).fetchone()
-    return ApiKeyOut(**_row(refreshed))
+    # No post-commit read: the row above came from the write itself.
+    return ApiKeyOut(**_row(revoked))
 
 
 # ---------------------------------------------------------------- tenants
