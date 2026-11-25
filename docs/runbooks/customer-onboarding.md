@@ -125,10 +125,20 @@ finding register but is refused `cloud:findings:read` routes — different permi
 The session was expired and the Stripe customer deleted afterwards, so nothing was left open in the live account and
 nothing was charged.
 
-**Still unproved, and cannot be proved without a card:** the card entry itself, and the `invoice.payment_succeeded`
-delivery that a real charge produces. Prove those with one deliberate low-value transaction and an immediate refund,
-then record the result here. The `invoice.payment_succeeded` handler writes a `billing_payments` row and was not
-exercised by this run.
+### The payment handler, proved on 25 November 2026 without charging anything
+
+`invoice.payment_succeeded` had never run, because only a real charge produces it, and `billing_payments` held 0 rows.
+Rather than charge a card to test a handler, the event was **signed and posted directly**:
+
+| Step | Result |
+|---|---|
+| `POST /billing/webhook` with a signed `invoice.payment_succeeded` (`amount_paid` 39900, `currency` gbp, `metadata.tenant_id`) | `200 {"processed":true,"amount":399.0,"currency":"gbp","status":"paid"}` |
+| `billing_payments` afterwards | 1 row: `399 gbp`, correct tenant, `status=paid` |
+| Cleanup | payment, subscription, event and tenant all deleted — 0 payments, 5 tenants |
+
+**Both webhook branches are now proved.** The only step with no evidence is the card entry itself, which needs a
+person and a card: run one deliberate low-value live transaction, confirm the `billing_payments` row and the
+entitlement, then refund it.
 
 ### The defect this run found, which is why the step above matters
 
@@ -149,6 +159,17 @@ Fixed in `apps/api/gds_api/billing/webhook_signature.py`: verification is perfor
 Stripe documents, with a constant-time comparison and a 300-second replay window, and the route answers `400` only for
 a bad signature — a genuine fault now surfaces as `500`, which Stripe *does* retry. Collapsing those two into one code
 is how a transient failure silently loses a payment.
+
+## 5a. If the owner misses the MFA deadline
+
+`scripts/ops/mfa-break-glass.sh <email> [hours]` grants one account a temporary window to enrol its second factor.
+It runs the grant and its audit row in one transaction and **fails closed**: if the audit row cannot be written, the
+window is not granted. Proved on 25 November 2026 against a test account — the deadline moved and the audit row
+carries the email, hours, previous deadline and the tool that granted it.
+
+```bash
+bash scripts/ops/mfa-break-glass.sh president@globaldigitalstreams.com 1
+```
 
 ## 6. Handover checklist
 

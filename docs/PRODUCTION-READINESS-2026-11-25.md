@@ -25,9 +25,21 @@ Every line below was measured against the live platform. Releases are the `GDS_R
 
 ## Still open
 
-1. **Stripe card entry and `invoice.payment_succeeded`.** Needs one deliberate low-value live transaction and an immediate refund. Only live Stripe keys are configured, so there is no test mode to fall back on. The handler writes `billing_payments` and has never run on a real charge.
-2. **Owner MFA enrolment** — due Thursday 26 November 14:49 UTC. Owner-only.
-3. **GitHub PAT revocation** — owner-only.
-4. **Neutralised probe account** `probe-copilot@example.com`: inactive, password hash replaced, sessions removed, login returns 401. A full delete needs the `capability_requests → capability_decisions` children purged first.
-5. **35 modules still name an unserved store**, each with a recorded reason and 0 unresolved. 23 name it only (picker/dropdown), 6 already state the absence, 5 make a claim about a *served* store, 1 partly settled (`AttackVectorSimulator` derives its graph from findings; `AttackPath` has no store).
-6. **Voice is proved at the API and wired in the UI, but not exercised through the browser microphone.** A manual recording in a real browser is the last mile.
+1. **Stripe card entry.** Needs one deliberate low-value live transaction and an immediate refund. Both webhook
+   branches are proved (25 Nov: a signed `invoice.payment_succeeded` wrote a real `billing_payments` row at £399/GBP
+   and was cleaned up); only the card entry itself needs a person with a card. Only live keys are configured.
+2. **Owner MFA enrolment** — due Thursday 26 November 14:49 UTC. Owner-only: enrolling a factor he does not hold
+   would lock him out. If he misses it, `scripts/ops/mfa-break-glass.sh` grants a 1–24 hour window (built and proved
+   25 Nov, fails closed if it cannot write its audit row).
+3. **GitHub PAT revocation** — owner-only. Measured 25 Nov: the token in `/opt/.env` is **still live** (`GET
+   https://api.github.com/user` returns 200 as `AI-Rabbani000`). It is out of `.git/config`, but a classic PAT can
+   only be revoked in GitHub's settings by its owner.
+4. **35 modules still name an unserved store**, each with a recorded reason and 0 unresolved. 23 name it only
+   (picker/dropdown), 6 already state the absence, 5 make a claim about a *served* store, 1 partly settled.
+5. **Voice: the API and the browser's own format are proved, a physical microphone is not.** 25 Nov: the spoken MP3
+   was transcoded to webm/opus — what `MediaRecorder` actually sends — and transcribed back word for word
+   (whisper-1, $0.000465). The remaining unknown is hardware, not code.
+
+Closed since the list above was written: the neutralised probe account was purged (5 test missions and their
+children, deepest-first); `invoice.payment_succeeded` proved; the webm/opus voice leg proved; the MFA break-glass
+built.
