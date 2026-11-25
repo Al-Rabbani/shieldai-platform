@@ -231,7 +231,7 @@ export default function ExecutiveDashboardPage() {
       </SectionCard>
 
       <SectionCard title="Executive Insights">
-        {insights.length === 0 ? <EmptyState message="No executive insights generated" /> : (
+        {insights.length === 0 ? <EmptyState message={absentStoreReason("ExecutiveInsight")} /> : (
           <div className="space-y-2">
             {insights.map((insight) => (
               <div key={insight.id} className="rounded-lg p-3 flex items-start gap-3" style={{ background: "#0a0f1e", border: "1px solid #1F2937" }}>
@@ -251,7 +251,7 @@ export default function ExecutiveDashboardPage() {
       </SectionCard>
 
       <SectionCard title="Board Reports">
-        {reports.length === 0 ? <EmptyState message="No board reports generated" /> : (
+        {reports.length === 0 ? <EmptyState message={absentStoreReason("BoardReport")} /> : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             {reports.map((rep) => (
               <div key={rep.id} className="rounded-lg p-3" style={{ background: "#0a0f1e", border: "1px solid #1F2937" }}>

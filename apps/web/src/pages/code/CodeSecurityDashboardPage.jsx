@@ -77,6 +77,9 @@ export default function CodeSecurityDashboardPage() {
             </div>
           )}
 
+          {licenseRisks.length === 0 && (
+            <p className="text-xs text-slate-500">{absentStoreReason("LicenseRisk")}</p>
+          )}
           {licenseRisks.length > 0 && (
             <div className="rounded-xl p-3" style={{ background: "#111827", border: "1px solid #1F2937" }}>
               <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">Top License / Dependency Risks</p>

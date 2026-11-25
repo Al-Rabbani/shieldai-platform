@@ -14,16 +14,15 @@ const VERDICT_STYLE = {
 };
 
 export default function AttackVectorSimulatorPage() {
-  const [data, setData] = useState({ aiPolicies: [], authorizationPolicies: [], promptAttacks: [], jailbreakAttempts: [], findings: [], incidents: [], assets: [], dependencies: [] });
+  const [data, setData] = useState({ aiPolicies: [], promptAttacks: [], jailbreakAttempts: [], findings: [], incidents: [], assets: [], dependencies: [] });
   const [selected, setSelected] = useState("prompt_injection");
   const [selectedAssetId, setSelectedAssetId] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     (async () => {
-      const [aiPolicies, authorizationPolicies, promptAttacks, jailbreakAttempts, findings, incidents, assets, dependencies] = await Promise.all([
+      const [aiPolicies, promptAttacks, jailbreakAttempts, findings, incidents, assets, dependencies] = await Promise.all([
         base44.entities.AIPolicy.list("-created_date", 200).catch(() => []),
-        base44.entities.AuthorizationPolicy.list("-risk_score", 200).catch(() => []),
         base44.entities.PromptAttack.list("-detected_at", 300).catch(() => []),
         base44.entities.JailbreakAttempt.list("-detected_at", 300).catch(() => []),
         base44.entities.TriagedFinding.list("-detected_at", 400).catch(() => []),
@@ -33,7 +32,6 @@ export default function AttackVectorSimulatorPage() {
       ]);
       setData({
         aiPolicies: aiPolicies || [],
-        authorizationPolicies: authorizationPolicies || [],
         promptAttacks: promptAttacks || [],
         jailbreakAttempts: jailbreakAttempts || [],
         findings: findings || [],

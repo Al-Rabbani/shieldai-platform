@@ -199,3 +199,36 @@ also found two defects that no test had:
 
 **Cleanup note:** the tenant created by this run (`acme-security`) was deleted afterwards, along with its role, owner
 user and API key, so the platform is back to its real tenants only.
+
+### 5.1 Card entry proved with a real live payment, 25 Nov 2026 04:33 UTC
+
+The one step that cannot be proved without a human is the card itself. Sidique entered a real card against a
+LIVE Stripe Checkout session for £1.00 and the full production chain ran unmodified.
+
+Setup: a test price was created in live Stripe (price_1UfXqOCbzy8IofOuS9otr1mo, product prod_VgvhYhswUJ22zY,
+100 gbp recurring monthly) because the platform's own /billing/checkout only accepts the three real tiers and the
+cheapest of those is £399. A throwaway tenant (4c3066f4-178e-4cb3-b701-5823b83d5c9d) carried the metadata.
+
+Result in Stripe: checkout session cs_live_agtehivlEzOWtTTcZ7DGrxZ8KDZvQf66hy4aHEcKyEty4cfofrOeX6Drlz
+status complete, payment_status paid, amount_total 100 gbp; subscription sub_1UfXszCbzy8IofOusPFkeFKt active;
+invoice in_1UfXseCbzy8IofOuDjdc12jo paid 100 gbp; charge ch_3UfXseCbzy8IofOu0W3q3Vq0 paid.
+
+Result in the platform, with NO manual intervention: four webhook events, all livemode true and
+signature_verified true, all recorded in billing_events:
+
+- evt_1UfXt2Cbzy8IofOuPSyERAG8  checkout.session.completed
+- evt_1UfXt2Cbzy8IofOuAFGdpZfl  invoice.payment_succeeded      <- the branch that had never run on a real charge
+- evt_1UfXt2Cbzy8IofOuGhAyDdnU  customer.subscription.created
+- evt_1UfXutCbzy8IofOuK7Uot2G9  customer.subscription.deleted  (from the deliberate cancel)
+
+A real billing_payments row was written: amount_paid 1 (whole pounds, correct for 100 pence), currency gbp,
+status paid, stripe_invoice_id in_1UfXseCbzy8IofOuDjdc12jo, with live invoice_url and invoice_pdf_url. The
+tenant was promoted to plan_tier starter and subscription_status active, so entitlement followed the money.
+
+Reversal, done immediately and in that order: subscription cancelled (status canceled), then the charge refunded
+(re_3UfXseCbzy8IofOu0LiVGJZ8, status succeeded, 100 gbp, charge amount_refunded 100, refunded true), then the
+test price and product deactivated, the Stripe customer deleted, and the throwaway tenant plus its billing rows
+removed (0 payments, 0 tenants). Nothing is left running and nothing will renew.
+
+Conclusion: the payment path is proved end to end against live Stripe, including the card entry that no test
+double can substitute for. This closes the last unproved item in the billing lifecycle.

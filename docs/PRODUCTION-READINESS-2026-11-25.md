@@ -31,7 +31,7 @@ Every line below was measured against the live platform. Releases are the `GDS_R
 2. **Owner MFA enrolment** — due Thursday 26 November 14:49 UTC. Owner-only: enrolling a factor he does not hold
    would lock him out. If he misses it, `scripts/ops/mfa-break-glass.sh` grants a 1–24 hour window (built and proved
    25 Nov, fails closed if it cannot write its audit row).
-3. **GitHub PAT revocation** — owner-only. Measured 25 Nov: the token in `/opt/.env` is **still live** (`GET
+3. **GitHub PAT revocation** — ✅ CLOSED 25 Nov 04:20 UTC, verified 401. Was owner-only. Measured 25 Nov: the token in `/opt/.env` is **still live** (`GET
    https://api.github.com/user` returns 200 as `AI-Rabbani000`). It is out of `.git/config`, but a classic PAT can
    only be revoked in GitHub's settings by its owner.
 4. **35 modules still name an unserved store**, each with a recorded reason and 0 unresolved. 23 name it only
@@ -49,3 +49,60 @@ Every line below was measured against the live platform. Releases are the `GDS_R
 Closed since the list above was written: the neutralised probe account was purged (5 test missions and their
 children, deepest-first); `invoice.payment_succeeded` proved; the webm/opus voice leg proved; the MFA break-glass
 built.
+
+## GitHub PAT revocation — CLOSED 2026-11-25 04:20 UTC
+
+Revoked in the live browser while signed in as AI-Rabbani000. The account held exactly one classic token,
+"Agentic AI Security Operating System" (admin:enterprise, admin:org, delete_repo, workflow, write:packages,
+delete:packages, repo, user, project, copilot, codespace; expired 2027-08-01). Deleted via Delete ->
+"I understand, delete this token".
+
+Proof: GET api.github.com/user returns 401 "Bad credentials".
+
+Consequence, proved with `git push --dry-run`: push from the VPS now fails with "Invalid username or token.
+Password authentication is not supported for Git operations." Reads still work only because
+Al-Rabbani/shieldai-platform is a public repository, so `git ls-remote` is not proof of authentication.
+
+To restore push: either a fine-grained PAT scoped to Al-Rabbani/shieldai-platform (Contents and Pull requests
+read/write) in /opt/.env, or an SSH key on AI-Rabbani000 with the remote switched to SSH, which keeps no token
+in /opt/.env. The dead token remains a line in /opt/.env and the git credential helper still reads it.
+
+## Git push restored over SSH — CLOSED 2026-11-25 04:20 UTC
+
+The revoked PAT was the only push credential. Replaced with an SSH key rather than another token, so nothing
+that can leak sits in /opt/.env.
+
+- Key: /root/.ssh/github_gds_os (ed25519, no passphrase, comment gds-os-vps@globaldigitalsecurity.io)
+- Added to the AI-Rabbani000 account as "gds-os-vps Hostinger KVM4", SHA256:0x8xvwNS5B+EXsvKsznCsvdd5AJhx/IQb/F7+Dxzaf8
+- /root/.ssh/config pins github.com to that IdentityFile with IdentitiesOnly yes
+- Remote switched from https:// to git@github.com:Al-Rabbani/shieldai-platform.git
+- The https credential.helper that read GITHUB_TOKEN was removed
+
+Proof: `ssh -T git@github.com` returns "Hi AI-Rabbani000! You've successfully authenticated"; `git push --dry-run`
+reports `* [new branch] HEAD -> probe-auth-check` with no error, which exercises write permission.
+
+The dead GITHUB_TOKEN line was removed from /opt/.env (backup /opt/.env.bak-20261125-041449) and the API was
+restarted through supervisor (`supervisorctl restart gds-os`), because the process had loaded the old value at
+boot. After restart: pid changed, GITHUB_TOKEN absent from the process environment, /health 200, 413 paths,
+all three supervisor programs RUNNING, push still good.
+
+Note: secrets_api.py decides "configured" by env presence, so a dead token would have made the secrets page
+claim GitHub was configured. Removing it keeps that page truthful. security_gate_client.py now fails closed with
+"GitHub read credential is not configured" if it ever runs outside CI; inside GitHub Actions it gets its own
+GITHUB_TOKEN, so CI is unaffected.
+
+## Stripe card entry and invoice.payment_succeeded — CLOSED 2026-11-25 04:33 UTC
+
+Proved with a real £1.00 live payment entered by the owner, then reversed. Stripe: session complete/paid at
+100 gbp, invoice in_1UfXseCbzy8IofOuDjdc12jo paid, subscription sub_1UfXszCbzy8IofOusPFkeFKt active. Platform:
+four livemode events with signature_verified true in billing_events, including invoice.payment_succeeded
+(evt_1UfXt2Cbzy8IofOuAFGdpZfl), and a real billing_payments row (amount_paid 1 gbp, status paid, live invoice
+URL); tenant promoted to starter/active.
+
+Reversed immediately: subscription cancelled, charge refunded in full (re_3UfXseCbzy8IofOu0LiVGJZ8, succeeded,
+amount_refunded 100), test price/product deactivated, Stripe customer deleted, throwaway tenant and its billing
+rows deleted. Details in docs/runbooks/customer-onboarding.md section 5.1.
+
+Note for anyone repeating this: the platform's /billing/checkout accepts only starter/professional/enterprise,
+so the cheapest self-serve proof is £399. A £1 proof requires creating a test price directly in Stripe and
+passing the tenant in metadata, which is what was done here.

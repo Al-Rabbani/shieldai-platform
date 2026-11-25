@@ -2,7 +2,7 @@ import React from "react";
 
 export default function IncidentTimelineView({ events }) {
   if (events.length === 0) {
-    return <p className="text-sm text-slate-500">No timeline events recorded yet.</p>;
+    return <p className="text-sm text-slate-500">{absentStoreReason("IncidentTimeline")}</p>;
   }
   const sorted = [...events].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
 

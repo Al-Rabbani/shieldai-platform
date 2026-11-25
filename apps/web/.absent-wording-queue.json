@@ -57,15 +57,15 @@
     "components/settings/SlackAlertSettingsCard.jsx": "names the store only (picker, dropdown or a read whose result is not presented as a count); measured 24 Nov 2026: no absence claim in this module",
     "components/shared/AIResponseModal.jsx": "names the store only (picker, dropdown or a read whose result is not presented as a count); measured 24 Nov 2026: no absence claim in this module",
     "pages/Assets.jsx": "claim is about a SERVED store: cloud_assets holds 145 rows and 'No assets found' is the filtered-empty state (measured 24 Nov 2026)",
-    "pages/AttackVectorSimulatorPage.jsx": "PARTLY SETTLED: AttackPath has no store, but this page does not read one - it derives the graph from findings and incidents, so the sentence describes a computation result rather than a missing table. Needs a read of the graph builder before the wording is changed (measured 24 Nov 2026)",
+    "pages/AttackVectorSimulatorPage.jsx": "SETTLED 25 Nov 2026: the AuthorizationPolicy read was fetched into state and never rendered, so it is removed entirely; the graph is derived from findings, assets and dependencies.",
     "pages/BlueTeamCommandPage.jsx": "names the store only (picker, dropdown or a read whose result is not presented as a count); measured 24 Nov 2026: no absence claim in this module",
     "pages/GDSSettingsPage.jsx": "names the store only (picker, dropdown or a read whose result is not presented as a count); measured 24 Nov 2026: no absence claim in this module",
     "pages/IdentityCIEMPage.jsx": "names the store only (picker, dropdown or a read whose result is not presented as a count); measured 24 Nov 2026: no absence claim in this module",
-    "pages/IncidentResponsePage.jsx": "claim is about a SERVED store: incidents holds 2 rows; the invented task/timeline seeding that made this page fabricate history was removed 24 Nov 2026",
+    "pages/IncidentResponsePage.jsx": "CONVERTED 25 Nov 2026 via IncidentTimelineView: the timeline rendered 'No timeline events recorded yet.' for every incident because IncidentTimeline has no store; it now reads absentStoreReason('IncidentTimeline'). The page's own 'No incidents recorded.' is a SERVED store (incidents, 2 rows).",
     "pages/RedTeamCommandPage.jsx": "names the store only (picker, dropdown or a read whose result is not presented as a count); measured 24 Nov 2026: no absence claim in this module",
-    "pages/code/CodeSecurityDashboardPage.jsx": "claim is about a SERVED store: repositories holds 1 row, so 'No repositories connected yet' is a real empty state (measured 24 Nov 2026)",
+    "pages/code/CodeSecurityDashboardPage.jsx": "CONVERTED 25 Nov 2026: an empty LicenseRisk list collapsed to nothing (licenseRisks.length > 0 && ...), and silence about licence risk reads as no licence risk; the empty branch now names the absent store. 'No repositories connected yet' is a SERVED store (repositories, 1 row).",
     "pages/code/SBOMDependenciesPage.jsx": "names the store only (picker, dropdown or a read whose result is not presented as a count); measured 24 Nov 2026: no absence claim in this module",
-    "pages/dashboards/ExecutiveDashboardPage.jsx": "claim is about a SERVED store: KPI is served at /executive/kpis, so 'No KPIs configured' is a real empty state; BoardReport and ExecutiveInsight are genuinely absent and are named elsewhere on the page (measured 24 Nov 2026)",
+    "pages/dashboards/ExecutiveDashboardPage.jsx": "CONVERTED 25 Nov 2026: 'No executive insights generated' and 'No board reports generated' were empty states over ExecutiveInsight and BoardReport, neither of which has a table; both now read absentStoreReason(...). Its remaining claim (KPI) is about a SERVED store at /executive/kpis.",
     "pages/dashboards/OrganizationManagementPage.jsx": "names the store only (picker, dropdown or a read whose result is not presented as a count); measured 24 Nov 2026: no absence claim in this module",
     "pages/forensics/ForensicEvidenceVaultPage.jsx": "already states the absence in its own prose (measured 24 Nov 2026); listed only because it still names the store",
     "pages/platform/offensive/RedTeamPage.jsx": "names the store only (picker, dropdown or a read whose result is not presented as a count); measured 24 Nov 2026: no absence claim in this module",
@@ -73,6 +73,8 @@
     "pages/settings/AutoRemediationPage.jsx": "names the store only (picker, dropdown or a read whose result is not presented as a count); measured 24 Nov 2026: no absence claim in this module",
     "pages/settings/FleetScalingPage.jsx": "already states the absence in its own prose (measured 24 Nov 2026); listed only because it still names the store",
     "pages/settings/RiskScoringPage.jsx": "already states the absence in its own prose (measured 24 Nov 2026); listed only because it still names the store",
-    "pages/settings/SlaTargetsPage.jsx": "already states the absence in its own prose (measured 24 Nov 2026); listed only because it still names the store"
-  }
+    "pages/settings/SlaTargetsPage.jsx": "already states the absence in its own prose (measured 24 Nov 2026); listed only because it still names the store",
+    "components/incidents/IncidentTimelineView.jsx": "CONVERTED 25 Nov 2026: empty branch now reads absentStoreReason('IncidentTimeline') instead of asserting an empty history."
+  },
+  "closed": "25 Nov 2026: every entry carries a measured reason and no entry makes a claim about a store that has no table"
 }
