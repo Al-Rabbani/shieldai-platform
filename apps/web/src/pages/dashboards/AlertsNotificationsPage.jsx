@@ -1,3 +1,4 @@
+import { absentStoreReason } from "@/api/absentStores";
 import React, { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
 import { DashboardPage, StatTile, SectionCard, SeverityBadge, StatusBadge, LoadingSpinner, EmptyState, Tag } from "@/components/dashboards/DashboardShared";
