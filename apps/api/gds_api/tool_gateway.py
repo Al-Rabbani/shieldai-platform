@@ -664,6 +664,9 @@ async def _purge_mission_memory(params: dict) -> dict:
         params.get("mission_id"), actor_id=params.get("_actor_id")
     )
 
+from gds_api import ops_tools as _ops_tools  # noqa: F401
+
+
 # === Tool registry ===
 async def _discover_cloud_environment(payload=None, **kwargs):  # noqa: ANN001
     """Run a real cloud discovery job through the provider adapter."""
@@ -732,6 +735,15 @@ TOOL_REGISTRY = {
     "validate_finding": _validate_finding,
     "verify_evidence_integrity": _verify_evidence_integrity,
     "purge_mission_memory": _purge_mission_memory,
+    "shell_run_allowlisted": _ops_tools.shell_run_allowlisted,
+    "repository_write_file": _ops_tools.repository_write_file,
+    "engineering_commit": _ops_tools.engineering_commit,
+    "engineering_commit_mission": _ops_tools.engineering_commit_mission,
+    "cloud_read_posture": _ops_tools.cloud_read_posture,
+    "cloud_apply_remediation": _ops_tools.cloud_apply_remediation,
+    "engineering_plan_mission": _ops_tools.engineering_plan_mission,
+    "engineering_execute_session": _ops_tools.engineering_execute_session,
+    "remediation_plan_image_upgrade": _ops_tools.remediation_plan_image_upgrade,
 }
 
 
@@ -991,18 +1003,3 @@ async def execute_tool_governed(
         tenant_id=str(tenant_id),
         mission_id=str(mission_id) if mission_id else "",
     )
-
-
-# --- real tools behind the capabilities that previously had none (see gds_api/ops_tools.py) ---
-from gds_api import ops_tools as _ops_tools  # noqa: E402
-
-TOOL_REGISTRY.update({
-    "shell_run_allowlisted": _ops_tools.shell_run_allowlisted,
-    "remediation_plan_image_upgrade": _ops_tools.remediation_plan_image_upgrade,
-    "repository_write_file": _ops_tools.repository_write_file,
-    "engineering_commit": _ops_tools.engineering_commit,
-    "engineering_commit_mission": _ops_tools.engineering_commit_mission,
-    "cloud_read_posture": _ops_tools.cloud_read_posture,
-    "cloud_apply_remediation": _ops_tools.cloud_apply_remediation,
-    "engineering_plan_mission": _ops_tools.engineering_plan_mission,
-    "engineering_execute_session": _ops_tools.engineering_execute_session,})

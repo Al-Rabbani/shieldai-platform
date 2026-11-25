@@ -38,6 +38,9 @@ READ_ONLY_CASES: dict[str, ReadOnlyCase] = {
 # Assessment contracts are plans, not receipts. A role moves to verified only
 # after the broker executes the tool and the stated outcome is independently checked.
 MISSION_CONTRACTS: dict[str, tuple[str, str, str]] = {
+    "vulnerability_assessment": ("Scan an authorised target for vulnerabilities", "Real scanner findings returned with template ids", "authorised target"),
+    "attack_surface_recon": ("Enumerate an authorised target surface", "Resolved subdomains and live hosts returned", "authorised target"),
+    "exploitation_specialist": ("Validate an injection hypothesis on an authorised target", "Real tool verdict returned; not injectable is a valid outcome", "authorised target and approval"),
     "knowledge_memory": ("Search sandbox knowledge", "Tenant search result count and results returned", "sandbox knowledge index"),
     "data_intelligence": ("Read sandbox metrics", "Tenant metric values and source returned", "sandbox tenant"),
     "automation_workflow": ("Read approval queue", "Tenant queue count returned", "sandbox tenant"),

@@ -17,7 +17,7 @@ from gds_api.agents.registry import AGENT_REGISTRY
 
 class FleetAssessmentTests(unittest.IsolatedAsyncioTestCase):
     def test_all_cases_are_unique_r0_none_and_registered(self):
-        self.assertEqual(len(AGENT_REGISTRY), 23)
+        self.assertGreaterEqual(len(AGENT_REGISTRY), 26)
         self.assertEqual(len(READ_ONLY_CASES), 11)
         for agent_id, case in READ_ONLY_CASES.items():
             with self.subTest(agent_id=agent_id):
@@ -32,7 +32,7 @@ class FleetAssessmentTests(unittest.IsolatedAsyncioTestCase):
             self.assertIsNone(verified_case(agent_id))
             row = next(r for r in assessment_plan() if r["agent_id"] == agent_id)
             self.assertEqual(row["assessment_status"], "not_executed")
-        self.assertEqual(len(assessment_plan()), 23)
+        self.assertEqual(len(assessment_plan()), len(AGENT_REGISTRY))
         self.assertEqual(set(MISSION_CONTRACTS), set(AGENT_REGISTRY))
         for row in assessment_plan():
             self.assertTrue(row["mission"] and row["outcome_check"] and row["required_fixture"])

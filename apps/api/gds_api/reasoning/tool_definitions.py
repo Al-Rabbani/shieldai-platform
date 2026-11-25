@@ -387,7 +387,79 @@ _ALL_TOOL_DEFINITIONS = [
                 "required": []
             }
         }
-    }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "shell_run_allowlisted",
+            "description": 'Run one of a fixed allowlist of named operational commands on this host. There is no free-form command parameter: an action name is the only input.',
+            "parameters": {"type": "object", "properties": {"action": {"type": "string", "enum": ["disk_usage", "memory", "load", "api_service", "worker_service", "kernel_service", "supervisor_all", "git_status", "git_log", "git_branch", "python_version"], "description": "The allowlisted action to run"}}, "required": ["action"]},
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "repository_write_file",
+            "description": 'Write a file inside the allowlisted repository root. Refuses any path that escapes it. Returns the sha256 and byte count.',
+            "parameters": {"type": "object", "properties": {"path": {"type": "string", "description": "Path relative to the repository root"}, "content": {"type": "string", "description": "Full file content"}, "repo_root": {"type": "string", "description": "Optional allowlisted root"}}, "required": ["path", "content"]},
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "engineering_commit",
+            "description": 'Commit staged changes to the allowlisted repository and return the real commit sha. Refuses when nothing is staged.',
+            "parameters": {"type": "object", "properties": {"message": {"type": "string", "description": "Commit message"}, "paths": {"type": "array", "items": {"type": "string"}, "description": "Paths to stage; omit to stage everything"}}, "required": ["message"]},
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "engineering_commit_mission",
+            "description": 'Commit changes with a mission reference after verifying the mission really exists.',
+            "parameters": {"type": "object", "properties": {"mission_id": {"type": "string", "description": "Mission UUID to reference"}, "message": {"type": "string"}, "paths": {"type": "array", "items": {"type": "string"}}}, "required": ["mission_id"]},
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "engineering_plan_mission",
+            "description": 'Plan a mission through the platform orchestrator and return the real agent plan.',
+            "parameters": {"type": "object", "properties": {"goal": {"type": "string", "description": "The goal to plan for"}, "model": {"type": "string"}}, "required": ["goal"]},
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "engineering_execute_session",
+            "description": 'Execute a multi-agent mission through the platform orchestrator.',
+            "parameters": {"type": "object", "properties": {"goal": {"type": "string"}, "context": {"type": "object"}, "model": {"type": "string"}, "max_agents_parallel": {"type": "integer"}, "mission_id": {"type": "string"}}, "required": ["goal"]},
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "cloud_read_posture",
+            "description": 'Read real cloud posture: S3 bucket encryption and public access block state, per bucket.',
+            "parameters": {"type": "object", "properties": {"limit": {"type": "integer", "description": "Maximum buckets to inspect"}}},
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "cloud_apply_remediation",
+            "description": 'Apply a real, narrow cloud hardening change (S3 default encryption or public access block) and report the real AWS response, including a refusal.',
+            "parameters": {"type": "object", "properties": {"bucket": {"type": "string", "description": "S3 bucket name"}, "action": {"type": "string", "enum": ["enable_default_encryption", "block_public_access"]}}, "required": ["bucket"]},
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "remediation_plan_image_upgrade",
+            "description": 'Plan an upgrade for a container image whose fixable findings live inside the image. Reads real findings, checks the registries and the running container, and returns the exact commands. Applies nothing.',
+            "parameters": {"type": "object", "properties": {"image": {"type": "string", "description": "Image reference, e.g. minio/minio:latest"}}, "required": ["image"]},
+        }
+    },
 ]
 
 
