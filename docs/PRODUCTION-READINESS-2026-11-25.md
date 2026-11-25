@@ -348,3 +348,66 @@ fixed_version to branch and commit a fix: there are 0, and the dependency watch 
 affected. `validation_retest` needs an open finding with a pinned `pkg==version` target: the open OSV rows predate
 the current writer and store no version. Both will earn receipts the first time real work exists. Stale pending
 approvals from the failed attempts were closed so the queue reflects reality.
+
+## The Digital Warriors: two teams and a five-stage campaign that runs — 2026-11-25, releases fa96493 → 8271cab
+
+The owner asked for an offensive team and a defensive team that come together to complete cyber warfare across
+five stages: vulnerability assessment, management, remediation, incident response and penetration testing.
+
+WHAT WAS ACTUALLY MISSING WAS NOT ROLES. Measured first: 23 roles existed (5 foundation, 16 blue, 2 red) and the
+capability catalogue held 70 capabilities, but **35 capabilities had no owning role at all** - including
+network.vulnerability_scan, network.web_server_scan, network.injection_scan, network.cms_scan,
+network.content_discovery, recon.subdomain_enum, recon.http_probe, sast_scan, dast_scan, container_scan, iac_scan,
+generate_sbom, cloud.apply_remediation, every engineering.* and every repository.* capability. The scanners were
+installed, the capabilities were declared, and NO agent could request any of them. That is why vulnerability
+assessment was not automated: there was no assessment role.
+
+THE TEAM, BUILT (26 roles: 5 foundation, 17 blue, 3 red, 1 purple):
+  * vulnerability_assessment (BLUE, R3) - nuclei, nikto, container, IaC, SAST, DAST, SBOM. The role that produces
+    findings instead of only reading them.
+  * attack_surface_recon (PURPLE, R3) - subfinder, httpx, ffuf, gobuster, wpscan.
+  * exploitation_specialist (RED, R4) - sqlmap, the only role permitted to run an injection exploit.
+  * Capability extensions: devsecops gained the ten repository.* reads (it could not read the code it reviews),
+    incident_response gained credential-leak and identity-threat detection, knowledge_memory gained memory purge,
+    data_intelligence gained the clock, and defensive_remediation_autofix can now read the code it fixes.
+RESULT: **every capability that has a tool now has an owning role**. The only 9 orphans left are capabilities with
+NO TOOL AT ALL (cloud.apply_remediation, cloud.read_posture, engineering.commit/commit_mission/execute_session/
+plan_mission, repository.write, shell.run_allowlisted, shell.run_unrestricted), named in a test so the remediation
+gap stays visible instead of implying it works.
+
+THREE REGISTRY GUARDS CAUGHT REAL MISTAKES AND WERE NOT WEAKENED TO FIT:
+  * team=RED requires ceiling R4/R5. Recon tops out at R3 (its tools are "high"), so it became the PURPLE cell that
+    feeds both teams rather than being given a false ceiling.
+  * a role must declare a ceiling covering its riskiest tool: adding purge pushed knowledge_memory to R3.
+  * a role may only claim a capability if it holds ALL that capability's tools: devsecops claimed five repository
+    capabilities without their tools; the tools existed and were added.
+The app would not start until each was satisfied (three crash-loops), and tests/test_warfare_teams.py now pins the
+whole structure including "no role is decorative".
+
+SCANNER FLAGS: TWO SILENT-ZERO DEFECTS. nuclei v3.11 removed -json, so every nuclei run exited 2 with "flag
+provided but not defined: -json" and returned zero findings; the flag is now -jsonl and the parser already read
+JSONL. nikto has no json format at all (csv/htm/msf+/nbe/txt/xml only), so "-Format json" never produced findings
+and nothing parsed them; it now uses xml and the items are parsed into findings, with an unparsed scan recording
+parse_error rather than reading as clean. tests/test_scanner_flags.py pins both.
+
+THE CAMPAIGN ENGINE (gds_api/warfare/campaign.py, migration m083 + m084, routes /warfare/*). Five stages in order,
+each with the role that owns the capability and a real governed tool call:
+  1 vulnerability_assessment -> vulnerability_assessment / nuclei_scan
+  2 vulnerability_management -> vulnerability_management / list_open_findings
+  3 vulnerability_remediation -> defensive_remediation_autofix / auto_fix_finding
+  4 incident_response -> incident_response / list_open_incidents
+  5 penetration_testing -> red_team / assess_attack_surface
+Each stage gets its own mission row (governance refuses without a real mission UUID), its own stage row, and a
+status of executed / awaiting_approval / refused / skipped with a reason. A refusal or a stage with nothing to do
+never aborts the war. Campaigns are RESUMABLE: approving a gated stage and resuming re-runs it on ITS OWN mission,
+so the granted approval is consumed instead of a new request being minted.
+
+PROVED END TO END, campaign ec98116d "War Campaign 001 - external estate" against www.globaldigitalsecurity.io:
+first run executed 2 of 5 (management returned 50 findings, incident response ran) with stages 1 and 5 correctly
+awaiting approval; after the owner's standing authorization was applied, resume executed stage 1 with **25 real
+nuclei findings** (including ssh-sha1-hmac-algo, waf-detect, exposed-gitignore) and stage 5 through red_team.
+Final: 4 executed, 1 skipped (no open finding carries a fixed_version, so there is nothing to branch and fix).
+
+HONEST GAPS: stage 3 cannot execute until a real fixable finding exists; the 9 untooled capabilities mean cloud
+remediation and code commit are still not automatable; and the campaign runs the five stages in sequence, not as
+concurrent agents coordinating with each other.
