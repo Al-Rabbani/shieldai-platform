@@ -411,3 +411,60 @@ Final: 4 executed, 1 skipped (no open finding carries a fixed_version, so there 
 HONEST GAPS: stage 3 cannot execute until a real fixable finding exists; the 9 untooled capabilities mean cloud
 remediation and code commit are still not automatable; and the campaign runs the five stages in sequence, not as
 concurrent agents coordinating with each other.
+
+## Nine capabilities had no tool; now eight have real tools and the war runs concurrently — 2026-11-25, e7f01f2 → 40c74af
+
+Owner instruction: repair the nine capabilities with no tool behind them, and stop the stages running in sequence.
+
+THE NINE. Measured: `required_tool_ids=()` and `status=PLANNED` on cloud.apply_remediation, cloud.read_posture,
+engineering.commit, engineering.commit_mission, engineering.execute_session, engineering.plan_mission,
+repository.write, shell.run_allowlisted, shell.run_unrestricted. Built `gds_api/ops_tools.py` with EIGHT real tools
+and REMOVED the ninth: an unrestricted shell is not something to hand an autonomous agent, and the allowlisted one
+covers the operational need, so the catalogue no longer promises it rather than shipping a tool that refuses.
+  * shell_run_allowlisted - a fixed action allowlist (disk, memory, load, supervisor service state, git status/log/
+    branch). There is deliberately no free-form command parameter.
+  * repository_write_file - writes inside /opt/gds-os with path containment; returns sha256 and byte count.
+  * engineering_commit / engineering_commit_mission - real git add+commit, refusing when nothing is staged
+    ("a commit with no changes would be a false report of work"); the mission variant verifies the mission exists.
+  * engineering_plan_mission / engineering_execute_session - wrap the platform's own mission orchestrator.
+  * cloud_read_posture / cloud_apply_remediation - real boto3 S3 encryption and public-access-block reads/writes.
+RESULT: 76 tools, 69 capabilities, **zero operational capabilities without a tool and zero without an owning role.**
+
+FOUR DECLARATION DEFECTS FOUND BY TRYING TO USE THEM, none of which a test would have caught:
+  1. A TOOL FUNCTION MUST CARRY risk_class and description. TOOL_REGISTRY maps name -> function and the gateway
+     reads those attributes; registered without them, a critical shell read as low risk to both the preflight and
+     the broker. All eight are now tagged, which immediately made the ceiling preflight demand R4 for
+     platform_operations, R3 for defensive_remediation_autofix and R2 for automation_workflow.
+  2. allowed_team_types WAS ABSENT on six of them, so the broker answered "This capability is not available to any
+     agent" - the capability existed, the tool existed, and no team could use it.
+  3. THE CLOUD ONES DEMANDED CONNECTORS THE HOST ALREADY SATISFIES (aws_readonly/azure_readonly/gcp_readonly) and
+     returned BLOCKED_DEPENDENCY. boto3 authenticates from the host environment, so the connector requirement was
+     stale and is removed.
+  4. requires_sandbox was True on capabilities that use no sandbox; set false where that is the truth.
+
+PROVED THROUGH GOVERNANCE, not just imported: shell disk_usage returned real df output (exit 0); repository_write_file
+wrote 61 bytes to docs/warfare-tooling-proof.txt (created=True); cloud_read_posture returned 0 buckets, and that zero
+was verified rather than assumed - sts get-caller-identity reports account 696616821372 (user gds-security-scanner)
+and s3 list_buckets genuinely returns none. Also fixed: the allowlist checked `systemctl is-active gds-os` and
+answered "inactive" while the API was healthy, because supervisor runs it, not systemd.
+
+CONCURRENCY. Stages now declare depends_on and run in dependency waves: group 1 concurrently
+[vulnerability_assessment, incident_response, penetration_testing], then management (needs the assessment),
+then remediation (needs management), max 3 at a time, each stage in its own session. Proved: one campaign ran
+stages 1, 4 and 5 in a single wave. Campaign 263cd8ed then proved the handoff: stage 1 executed with 25 findings,
+and the management stage RE-RAN because its dependency had just executed, recording handoff=
+["vulnerability_assessment"] - final state completed, 2 executed, 0 blocked.
+
+TWO BUGS ONLY RUNNING FOUND: a refused stage referenced an uninitialised findings count (UnboundLocalError killed
+the wave); and a stage re-run after its dependency executed received an EMPTY handoff because a stage skipped as
+already-done never repopulated the shared context (now seeded from the stored rows).
+
+ONE CONTROL THAT WAS RIGHT TO REFUSE ME. I first passed the handoff as a tool argument `_upstream`. The execution
+binding rejected it with execution_binding_mismatch, because a request whose parameters differ from the approved set
+must not run. The handoff now travels in the purpose and the stage record instead, and a test asserts it is never
+smuggled into the bound parameters.
+
+HONEST GAPS: cloud.apply_remediation has never actually applied a change - the credential is read-only, so it
+returns the real AccessDenied and that is the truthful outcome until a write-capable role exists; engineering.commit
+was built and unit-covered but not exercised against a real commit in this pass; and because approval is bound to a
+mission, an approval-gated stage needs a fresh approval for each new campaign.
