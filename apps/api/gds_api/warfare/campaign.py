@@ -205,6 +205,7 @@ async def _execute_stage(*, tenant_id: str, user_id: str, campaign_id: str, stag
         except Exception as exc:  # noqa: BLE001 - a stage failure must not abort the campaign
             result = {"success": False, "error": str(exc)[:300]}
 
+        count: Optional[int] = None
         if result.get("success"):
             found = result.get("findings")
             count = len(found) if isinstance(found, list) else (found if isinstance(found, int) else None)
