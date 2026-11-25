@@ -358,8 +358,8 @@ async def resume_campaign(*, campaign_id: str, tenant_id: str, user_id: str,
             return {"error": "campaign not found", "campaign_id": campaign_id}
         rows = (
             await session.execute(
-                text("SELECT id, stage_key, status, mission_id FROM warfare_campaign_stages "
-                     "WHERE campaign_id = CAST(:i AS uuid) ORDER BY stage_number"),
+                text("SELECT id, stage_key, status, mission_id, findings_count, tool_name, owner_agent "
+                     "FROM warfare_campaign_stages WHERE campaign_id = CAST(:i AS uuid) ORDER BY stage_number"),
                 {"i": campaign_id},
             )
         ).mappings().all()
@@ -370,7 +370,13 @@ async def resume_campaign(*, campaign_id: str, tenant_id: str, user_id: str,
 
     by_key = {r["stage_key"]: r for r in rows}
     stages = [_STAGE_BY_KEY[r["stage_key"]] for r in rows if r["stage_key"] in _STAGE_BY_KEY]
-    shared: dict[str, Any] = {}
+    # Seed the shared context from stages that already executed in an EARLIER pass. Without this a stage
+    # re-run because its dependency just executed receives an empty handoff, which is what happened on
+    # 25 Nov 2026: stage 2 re-ran and was told nothing because stage 1 had been skipped as already done.
+    shared: dict[str, Any] = {
+        r["stage_key"]: {"findings": r["findings_count"], "tool": r["tool_name"], "owner_agent": r["owner_agent"]}
+        for r in rows if r["status"] == "executed"
+    }
     executed_now: set[str] = set()
     results: list[dict[str, Any]] = []
     skipped_already: list[dict[str, Any]] = []
