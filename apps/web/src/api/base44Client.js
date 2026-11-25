@@ -1152,6 +1152,16 @@ export const base44 = {
       throw new NotOnThisPlatform('verifyOtp', 'Auth method');
     },
   },
+  /* API KEYS. The routes existed (GET/POST/DELETE /admin/api-keys, gated on users:manage) but nothing in the
+   * product reached them, so a customer had no way to obtain a credential and api_keys stayed at 0 rows. A key's
+   * scopes ARE its permissions - security.py builds CurrentUser(permissions=list(scopes)) - so the screen asks for
+   * scopes explicitly rather than letting an unscoped key authenticate and then 403 everywhere. */
+  admin: {
+    apiKeys: () => request('/admin/api-keys'),
+    permissionCatalogue: () => request('/admin/permissions'),
+    issueApiKey: (name, scopes) => request('/admin/api-keys', { method: 'POST', body: { name, scopes } }),
+    revokeApiKey: (keyId) => request(`/admin/api-keys/${keyId}`, { method: 'DELETE' }),
+  },
 };
 
 export default base44;

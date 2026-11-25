@@ -103,6 +103,7 @@ const SECTIONS = [
     { icon: Timer, label: "SLA Deadlines", path: "/settings/sla-targets" },
     { icon: Target, label: "Risk Thresholds", path: "/settings/risk-thresholds" },
     { icon: KeyRound, label: "Two-Factor Auth", path: "/settings/mfa" },
+    { icon: KeyRound, label: "API Keys", path: "/settings/api-keys" },
     { icon: SlidersHorizontal, label: "Asset Risk Scoring", path: "/settings/risk-scoring" },
     { icon: Radio, label: "Integrations", path: "/settings/integrations" },
     { icon: Database, label: "Data Fabric", path: "/data-fabric" },

@@ -88,6 +88,7 @@ import LinearIntegrationPage from '@/pages/settings/LinearIntegrationPage';
 import LeadershipBriefingPage from '@/pages/LeadershipBriefingPage';
 import ExecutiveOverviewPage from '@/pages/ExecutiveOverviewPage';
 import MfaSettingsPage from '@/pages/MfaSettingsPage';
+import ApiKeysPage from '@/pages/ApiKeysPage';
 import BillingSettingsPage from '@/pages/BillingSettingsPage';
 import FixCalendarPage from '@/pages/FixCalendarPage';
 import DriveReportsPage from '@/pages/DriveReportsPage';
@@ -214,6 +215,7 @@ const AuthenticatedApp = () => {
           <Route path="/briefing" element={<LeadershipBriefingPage />} />
           <Route path="/executive-overview" element={<ExecutiveOverviewPage />} />
           <Route path="/settings/mfa" element={<MfaSettingsPage />} />
+          <Route path="/settings/api-keys" element={<ApiKeysPage />} />
           <Route path="/settings/billing" element={<BillingSettingsPage />} />
           <Route path="/vulnerability-fixes" element={<VulnerabilityFixesPage />} />
           <Route path="/triage" element={<TriageQueuePage />} />
