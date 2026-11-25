@@ -10,6 +10,7 @@ import os
 from typing import Any
 
 import httpx
+from sqlalchemy import text
 
 from gds_api.logging_config import get_logger
 
@@ -229,7 +230,8 @@ async def dispatch_webhook(url: str, secret: str, alert_data: dict[str, Any]) ->
 
 
 async def dispatch_all(
-    channels: list[Any], alert_data: dict[str, Any], config: dict[str, Any] | None = None
+    channels: list[Any], alert_data: dict[str, Any], config: dict[str, Any] | None = None,
+    db: Any = None, tenant_id: Any = None, triggered_by: str = "rule",
 ) -> dict[str, Any]:
     """Route to all channels in parallel with asyncio.gather."""
     if not channels:
@@ -314,7 +316,43 @@ async def dispatch_all(
         else:
             results.append(res)
 
+    await _record_deliveries(db, tenant_id, results, alert_data, triggered_by)
+
     return {
         "dispatched_count": len(results),
         "results": results,
     }
+
+async def _record_deliveries(db, tenant_id, results, alert_data, triggered_by="rule") -> None:
+    """Write one row per channel attempt.
+
+    A dispatch that only returns a dict to its caller leaves no evidence anywhere, so "was anyone told?" had no
+    answer in the product. dispatch_all is the one place that sees every channel result, and both the rule engine
+    and the test route come through it. A failure to record is logged and never masks the delivery result.
+    """
+    if db is None or tenant_id is None:
+        return
+    try:
+        for r in results or []:
+            ok = bool(r.get("success"))
+            await db.execute(
+                text(
+                    "INSERT INTO alert_deliveries "
+                    "(tenant_id, channel, success, error, provider, alert_ref, rule_name, severity, triggered_by) "
+                    "VALUES (:tid, :ch, :ok, :err, CAST(:prov AS jsonb), :ref, :rule, :sev, :by)"
+                ),
+                {
+                    "tid": str(tenant_id),
+                    "ch": str(r.get("channel") or "unknown"),
+                    "ok": ok,
+                    "err": None if ok else (r.get("error") or "unknown error"),
+                    "prov": json.dumps({k: v for k, v in r.items() if k not in ("channel", "success", "error")}, default=str),
+                    "ref": (str(alert_data.get("entity_id"))[:200] or None) if alert_data.get("entity_id") else None,
+                    "rule": (str(alert_data.get("rule_name"))[:200] or None) if alert_data.get("rule_name") else None,
+                    "sev": (str(alert_data.get("severity"))[:40] or None) if alert_data.get("severity") else None,
+                    "by": triggered_by,
+                },
+            )
+        await db.commit()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("alert delivery record failed: %s", exc)

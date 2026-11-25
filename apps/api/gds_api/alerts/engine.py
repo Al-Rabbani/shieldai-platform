@@ -193,7 +193,9 @@ async def fire_alert(
     }
 
     channels = rule.channels or []
-    dispatch_res = await dispatch_all(channels, alert_data)
+    dispatch_res = await dispatch_all(
+        channels, alert_data, db=db, tenant_id=tenant_id, triggered_by="rule"
+    )
 
     now = datetime.now(UTC)
     rule.last_fired = now

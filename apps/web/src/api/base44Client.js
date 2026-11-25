@@ -921,6 +921,7 @@ export const base44 = {
     /* Which alert channels are actually configured. A critical finding can reach the in-app inbox only when
      * no external channel is set, and the Alerts page must say so rather than draw a zero. */
     alertChannels: () => request('/alerts/channels'),
+    alertDeliveries: (limit = 50) => request('/alerts/deliveries', { query: { limit } }),
     scheduler: () => request('/copilot/scheduler'),
     pauseSchedule: (name) => request(`/copilot/scheduler/${encodeURIComponent(name)}/pause`, { method: 'POST', body: {} }),
     resumeSchedule: (name) => request(`/copilot/scheduler/${encodeURIComponent(name)}/resume`, { method: 'POST', body: {} }),

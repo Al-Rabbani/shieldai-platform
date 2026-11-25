@@ -8,7 +8,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from gds_api.alerts.dispatch import dispatch_all
@@ -16,7 +16,7 @@ from gds_api.alerts.engine import check_entity_change
 from gds_api.alerts.models import AlertEvent, AlertRule
 from gds_api.db import get_db
 from gds_api.logging_config import get_logger
-from gds_api.security import CurrentUser, get_current_user
+from gds_api.security import CurrentUser, get_current_user, require_permission
 
 logger = get_logger(__name__)
 
@@ -423,7 +423,8 @@ async def resolve_event(
 @router.post("/test")
 async def test_alert(
     body: TestAlertRequest,
-    user: CurrentUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    user: CurrentUser = Depends(require_permission("settings:write")),
 ) -> dict[str, Any]:
     """Send a test alert through configured channels."""
     alert_data = body.alert_data or {
@@ -438,7 +439,9 @@ async def test_alert(
         "condition_value": "triggered",
         "timestamp": datetime.now(UTC).isoformat(),
     }
-    dispatch_results = await dispatch_all(body.channels, alert_data)
+    dispatch_results = await dispatch_all(
+        body.channels, alert_data, db=db, tenant_id=user.tenant_id, triggered_by="manual"
+    )
     return {
         "status": "completed",
         "channels_tested": len(body.channels),
@@ -465,4 +468,44 @@ async def entity_trigger(
         "status": "processed",
         "fired_count": len(events),
         "event_ids": [str(e.id) for e in events],
+    }
+
+
+@router.get("/deliveries")
+async def list_deliveries(
+    limit: int = 50,
+    db: AsyncSession = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+) -> dict[str, Any]:
+    """What the platform actually sent, channel by channel.
+
+    MEASURED 25 Nov 2026: dispatch_all returned a dict and wrote nothing, so no page could answer "was anyone told?".
+    Every attempt now lands in alert_deliveries, successful or not - a channel that refuses is the more important row.
+    """
+    limit = max(1, min(limit, 200))
+    rows = (await db.execute(
+        text(
+            "SELECT channel, success, error, alert_ref, rule_name, severity, triggered_by, sent_at "
+            "FROM alert_deliveries WHERE tenant_id = :tid ORDER BY sent_at DESC LIMIT :lim"
+        ),
+        {"tid": str(user.tenant_id), "lim": limit},
+    )).mappings().all()
+    deliveries = [{
+        "channel": r["channel"],
+        "success": r["success"],
+        "error": r["error"],
+        "alert_ref": r["alert_ref"],
+        "rule_name": r["rule_name"],
+        "severity": r["severity"],
+        "triggered_by": r["triggered_by"],
+        "sent_at": r["sent_at"].isoformat() if r["sent_at"] else None,
+    } for r in rows]
+    delivered = [d for d in deliveries if d["success"]]
+    return {
+        "deliveries": deliveries,
+        "count": len(deliveries),
+        "delivered": len(delivered),
+        "failed": len(deliveries) - len(delivered),
+        "note": "Every attempt is recorded, successful or not. An empty list means nothing has been sent from this "
+                "tenant yet - it is not a quiet period.",
     }

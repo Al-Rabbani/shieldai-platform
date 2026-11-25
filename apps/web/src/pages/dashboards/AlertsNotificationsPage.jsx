@@ -7,6 +7,7 @@ export default function AlertsNotificationsPage() {
   const [rules, setRules] = useState([]);
   const [dispatches, setDispatches] = useState([]);
   const [channels, setChannels] = useState(null);
+  const [deliveries, setDeliveries] = useState(null);
   const [escalations, setEscalations] = useState([]);
   const [prefs, setPrefs] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -19,8 +20,9 @@ export default function AlertsNotificationsPage() {
       base44.entities.EscalationPolicy.list().catch(() => []),
       base44.entities.NotificationPreference.list().catch(() => []),
       base44.platform.alertChannels().catch(() => null),
-    ]).then(([r, d, e, p, ch]) => {
-      setRules(r); setDispatches(d); setEscalations(e); setPrefs(p); setChannels(ch); setLoading(false);
+      base44.platform.alertDeliveries(50).catch(() => null),
+    ]).then(([r, d, e, p, ch, dv]) => {
+      setRules(r); setDispatches(d); setEscalations(e); setPrefs(p); setChannels(ch); setDeliveries(dv); setLoading(false);
     });
   }, []);
 
@@ -33,7 +35,7 @@ export default function AlertsNotificationsPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatTile icon={Bell} label="Alert Rules" value={rules.length} sublabel={`${activeRules} active`} accent="#3b82f6" />
         <StatTile icon={AlertTriangle} label="Active Rules" value={activeRules} sublabel={`${rules.length - activeRules} disabled`} accent="#10b981" />
-        <StatTile icon={ArrowUp} label="External alert channels" value={channels ? channels.external_configured.length : "\u2014"} sublabel={channels ? (channels.external_configured.length === 0 ? "in-app inbox only" : channels.external_configured.join(", ")) : "not measured"} accent="#f59e0b" />
+        <StatTile icon={ArrowUp} label="Alert deliveries" value={deliveries ? deliveries.delivered : "—"} sublabel={deliveries ? `${deliveries.failed} failed of ${deliveries.count} recorded` : "not measured"} accent="#f59e0b" />
         <StatTile icon={Settings} label="Escalation Policies" value={escalations.length} sublabel={`${escalations.filter(e => e.is_active).length} active`} accent="#8b5cf6" />
       </div>
 
