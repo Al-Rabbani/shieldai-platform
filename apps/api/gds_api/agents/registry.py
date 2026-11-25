@@ -196,7 +196,7 @@ AGENT_REGISTRY: dict[str, AgentManifest] = {
             "compute a real, deterministic priority score - report only what these "
             "real sources actually returned."
         ),
-        tool_names=("search_osv_vulnerabilities", "enrich_finding", "prioritise_finding"),
+        tool_names=("search_osv_vulnerabilities", "enrich_finding", "prioritise_finding", "list_open_findings"),
         team=Team.BLUE,
         department="Vulnerability Management",
         risk_ceiling=RiskCeiling.R3,
@@ -204,6 +204,7 @@ AGENT_REGISTRY: dict[str, AgentManifest] = {
             "vulnerability.lookup",
             "finding.enrich",
             "finding.prioritise",
+            "finding.list_open",
         ),
         workforce="purple-cybersecurity-workforce",
         purple_role_id="purple-06",
