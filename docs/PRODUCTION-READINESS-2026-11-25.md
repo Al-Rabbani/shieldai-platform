@@ -468,3 +468,51 @@ HONEST GAPS: cloud.apply_remediation has never actually applied a change - the c
 returns the real AccessDenied and that is the truthful outcome until a write-capable role exists; engineering.commit
 was built and unit-covered but not exercised against a real commit in this pass; and because approval is bound to a
 mission, an approval-gated stage needs a fresh approval for each new campaign.
+
+## Stage 3 remediation executed for the first time; auto-fix was never blocked by missing data — 2026-11-25, 444b0c3
+
+Owner instruction: proceed to the next item. The open gap was that stage 3 (vulnerability remediation) had
+NEVER executed, and the campaign blamed "no open finding carries a fixed_version".
+
+I MEASURED INSTEAD OF TRUSTING THAT MESSAGE, and found two independent blockers:
+  1. The data claim was TRUE. security_findings holds 847 open / 141 resolved / 14 accepted_risk, and only 12
+     rows carry raw_data->>'fixed_version' - all of them resolved. So there was genuinely nothing to fix. The
+     "observed" vocabulary trap I suspected does not apply here: that status lives in the separate findings
+     table, not in security_findings.
+  2. THE MESSAGE WAS STILL MISLEADING, because the tool it would have called fails closed regardless of data.
+     tool_actions.autofix_finding returns GOVERNED_ENGINEERING_REQUIRED and states why: the former
+     implementation checked out and committed a branch in a repository's PRIMARY WORKING DIRECTORY, bypassing
+     the Workspace Manager and the human-approved commit boundary, and an R2 broker decision cannot authorise
+     that write. So stage 3 could never have run even with a perfect fixable finding.
+
+WHAT IS ACTUALLY FIXABLE, measured: 303 findings carrying a fixed_version, all inside ONE image
+(minio/minio:latest) - 7 critical, 125 high, 171 medium. The vulnerable packages are Go modules compiled into
+the binary (google.golang.org/grpc, stdlib, github.com/rabbitmq/amqp091-go), so no dependency pin in
+requirements.txt can fix them. The only real remediation is a newer image.
+
+BUILT: capability remediation.plan_image_upgrade (R1, READ_EXTERNAL, no approval, owned by
+defensive_remediation_autofix) and tool remediation_plan_image_upgrade. It reads the real fixable findings for
+an image, asks each registry that could carry it, inspects the running container's real configuration (ports,
+binds, restart policy, command), and returns a plan with the exact recreate commands and a verification step. It
+APPLIES NOTHING and says so: applied=false. Stage 3 now uses it when no dependency fix exists, and reports the
+plan instead of claiming there is nothing to do.
+
+PROVED: campaign a4f30538 "Remediation proof 2" completed 1/1, stage 3 EXECUTED by
+defensive_remediation_autofix - "verified upgrade plan for minio/minio:latest: 303 fixable finding(s)
+{critical: 7, high: 125, medium: 171}, resolvable=False; nothing was applied". All five stages have now executed
+at least once, and defensive_remediation_autofix has its first executed receipt (25 of 26 roles now hold one;
+only exploitation_specialist remains).
+
+A CORRECTION I MADE TO MYSELF: my first blocker text said the image "is not published on any registry this
+platform can reach". That overstated it. Re-measured: Docker Hub answers "object not found" for minio/minio,
+quay.io answers HTTP 401 REQUIRES AUTHENTICATION (so it may well carry it and simply refuses anonymous
+queries), and dl.min.io answers 410 Gone. Refused is not absent, so the tool now distinguishes auth_required
+from has_image=false and the blocker text names each registry's actual answer.
+
+TWO REAL OPERATIONAL FINDINGS FOR THE OWNER, neither a test failure:
+  * minio/minio:latest CANNOT BE VERIFIED AS RE-PULLABLE. The local image is present (14cea493d9a3, 241MB,
+    running since 21 Nov), so the object store works today, but if that image were pruned the container could
+    not be recreated from a verified source. This is an availability risk independent of the CVEs.
+  * requirements.txt pins torch==2.14.1+cpu, which is not resolvable from PyPI without the PyTorch CPU index,
+    so pip-audit cannot audit the pinned set at all ("No matching distribution found"). Deploys work because
+    installs handle it separately, but any tooling that resolves requirements.txt directly will fail.
