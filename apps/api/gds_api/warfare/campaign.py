@@ -177,10 +177,15 @@ async def _execute_stage(*, tenant_id: str, user_id: str, campaign_id: str, stag
                                      detail={})
             args["target"] = target
 
-        # ---- the handoff: a downstream stage receives what its upstream stages really produced ----
+        # ---- the handoff: a downstream stage is told what its upstream stages really produced ----
+        # It travels in the purpose and the record, NOT in the tool arguments: the execution binding
+        # refuses a request whose parameters differ from the approved set (measured 25 Nov 2026), and that
+        # control is right - smuggling a new argument in after approval is exactly what it must stop.
         handoff = {d: shared.get(d) for d in stage["depends_on"] if shared.get(d)}
+        handoff_text = ""
         if handoff:
-            args["_upstream"] = handoff
+            bits = [f"{k} produced {v.get('findings')} finding(s) via {v.get('tool')}" for k, v in handoff.items()]
+            handoff_text = " | upstream: " + "; ".join(bits)
 
         if stage["key"] == "vulnerability_remediation":
             finding_id = await _newest_fixable_finding(session, tenant_id)
@@ -200,7 +205,8 @@ async def _execute_stage(*, tenant_id: str, user_id: str, campaign_id: str, stag
             result = await execute_governed_tool(
                 tenant_id=tenant_id, user_id=user_id, mission_id=mission_id, agent_id=stage["owner_agent"],
                 tool_name=tool_name, args=args,
-                purpose=f"warfare campaign {campaign_id} stage {stage['number']} {stage['key']}",
+                purpose=(f"warfare campaign {campaign_id} stage {stage['number']} {stage['key']}"
+                         f"{handoff_text}"),
             )
         except Exception as exc:  # noqa: BLE001 - a stage failure must not abort the campaign
             result = {"success": False, "error": str(exc)[:300]}
@@ -398,6 +404,13 @@ async def resume_campaign(*, campaign_id: str, tenant_id: str, user_id: str,
                 executed_now.add(r["key"])
         results.extend(wave_results)
 
-    final = await _finalise(tenant_id, campaign_id, results + skipped_already)
+    for stub in skipped_already:
+        stage = _STAGE_BY_KEY[stub["key"]]
+        results.append({
+            "stage": stage["number"], "key": stage["key"], "label": stage["label"], "team": stage["team"],
+            "owner_agent": stage["owner_agent"], "tool": resolve_stage_tool(stage), "mission_id": None,
+            "status": "executed", "findings_count": None, "summary": stub["note"],
+        })
+    final = await _finalise(tenant_id, campaign_id, results)
     return {"campaign_id": campaign_id, "name": campaign["name"], "target": target or campaign["target"],
             "rerun_after_upstream": sorted(executed_now), **final}
