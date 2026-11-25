@@ -799,3 +799,52 @@ mission its own approval and must keep working after the first use. Guarded in t
 
 CAPABILITY COUNT: 74, tools 85.
 
+
+## The Co-Pilot learns from its own missions, under a rule — 25 Nov 2026
+
+The readiness list named this as the next honest gap in "give the Co-Pilot a brain": memory was operator-stated
+only, so the Co-Pilot never learned from work it had done. Closing it needed the rule first, because a platform
+that remembers the wrong things is worse than one that remembers nothing.
+
+THE RULE, implemented and enforced in gds_api/reasoning/mission_memory.py rather than described in prose:
+  * REMEMBERED, only from a governed execution receipt: a consequential action that actually executed
+    (remediation_apply_*, cloud_apply_*), stored as the durable historical fact "X ran under governance against
+    Y on this date". It cannot go stale because it is history.
+  * NEVER REMEMBERED: COUNTS ("849 open findings" is true today and false tomorrow, and a later mission would
+    quote it as current - counts belong to the register, read live); RAW TOOL OUTPUT (that is the register's
+    job); ANYTHING THE MODEL WROTE (the answer is unverified prose; a memory must be something that happened);
+    SECRETS OR PERSONAL DATA (a denylist refuses token shapes, key assignments, private key blocks, bare hex
+    blobs and email addresses, so a memory cannot become an exfiltration channel); READS (a scan changes
+    nothing, and remembering every scan would bury the few entries that matter).
+  * WHAT IT DOES NOT CLAIM: the receipt proves the request executed under governance. The handler's own verdict
+    is not persisted anywhere, so a memory says "ran under governance", never "succeeded".
+
+PROVED LIVE, end to end, on a real mission that executed remediation_apply_config_fix(hide_api_docs):
+  - the mission closed and its own report carries learned.updated = [remediation_apply_config_fix:hide_api_docs];
+  - copilot_memory holds exactly ONE row: kind=fact, source=observed, confidence=inferred,
+    key=remediation_apply_config_fix:hide_api_docs, value "ran under governance against the platform on
+    2026-11-25";
+  - re-running the same action UPSERTS on the table's unique key: use_count reached 2 and the row count stayed 1,
+    so repeated campaigns cannot grow duplicates;
+  - a mission that only called get_findings taught nothing (0 rows mention it) - the read is refused by
+    construction, not by filtering later;
+  - the NEXT mission receives it: _with_standing_memory (the function the mission route calls) returned
+    standing_memory_count = 1 and the goal carried "- [fact] remediation_apply_config_fix:hide_api_docs: ...";
+  - nothing count-shaped was stored (0 rows match a count pattern).
+
+THREE DEFECTS FOUND WHILE BUILDING IT, each invisible to a green suite:
+  1. A HOOK PLACED AFTER `return True` IS DEAD CODE. My first wiring appended the learning block after the
+     return, so three separate proofs reported a mission that closed and learned nothing, with no error to
+     show for it. A source guard now asserts the call precedes the return.
+  2. THE TABLE'S CHECK VOCABULARY WAS GUESSED. copilot_memory constrains kind IN (preference, instruction,
+     fact), source IN (operator_stated, observed) and confidence IN (stated, inferred). I invented kind
+     'outcome' and source 'mission:<id>', so every insert was refused by a CHECK. The lesson generalises: read
+     pg_constraint before writing to a table whose columns are enums in disguise.
+  3. A COMMIT CLEARS THE TRANSACTION-LOCAL TENANT SETTING, AND RLS THEN HIDES THE ROW. This is the fourth time
+     in this conversation: it broke the api_keys insert, the learning query itself, my own diagnostic loop, and
+     finally the report write after an intermediate commit (StaleDataError: 0 rows matched). set_mission_outcome
+     now commits ONCE, and if that commit fails it retries the outcome alone so a refused memory can never leave
+     a mission running or report a completed mission as failed.
+
+Tests: tests/test_mission_memory.py (8 guards).
+

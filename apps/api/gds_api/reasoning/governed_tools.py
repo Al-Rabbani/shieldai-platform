@@ -381,10 +381,19 @@ async def open_reasoning_mission(*, tenant_id: Any, user_id: Any, goal: str, age
 async def set_mission_outcome(*, mission_id: Any, tenant_id: Any, success: bool, summary: str,
                              iterations: int | None = None, tool_call_count: int | None = None,
                              model: str | None = None) -> bool:
-    """Close a reasoning mission. A mission must never be left running.
+    """Close a reasoning mission, and let it learn from itself. A mission must never be left running.
 
     iterations and tool_call_count are recorded because they are what distinguishes a reasoning run from a
     template: a mission that never iterated and never called a tool produced prose, not a decision.
+
+    Learning is derived from this mission's own governed execution receipts (see
+    gds_api.reasoning.mission_memory), never from its prose. Two properties are deliberate:
+
+      * ONE commit. A commit clears the transaction-local tenant setting that RLS reads, so writing the report
+        again after an intermediate commit matched zero rows and raised StaleDataError. Measured three times on
+        25 Nov 2026 - it is the same trap that bit the api_keys insert and the learning query itself.
+      * THE OUTCOME SURVIVES A LEARNING FAILURE. If the combined commit fails, the outcome is retried on its
+        own, so a refused memory can never leave a mission running or report a completed mission as failed.
     """
     from gds_api.db import async_session_factory
     from gds_api.models import Mission
@@ -412,10 +421,31 @@ async def set_mission_outcome(*, mission_id: Any, tenant_id: Any, success: bool,
         }
         mission.status = "completed" if success else "failed"
         mission.completed_at = datetime.now(UTC)
-        mission.report = json.dumps(report)
-        await session.commit()
-        return True
 
+        try:
+            from gds_api.reasoning.mission_memory import learn_from_mission
+
+            report["learned"] = await learn_from_mission(session, mission_id=mid, tenant_id=tid)
+        except Exception as exc:  # noqa: BLE001 - recorded on the mission, never raised
+            report["learned_error"] = f"{type(exc).__name__}: {exc}"
+
+        mission.report = json.dumps(report)
+        try:
+            await session.commit()
+        except Exception as exc:  # noqa: BLE001 - the outcome must survive a learning failure
+            await session.rollback()
+            await bind_tenant(session, tid)
+            fresh = await session.get(Mission, mid)
+            if fresh is None:
+                return False
+            fresh.status = "completed" if success else "failed"
+            fresh.completed_at = datetime.now(UTC)
+            fallback = dict(report)
+            fallback["learned_error"] = f"commit with learning failed: {type(exc).__name__}: {exc}"
+            fallback.pop("learned", None)
+            fresh.report = json.dumps(fallback)
+            await session.commit()
+        return True
 
 async def record_reasoning_tool_calls(*, mission_id: Any, tenant_id: Any, agent_id: str,
                                       tool_calls: list[Any]) -> int:
