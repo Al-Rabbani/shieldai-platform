@@ -1,4 +1,5 @@
 import React from "react";
+import { absentStoreReason } from "@/api/absentStores";
 
 export default function IncidentTimelineView({ events }) {
   if (events.length === 0) {

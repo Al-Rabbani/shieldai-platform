@@ -47,6 +47,21 @@ def test_fixed_modules_read_the_shipped_reason():
         assert phrase not in src, f"{rel} still asserts '{phrase}' over a store that has no table"
 
 
+def test_every_module_that_calls_the_reason_also_imports_it():
+    """A call without its import is a ReferenceError at render, which blanks the whole route.
+
+    This is not hypothetical: the first cut of this pass inserted the calls before adding the import and the
+    helper skipped it because the name was already in the file, so /v2/executive-dashboard rendered a blank
+    body while the build and the tests were green. Pin the import, not just the call.
+    """
+    callers = [p for p in WEB.rglob("*.jsx")
+               if "absentStoreReason(" in strip_comments(p.read_text(errors="ignore"))]
+    assert callers, "no module reads the shipped reason any more"
+    missing = [str(p).replace(str(WEB) + "/", "") for p in callers
+               if 'from "@/api/absentStores"' not in p.read_text(errors="ignore")]
+    assert not missing, f"calls absentStoreReason without importing it: {missing[:5]}"
+
+
 def test_license_risk_collapse_is_marked():
     src = strip_comments((WEB / "pages/code/CodeSecurityDashboardPage.jsx").read_text())
     assert 'absentStoreReason("LicenseRisk")' in src, "an empty LicenseRisk list is not explained"

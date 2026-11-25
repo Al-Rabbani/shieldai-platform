@@ -4,6 +4,7 @@ import { base44 } from "@/api/base44Client";
 import { invokeAction } from "@/lib/invokeAction";
 import CodeRepoDetailCard from "@/components/code/CodeRepoDetailCard";
 import AIResponseModal from "@/components/shared/AIResponseModal";
+import { absentStoreReason } from "@/api/absentStores";
 
 export default function CodeSecurityDashboardPage() {
   const [repos, setRepos] = useState([]);

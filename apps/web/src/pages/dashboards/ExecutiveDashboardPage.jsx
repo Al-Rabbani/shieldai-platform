@@ -11,6 +11,7 @@ import VulnerabilityTrend90d from "@/components/dashboards/VulnerabilityTrend90d
 import GenerateExecutiveReportButton from "@/components/dashboard/GenerateExecutiveReportButton";
 import { Link } from "react-router-dom";
 import { Shield, FileCheck, AlertTriangle, Fingerprint, TrendingUp, TrendingDown, Minus, FileText, Briefcase, ChevronRight } from "lucide-react";
+import { absentStoreReason } from "@/api/absentStores";
 
 const RISK_KPI_NAME = "Overall Risk Score";
 
