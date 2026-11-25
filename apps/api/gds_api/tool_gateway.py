@@ -998,6 +998,7 @@ from gds_api import ops_tools as _ops_tools  # noqa: E402
 
 TOOL_REGISTRY.update({
     "shell_run_allowlisted": _ops_tools.shell_run_allowlisted,
+    "remediation_plan_image_upgrade": _ops_tools.remediation_plan_image_upgrade,
     "repository_write_file": _ops_tools.repository_write_file,
     "engineering_commit": _ops_tools.engineering_commit,
     "engineering_commit_mission": _ops_tools.engineering_commit_mission,

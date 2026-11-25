@@ -990,6 +990,8 @@ AGENT_REGISTRY: dict[str, AgentManifest] = {
             "search_repository",
             "cloud_apply_remediation",
             "engineering_commit_mission",
+        
+            "remediation_plan_image_upgrade",
         ),
         team=Team.BLUE,
         department="Remediation Engineering",
@@ -1002,6 +1004,8 @@ AGENT_REGISTRY: dict[str, AgentManifest] = {
             "repository.search",
             "cloud.apply_remediation",
             "engineering.commit_mission",
+        
+            "remediation.plan_image_upgrade",
         ),
         workforce="purple-cybersecurity-workforce",
         purple_role_id="purple-17",

@@ -120,6 +120,25 @@ async def _newest_fixable_finding(session, tenant_id: str) -> Optional[str]:
     return str(row) if row else None
 
 
+async def _most_fixable_image(session, tenant_id: str) -> Optional[str]:
+    """The container image with the most findings that carry a fix version.
+
+    These are compiled into the image (Go modules inside a binary), so the only real remediation is a newer
+    image. A dependency-level auto-fix cannot touch them.
+    """
+    row = (
+        await session.execute(
+            text(
+                "SELECT raw_data->>'image' AS image, count(*) AS n FROM findings WHERE tenant_id = :t "
+                "AND raw_data->>'fixed_version' IS NOT NULL AND raw_data->>'fixed_version' <> '' "
+                "GROUP BY raw_data->>'image' ORDER BY count(*) DESC LIMIT 1"
+            ),
+            {"t": tenant_id},
+        )
+    ).mappings().first()
+    return row["image"] if row and row["image"] else None
+
+
 async def _ensure_mission(session, *, tenant_id: str, user_id: str, stage: dict, target: Optional[str]) -> str:
     mission_id = str(
         (
@@ -189,13 +208,22 @@ async def _execute_stage(*, tenant_id: str, user_id: str, campaign_id: str, stag
 
         if stage["key"] == "vulnerability_remediation":
             finding_id = await _newest_fixable_finding(session, tenant_id)
-            if finding_id is None:
-                return await _record(session, tenant_id=tenant_id, campaign_id=campaign_id, stage=stage,
-                                     stage_row_id=stage_row_id, mission_id=mission_id, status="skipped",
-                                     findings_count=None,
-                                     summary="no open finding carries a fixed_version, so there is nothing to fix",
-                                     detail={"handoff": handoff})
-            args["finding_id"] = finding_id
+            if finding_id is not None:
+                args["finding_id"] = finding_id
+            else:
+                # No dependency-level fix exists. The fixable findings are compiled INTO a container image,
+                # so produce a verified upgrade plan instead of declaring there is nothing to do.
+                image = await _most_fixable_image(session, tenant_id)
+                if image is None:
+                    return await _record(session, tenant_id=tenant_id, campaign_id=campaign_id, stage=stage,
+                                         stage_row_id=stage_row_id, mission_id=mission_id, status="skipped",
+                                         findings_count=None,
+                                         summary=("no finding carries a fixed_version in either the dependency or "
+                                                  "the container register, so there is nothing to remediate"),
+                                         detail={"handoff": handoff})
+                tool_name = "remediation_plan_image_upgrade"
+                args["image"] = image
+                args["_remediation_mode"] = "image_upgrade_plan"
 
         if not mission_id:
             mission_id = await _ensure_mission(session, tenant_id=tenant_id, user_id=user_id,
@@ -216,7 +244,12 @@ async def _execute_stage(*, tenant_id: str, user_id: str, campaign_id: str, stag
             found = result.get("findings")
             count = len(found) if isinstance(found, list) else (found if isinstance(found, int) else None)
             status = "executed"
-            summary = str(result.get("note") or result.get("source") or "executed")[:300]
+            if result.get("applied") is False and result.get("image"):
+                summary = (f"verified upgrade plan for {result['image']}: {result.get('fixable_findings')} fixable "
+                           f"finding(s) {result.get('by_severity')}, resolvable="
+                           f"{result.get('image_still_resolvable')}; nothing was applied")
+            else:
+                summary = str(result.get("note") or result.get("source") or "executed")[:300]
             detail = {"handoff_received": sorted(handoff), "result_keys":
                       sorted(k for k in result if k not in ("findings", "stdout", "stderr"))[:12]}
             shared[stage["key"]] = {"findings": count, "tool": tool_name, "owner_agent": stage["owner_agent"]}

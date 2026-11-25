@@ -344,3 +344,161 @@ async def engineering_execute_session(params: dict) -> dict:
         "duration_ms": result.get("duration_ms"),
         "summary": (result.get("final_answer") or result.get("summary") or "")[:1500],
     }
+
+
+# --------------------------------------------------------------------------- image remediation plan
+_IMAGE_REGISTRIES = (
+    ("docker_hub", "https://hub.docker.com/v2/repositories/{repo}/tags/?page_size=5&ordering=last_updated"),
+    ("quay", "https://quay.io/api/v1/repository/{repo}/tag/?limit=5&onlyActiveTags=true"),
+)
+
+
+async def _registry_tags(repo: str) -> dict:
+    """Ask each registry that could carry the image. A registry that does not have it says so."""
+    import httpx
+
+    found: dict[str, Any] = {}
+    async with httpx.AsyncClient(timeout=20.0, follow_redirects=True) as client:
+        for name, url in _IMAGE_REGISTRIES:
+            try:
+                resp = await client.get(url.format(repo=repo))
+                body = resp.json() if resp.status_code < 500 else {}
+            except Exception as exc:  # noqa: BLE001
+                found[name] = {"reachable": False, "error": type(exc).__name__}
+                continue
+            if resp.status_code != 200 or not isinstance(body, dict):
+                found[name] = {"reachable": True, "has_image": False, "status": resp.status_code,
+                               "message": (body or {}).get("message")}
+                continue
+            tags = body.get("results") or body.get("tags") or []
+            found[name] = {
+                "reachable": True,
+                "has_image": bool(tags),
+                "newest": [t.get("name") for t in tags][:5],
+                "last_updated": (tags[0].get("last_updated") or tags[0].get("last_modified")) if tags else None,
+            }
+    return found
+
+
+def _container_config(image: str) -> dict:
+    """The running container's real configuration, so a plan can be recreated faithfully."""
+    import json as _json
+    import subprocess
+
+    name = image.split("/")[-1].split(":")[0]
+    try:
+        raw = subprocess.run(["docker", "inspect", name], capture_output=True, text=True, timeout=20)
+        if raw.returncode != 0:
+            return {"found": False, "error": raw.stderr.strip()[:200]}
+        data = _json.loads(raw.stdout)[0]
+    except Exception as exc:  # noqa: BLE001
+        return {"found": False, "error": type(exc).__name__}
+    host = data.get("HostConfig") or {}
+    return {
+        "found": True,
+        "name": name,
+        "image": (data.get("Config") or {}).get("Image"),
+        "restart": (host.get("RestartPolicy") or {}).get("Name"),
+        "ports": host.get("PortBindings") or {},
+        "binds": host.get("Binds") or [],
+        "cmd": (data.get("Config") or {}).get("Cmd"),
+        "env_count": len((data.get("Config") or {}).get("Env") or []),
+    }
+
+
+@_tool("low", "Plan a container image upgrade from real findings, registry and container state. Applies nothing.")
+async def remediation_plan_image_upgrade(params: dict) -> dict:
+    """Build a verified upgrade plan for an image whose CVEs are fixed only by a newer image.
+
+    Read-only by design: it states the plan, the evidence and the exact commands, and never changes the
+    running stack. A dependency-level auto-fix cannot help here because the vulnerable packages are compiled
+    into the image (Go modules inside a binary), so the only real remediation is a newer image.
+    """
+    image = str(params.get("image") or "").strip()
+    if not image:
+        return {"success": False, "error": "image is required"}
+    repo = image.split("@")[0]
+    for suffix in (":latest",):
+        if repo.endswith(suffix):
+            repo = repo[: -len(suffix)]
+    if ":" in repo.split("/")[-1]:
+        repo = repo.rsplit(":", 1)[0]
+    tenant_id = params.get("_tenant_id")
+    if not tenant_id:
+        return {"success": False, "error": "tenant context is required"}
+
+    from sqlalchemy import text
+
+    from gds_api.db import async_session_factory
+    from gds_api.tenant_binding import bind_tenant
+
+    async with async_session_factory() as session:
+        await bind_tenant(session, str(tenant_id))
+        rows = (
+            await session.execute(
+                text(
+                    "SELECT severity, raw_data->>'package' AS package, raw_data->>'installed_version' AS installed, "
+                    "raw_data->>'fixed_version' AS fixed, coalesce(raw_data->>'cve_id', cve) AS cve, title "
+                    "FROM findings WHERE tenant_id = :t AND raw_data->>'image' = :i "
+                    "AND raw_data->>'fixed_version' IS NOT NULL AND raw_data->>'fixed_version' <> '' "
+                    "ORDER BY CASE severity WHEN 'critical' THEN 0 WHEN 'high' THEN 1 ELSE 2 END"
+                ),
+                {"t": str(tenant_id), "i": image},
+            )
+        ).mappings().all()
+
+    if not rows:
+        return {"success": False, "error": f"no fixable findings are recorded for {image}",
+                "note": "nothing to plan; this is a real absence, not a failure"}
+    by_sev: dict[str, int] = {}
+    packages: dict[str, dict] = {}
+    for r in rows:
+        by_sev[r["severity"]] = by_sev.get(r["severity"], 0) + 1
+        key = f"{r['package']} {r['installed']}"
+        entry = packages.setdefault(key, {"package": r["package"], "installed": r["installed"],
+                                         "fixed": r["fixed"], "cves": []})
+        if r["cve"]:
+            entry["cves"].append(r["cve"])
+
+    registries = await _registry_tags(repo)
+    container = _container_config(image)
+    resolvable = [k for k, v in registries.items() if v.get("has_image")]
+    newest = next((registries[k].get("newest") for k in resolvable if registries[k].get("newest")), None)
+
+    commands = []
+    if container.get("found"):
+        ports = " ".join(
+            f"-p {b[0].get('HostIp') or '0.0.0.0'}:{b[0].get('HostPort')}:{c.split('/')[0]}"
+            for c, b in (container.get("ports") or {}).items() if b
+        )
+        binds = " ".join(f"-v {b}" for b in container.get("binds") or [])
+        cmd = " ".join(container.get("cmd") or [])
+        commands = [
+            f"docker pull {image}",
+            f"docker stop {container['name']} && docker rename {container['name']} {container['name']}-prev",
+            f"docker run -d --name {container['name']} --restart {container.get('restart') or 'unless-stopped'} "
+            f"{ports} {binds} {image} {cmd}".replace("  ", " "),
+            f"docker logs --tail 20 {container['name']}",
+        ]
+
+    return {
+        "success": True,
+        "tool": "remediation.plan_image_upgrade",
+        "image": image,
+        "applied": False,
+        "applied_note": "this produces a plan only; no image was pulled, replaced or restarted",
+        "fixable_findings": len(rows),
+        "by_severity": by_sev,
+        "vulnerable_packages": list(packages.values())[:15],
+        "registries": registries,
+        "image_still_resolvable": bool(resolvable),
+        "newest_tags": newest,
+        "running_container": container,
+        "plan_commands": commands,
+        "verification": ("re-run the container scan and confirm the fixable count for this image drops to 0; "
+                         "until then the finding stays open"),
+        "blocker": (None if resolvable else
+                    f"{repo} is not published on any registry this platform can reach, so an upgrade cannot be "
+                    "planned against a verified source; the image also cannot be re-pulled, which is an "
+                    "availability risk independent of the CVEs"),
+    }

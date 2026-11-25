@@ -899,6 +899,20 @@ CAPABILITY_REGISTRY: dict[str, CapabilityDefinition] = {
     # Fail-closed placeholder until a finding-triggered remediation is implemented
     # through the isolated Workspace Manager and approved engineering commit path.
     # The old tool directly committed in the registered repository and was disabled.
+    "remediation.plan_image_upgrade": CapabilityDefinition(
+        stable_key="remediation.plan_image_upgrade",
+        display_name="Plan Container Image Upgrade",
+        description="Reads real fixable findings for a container image, asks the registries that could carry it, "
+                    "and returns a verified upgrade plan with the exact commands. Changes nothing.",
+        category="remediation",
+        risk_class=RiskClass.R1,
+        side_effect_type=SideEffectType.READ_EXTERNAL,
+        required_tool_ids=("remediation_plan_image_upgrade",),
+        status=CapabilityStatus.OPERATIONAL,
+        allowed_team_types=(Team.BLUE,),
+        requires_sandbox=False,
+        requires_human_approval=False,
+    ),
     "remediation.auto_fix_finding": CapabilityDefinition(
         stable_key="remediation.auto_fix_finding",
         display_name="Auto-Fix a Validated Finding",
