@@ -810,6 +810,7 @@ CAPABILITY_REGISTRY: dict[str, CapabilityDefinition] = {
             "bare 'write one file' capability outside that governed pipeline."
         ),
         category="repository",
+        allowed_team_types=(Team.BLUE,),
         risk_class=RiskClass.R3,
         side_effect_type=SideEffectType.WRITE_EXTERNAL,
         required_tool_ids=("repository_write_file",),
@@ -839,6 +840,7 @@ CAPABILITY_REGISTRY: dict[str, CapabilityDefinition] = {
             "nothing is committed by this capability alone."
         ),
         category="engineering",
+        allowed_team_types=(Team.FOUNDATION, Team.BLUE),
         risk_class=RiskClass.R1,
         side_effect_type=SideEffectType.WRITE_INTERNAL,
         required_tool_ids=("engineering_execute_session",),
@@ -851,6 +853,7 @@ CAPABILITY_REGISTRY: dict[str, CapabilityDefinition] = {
             "session's real, workspace-scoped changes - always requires human approval."
         ),
         category="engineering",
+        allowed_team_types=(Team.BLUE,),
         risk_class=RiskClass.R3,
         side_effect_type=SideEffectType.WRITE_EXTERNAL,
         required_tool_ids=("engineering_commit",),
@@ -872,6 +875,7 @@ CAPABILITY_REGISTRY: dict[str, CapabilityDefinition] = {
             "by this capability alone."
         ),
         category="engineering",
+        allowed_team_types=(Team.FOUNDATION, Team.BLUE),
         risk_class=RiskClass.R1,
         side_effect_type=SideEffectType.WRITE_INTERNAL,
         required_tool_ids=("engineering_plan_mission",),
@@ -885,6 +889,7 @@ CAPABILITY_REGISTRY: dict[str, CapabilityDefinition] = {
             "human approval."
         ),
         category="engineering",
+        allowed_team_types=(Team.BLUE,),
         risk_class=RiskClass.R3,
         side_effect_type=SideEffectType.WRITE_EXTERNAL,
         required_tool_ids=("engineering_commit_mission",),
@@ -916,6 +921,7 @@ CAPABILITY_REGISTRY: dict[str, CapabilityDefinition] = {
             "Explicitly out of scope this phase - no sandbox exists yet. No backing tool."
         ),
         category="shell",
+        allowed_team_types=(Team.FOUNDATION, Team.BLUE),
         risk_class=RiskClass.R4,
         side_effect_type=SideEffectType.WRITE_EXTERNAL,
         required_tool_ids=("shell_run_allowlisted",),
