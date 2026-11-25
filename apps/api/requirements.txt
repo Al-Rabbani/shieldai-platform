@@ -1,3 +1,8 @@
+# torch==2.14.1+cpu is published on the PyTorch CPU index, not PyPI, so a plain
+# `pip install -r requirements.txt` cannot resolve it without this line. Measured 25 Nov 2026:
+# PyPI has no 2.14.1+cpu, and pip-audit refused the whole file with "No matching distribution".
+--extra-index-url https://download.pytorch.org/whl/cpu
+
 Jinja2==3.1.6
 Mako==1.4.3
 MarkupSafe==3.0.3

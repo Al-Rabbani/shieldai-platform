@@ -142,7 +142,13 @@ AGENT_REGISTRY: dict[str, AgentManifest] = {
             "recent mission activity for leadership: what was done, what risk it "
             "carried, and the real outcome - never embellished, never speculative."
         ),
-        tool_names=("list_recent_missions", "list_open_findings", "check_url_security_headers"),
+        tool_names=(
+            "list_recent_missions",
+            "list_open_findings",
+            "check_url_security_headers",
+            "security_headers_check",
+            "get_findings",
+        ),
         team=Team.FOUNDATION,
         department="Executive Advisory",
         risk_ceiling=RiskCeiling.R2,
@@ -150,6 +156,7 @@ AGENT_REGISTRY: dict[str, AgentManifest] = {
             "mission.list_recent",
             "finding.list_open",
             "network.check_url_headers",
+            "finding.read",
         ),
     ),
     "threat_intelligence": AgentManifest(
@@ -164,7 +171,10 @@ AGENT_REGISTRY: dict[str, AgentManifest] = {
             "real CISA KEV feed against this tenant's watchlist and report only what the "
             "feed actually returned - never invent a CVE or a match that wasn't real."
         ),
-        tool_names=("check_cisa_kev",),
+        tool_names=(
+            "check_cisa_kev",
+            "cisa_kev_check",
+        ),
         team=Team.BLUE,
         department="Threat Intelligence",
         risk_ceiling=RiskCeiling.R3,
@@ -210,7 +220,14 @@ AGENT_REGISTRY: dict[str, AgentManifest] = {
             "compute a real, deterministic priority score - report only what these "
             "real sources actually returned."
         ),
-        tool_names=("search_osv_vulnerabilities", "enrich_finding", "prioritise_finding", "list_open_findings"),
+        tool_names=(
+            "search_osv_vulnerabilities",
+            "enrich_finding",
+            "prioritise_finding",
+            "list_open_findings",
+            "osv_check",
+            "get_findings",
+        ),
         team=Team.BLUE,
         department="Vulnerability Management",
         risk_ceiling=RiskCeiling.R3,
@@ -219,6 +236,7 @@ AGENT_REGISTRY: dict[str, AgentManifest] = {
             "finding.enrich",
             "finding.prioritise",
             "finding.list_open",
+            "finding.read",
         ),
         workforce="purple-cybersecurity-workforce",
         purple_role_id="purple-06",
@@ -322,11 +340,19 @@ AGENT_REGISTRY: dict[str, AgentManifest] = {
             "findings using deterministic rules (never self-authorizing an escalation "
             "decision) and report the tenant's real open-findings backlog honestly."
         ),
-        tool_names=("triage_finding", "list_open_findings"),
+        tool_names=(
+            "triage_finding",
+            "list_open_findings",
+            "get_findings",
+        ),
         team=Team.BLUE,
         department="Security Operations",
         risk_ceiling=RiskCeiling.R1,
-        allowed_capability_ids=("finding.triage", "finding.list_open"),
+        allowed_capability_ids=(
+            "finding.triage",
+            "finding.list_open",
+            "finding.read",
+        ),
         workforce="purple-cybersecurity-workforce",
         purple_role_id="purple-02",
         purple_role_name="SOC Detection and Triage Agent",
@@ -428,6 +454,7 @@ AGENT_REGISTRY: dict[str, AgentManifest] = {
             "evaluate_cloud_posture",
             "list_open_findings",
             "cloud_read_posture",
+            "get_findings",
         ),
         team=Team.BLUE,
         department="Security Architecture",
@@ -438,6 +465,7 @@ AGENT_REGISTRY: dict[str, AgentManifest] = {
             "cloud.posture.evaluate_environment",
             "finding.list_open",
             "cloud.read_posture",
+            "finding.read",
         ),
         workforce="purple-cybersecurity-workforce",
         purple_role_id="purple-19",
@@ -564,7 +592,10 @@ AGENT_REGISTRY: dict[str, AgentManifest] = {
             "has explicitly authorized on its Watchlist - refuse any other target and "
             "report which real security headers are present or missing."
         ),
-        tool_names=("check_url_security_headers",),
+        tool_names=(
+            "check_url_security_headers",
+            "security_headers_check",
+        ),
         team=Team.BLUE,
         department="API and Application Security",
         risk_ceiling=RiskCeiling.R2,
@@ -852,7 +883,12 @@ AGENT_REGISTRY: dict[str, AgentManifest] = {
             "findings honestly and factually; an unauthorized-target refusal is the "
             "safety boundary working correctly, not a failure to explain away."
         ),
-        tool_names=("recon_dns_enumeration", "recon_port_scan", "assess_attack_surface"),
+        tool_names=(
+            "recon_dns_enumeration",
+            "recon_port_scan",
+            "assess_attack_surface",
+            "store_finding",
+        ),
         team=Team.RED,
         department="Offensive Security",
         risk_ceiling=RiskCeiling.R4,
@@ -861,6 +897,7 @@ AGENT_REGISTRY: dict[str, AgentManifest] = {
             "red_team.recon_passive",
             "red_team.recon_active",
             "red_team.assess_attack_surface",
+            "finding.store",
         ),
         workforce="purple-cybersecurity-workforce",
         purple_role_id="purple-08",
@@ -1059,7 +1096,11 @@ AGENT_REGISTRY: dict[str, AgentManifest] = {
             "list - you never run a technique the engagement prohibits, and you "
             "never touch a target outside its explicit scope."
         ),
-        tool_names=("coordinate_pentest_engagement", "nmap_scan"),
+        tool_names=(
+            "coordinate_pentest_engagement",
+            "nmap_scan",
+            "masscan_scan",
+        ),
         team=Team.RED,
         department="Penetration Testing",
         risk_ceiling=RiskCeiling.R4,
@@ -1118,6 +1159,7 @@ AGENT_REGISTRY: dict[str, AgentManifest] = {
             "ffuf_scan",
             "gobuster_scan",
             "wpscan_scan",
+            "httpx_scan",
         ),
         team=Team.PURPLE,
         department="Offensive Security",
@@ -1200,6 +1242,9 @@ AGENT_REGISTRY: dict[str, AgentManifest] = {
             "sast_scan",
             "dast_scan",
             "generate_sbom",
+            "store_finding",
+            "semgrep_scan",
+            "trivy_scan",
         ),
         team=Team.BLUE if "vulnerability_assessment" == "vulnerability_assessment" else Team.RED,
         department="Vulnerability Management",
@@ -1212,6 +1257,7 @@ AGENT_REGISTRY: dict[str, AgentManifest] = {
             "security_tools.sast_scan",
             "security_tools.dast_scan",
             "security_tools.generate_sbom",
+            "finding.store",
         ),
         target_authorisation_required=False,
         operational_domain="Vulnerability Assessment",

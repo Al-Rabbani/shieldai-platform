@@ -315,19 +315,6 @@ _ALL_TOOL_DEFINITIONS = [
     {
         "type": "function",
         "function": {
-            "name": "aws_iam_scan",
-            "description": "Scan AWS IAM for security issues — users without MFA, old access keys, missing password policy. Use for cloud security assessment. Returns IAM findings.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "check_type": {"type": "string", "enum": ["users", "mfa", "keys", "policy", "all"], "description": "What to check. Default: all"}
-                }
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
             "name": "store_finding",
             "description": "Store a security finding in the PostgreSQL database. Use after discovering a vulnerability or security issue during a scan. Required for tracking and compliance.",
             "parameters": {

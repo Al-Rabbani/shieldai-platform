@@ -37,3 +37,8 @@
 # each role's health from whether its declared tools resolve and their binaries exist, then signs and records it.
 # FRESH_WITHIN_SECONDS is 180, so a 2-minute cadence keeps every role inside the fresh window.
 */2 * * * * cd /opt/gds-os && set -a && . /opt/.env 2>/dev/null && set +a && PYTHONPATH=apps/api ./apps/api/venv/bin/python3.11 scripts/ops/agent_heartbeat.py >> /var/log/gds-heartbeat.log 2>&1
+
+# Every running image is archived to /opt/backups/images with a digest tag, because a registry is not
+# guaranteed to still serve it: minio/minio:latest answers "object not found" on Docker Hub and quay.io
+# refuses anonymous queries (401), measured 25 Nov 2026. Weekly, so a pruned image or a lost archive heals.
+17 3 * * 0 /opt/gds-os/scripts/ops/image_archive.sh >> /var/log/gds-image-archive.log 2>&1

@@ -580,3 +580,61 @@ api./app./www.
 STILL OPEN AND HONEST: cloud.apply_remediation has never changed anything because the credential is read-only, so
 it returns the real AccessDenied; a write-capable IAM role is needed before that capability is more than a
 truthful refusal.
+
+## Ten tools the model was told about but governance refused, and two that did not exist — 25 Nov 2026
+
+Owner instruction: build and fix the next. I took the two defects I had reported but not fixed (image
+recreatability, the torch pin) and they led somewhere much larger.
+
+CLOSED: DEPENDENCY AUDIT AND IMAGE RECREATABILITY.
+  * torch==2.14.1+cpu is published only on the PyTorch CPU index, not PyPI (PyPI has 2.14.1 without the +cpu
+    local version), so `pip install -r requirements.txt` could not resolve it and pip-audit refused the whole
+    file. Added `--extra-index-url https://download.pytorch.org/whl/cpu` with the measurement recorded in the
+    file. torch is genuinely required: gds_api/memory.py imports sentence-transformers for embeddings.
+  * The deployed environment now audits clean: pip-audit over the running site-packages reports NO known
+    vulnerabilities. It skips torch because a local-version build is not on PyPI, so I queried OSV directly
+    for torch 2.14.1: 0 vulnerabilities. The dependency posture is clean, and that is measured, not assumed.
+  * minio/minio:latest could not be verified as re-pullable (Docker Hub "object not found", quay.io 401), so
+    the object store could not be recreated if its image were pruned. scripts/ops/image_archive.sh now saves
+    EVERY running image to /opt/backups/images, verifies gzip integrity and a readable manifest.json in each,
+    and tags it pinned-<id> so recreation cannot drift. 5 archives, 663MB, scheduled weekly in
+    config/cron/root.crontab (17 3 * * 0), proved under cron's own minimal environment (env -i
+    PATH=/usr/bin:/bin) where it reported skipped=5 failed=0 exit 0. My first version of that script shipped
+    8 files for 5 images with malformed paths (image names contain slashes) and still printed success; the
+    guard test now asserts the sanitisation, the verification and the non-zero exit.
+
+THE REAL FIND: THE REASONING LAYER AND THE BROKER DISAGREED ABOUT TEN TOOLS. Measured: ten tools were
+advertised in reasoning/tool_definitions.py but declared by no operational capability, so the model could be
+instructed to call them and governance answered "No single operational capability declares tool ...". Seven of
+the ten were names that DID exist as registry keys but under a different name than the capability declared
+(semgrep_scan vs sast_scan, trivy_scan vs container_scan, security_headers_check vs
+check_url_security_headers, osv_check vs search_osv_vulnerabilities, cisa_kev_check vs check_cisa_kev,
+httpx_scan vs httpx_probe, masscan_scan vs port_inventory_scan). THREE DID NOT EXIST AT ALL: get_findings,
+store_finding and aws_iam_scan. Fifteen bridge agents name store_finding and get_findings in their reasoning
+tool map, so those agents could never read or record a finding.
+
+FIXED: four synonyms registered against the implementations that already existed; the seven already-registered
+names declared in the capabilities that own that work; get_findings and store_finding IMPLEMENTED for real
+(store_finding refuses without a tenant or a valid severity and writes into security_findings); aws_iam_scan
+REMOVED from the advertised schemas because no implementation exists and inventing one would have been the
+fabrication this platform refuses (cloud posture is covered by discover_cloud_environment and
+evaluate_posture). Two new capabilities, finding.read (R0) and finding.store (R2), and every role holding
+finding.list_open also holds finding.read, because the validator requires a role to hold ALL of a capability's
+tools. Guard: tests/test_advertised_tools_are_brokerable.py asserts the advertised set is a subset of the
+brokerable set, so the two layers cannot drift again.
+
+PROVED LIVE, and one defect found only by running it: sast_scan success, semgrep_scan success, container_scan
+success (it committed 11 REAL trivy findings for minio/minio:latest into the register, 1002 -> 1013, which is
+the scanner working), get_findings returned 3 rows. store_finding FAILED with "'CursorResult' object is not
+subscriptable" AFTER its INSERT had committed: the row was written and the response reported failure, so a
+caller would retry and duplicate the finding. Fixed with .mappings().first(); re-proved success=true, id 1038,
+row verified present, then deleted and the register returned to 1013 with 0 proof rows left.
+
+STATE: 26 roles, 77 tools, 72 capabilities, every operational capability has a tool and an owning role, every
+advertised tool is registered and brokerable, 1,377 tests pass with 24 skipped.
+
+STILL OPEN: cloud.apply_remediation has never changed anything because the credential is read-only and returns
+the real AccessDenied; it needs a write-capable IAM role. pip check reports semgrep's own pinned deps (mcp,
+opentelemetry-api, pyjwt, wcmatch) conflicting with the platform's newer versions; semgrep 1.187.0 runs fine
+as a CLI (2 real findings on a test file), so this is cosmetic today but would matter if semgrep were ever
+imported rather than executed.

@@ -121,60 +121,128 @@ async def _port_inventory_scan(params: dict) -> dict:
 
 
 async def _nuclei_scan(params: dict) -> dict:
-    """Run nuclei scan. params: target, templates."""
+    """Run nuclei. params: target, templates.
+
+    nuclei v3.11 removed -json; the JSONL flag is -jsonl (alias -j). Measured 25 Nov 2026: the stale flag made
+    every run exit 2 with "flag provided but not defined: -json" and return zero findings. Malformed JSONL lines
+    are counted rather than swallowed, and a run that failed does not report an empty finding list as success.
+    """
     target = params.get("target", "localhost")
     templates = params.get("templates", "")
-    
-    # nuclei v3.11 removed -json; the JSONL flag is -jsonl (alias -j). Measured 25 Nov 2026: the stale
-    # flag made every nuclei run exit 2 with "flag provided but not defined: -json" and return zero
-    # findings, so the assessment role could not scan at all. The parser below already reads JSONL.
+
     cmd = [_find_tool("nuclei"), "-u", target, "-jsonl"]
     if templates:
         cmd.extend(["-t", templates])
-    
+
     result = await _run_tool(cmd, timeout=600)
     findings = []
-    for line in result["stdout"].split("\n"):
+    malformed = 0
+    for line in (result.get("stdout") or "").split("\n"):
         if line.strip().startswith("{"):
             try:
                 findings.append(json.loads(line))
-            except:
-                pass
+            except Exception:
+                malformed += 1
     result["findings"] = findings
     result["tool"] = "nuclei"
+    result["target"] = target
+    result["malformed_lines"] = malformed
+    result["summary"] = {"findings": len(findings), "malformed_lines": malformed,
+                         "exit_code": result.get("exit_code")}
+    if result.get("exit_code") not in (0, None):
+        result["success"] = False
+        result["error"] = (f"nuclei exited {result.get('exit_code')}: "
+                           f"{(result.get('stderr') or '')[-200:]}")
+    elif not findings and malformed:
+        result["success"] = False
+        result["error"] = f"nuclei output could not be parsed ({malformed} malformed line(s))"
+    else:
+        result["success"] = True
     return result
 
 
 async def _semgrep_scan(params: dict) -> dict:
-    """Run semgrep scan. params: path, rules."""
+    """Run semgrep. params: target (or path), rules.
+
+    Findings and ERRORS are reported separately. An earlier version filed semgrep's errors under a key named
+    "summary" and turned any parse failure into findings=[], so a semgrep that could not run looked exactly like
+    a clean scan. Measured 25 Nov 2026.
+    """
     path = params.get("target") or params.get("path") or "."
     rules = params.get("rules", "auto")
-    
+
     cmd = [_find_tool("semgrep"), "--json", "--config", rules, path]
     result = await _run_tool(cmd, timeout=600)
-    try:
-        data = json.loads(result["stdout"])
-        result["findings"] = data.get("results", [])
-        result["summary"] = data.get("errors", [])
-    except:
-        result["findings"] = []
     result["tool"] = "semgrep"
+    result["target"] = path
+
+    raw = result.get("stdout") or ""
+    try:
+        data = json.loads(raw)
+    except Exception:
+        result["success"] = False
+        result["findings"] = []
+        result["errors"] = []
+        result["error"] = (f"semgrep produced no parseable JSON (exit {result.get('exit_code')}); "
+                           f"stderr: {(result.get('stderr') or '')[-300:]}")
+        return result
+
+    findings = data.get("results") or []
+    errors = data.get("errors") or []
+    result["findings"] = findings
+    result["errors"] = errors
+    result["summary"] = {
+        "findings": len(findings),
+        "errors": len(errors),
+        "rules_run": len(data.get("paths", {}).get("scanned") or []),
+        "exit_code": result.get("exit_code"),
+    }
+    # a run that errored and produced nothing is a failure, not a clean bill of health
+    if not findings and errors:
+        result["success"] = False
+        result["error"] = "semgrep errored and returned no findings: " + str(
+            (errors[0] or {}).get("message", ""))[:200]
+    elif result.get("exit_code") not in (0, None):
+        result["success"] = False
+        result["error"] = (f"semgrep exited {result.get('exit_code')}: "
+                           f"{(result.get('stderr') or '')[-200:]}")
+    else:
+        result["success"] = True
     return result
 
 
 async def _trivy_scan(params: dict) -> dict:
-    """Run trivy scan. params: image, path, scan_type."""
+    """Run trivy. params: image or target, scan_type.
+
+    An earlier version turned any parse failure into vulnerabilities=[], so a trivy that could not run read
+    exactly like a clean image. Measured 25 Nov 2026.
+    """
     scan_type = params.get("scan_type", "fs")
     target = params.get("target", params.get("image", "."))
-    
+
     cmd = [_find_tool("trivy"), scan_type, "--format", "json", target]
     result = await _run_tool(cmd, timeout=600)
-    try:
-        data = json.loads(result["stdout"])
-        result["vulnerabilities"] = data.get("Results", [])
-    except:
-        result["vulnerabilities"] = []
     result["tool"] = "trivy"
+    result["target"] = target
+    try:
+        data = json.loads(result.get("stdout") or "")
+    except Exception:
+        result["success"] = False
+        result["vulnerabilities"] = []
+        result["error"] = (f"trivy produced no parseable JSON (exit {result.get('exit_code')}); "
+                           f"stderr: {(result.get('stderr') or '')[-300:]}")
+        return result
+    results = data.get("Results") or []
+    total = sum(len(r.get("Vulnerabilities") or []) for r in results)
+    result["vulnerabilities"] = results
+    result["summary"] = {"results": len(results), "vulnerabilities": total,
+                         "exit_code": result.get("exit_code")}
+    if result.get("exit_code") not in (0, None):
+        result["success"] = False
+        result["error"] = (f"trivy exited {result.get('exit_code')}: "
+                           f"{(result.get('stderr') or '')[-200:]}")
+    else:
+        result["success"] = True
     return result
 
 
@@ -551,6 +619,59 @@ async def _triage_finding(params: dict) -> dict:
         "epss": finding.get("epss"),
         **platform_data.derive_priority(finding),
     }
+
+async def _get_findings(params: dict) -> dict:
+    """Read findings from the live register.
+
+    Advertised to the reasoning layer and named by fifteen bridge agents, but never registered, so every agent
+    that tried to read its own findings was refused. Measured 25 Nov 2026.
+    """
+    return await _list_open_findings(params)
+
+
+async def _store_finding(params: dict) -> dict:
+    """Persist one finding into the live register.
+
+    Advertised and named by fifteen bridge agents but never registered. Refuses rather than pretending when the
+    tenant or the minimum fields are missing.
+    """
+    import json as _json
+
+    from sqlalchemy import text as _text
+
+    from gds_api.db import async_session_factory
+    from gds_api.tenant_binding import bind_tenant
+
+    tenant = params.get("_tenant_id") or params.get("tenant_id")
+    if not tenant:
+        return {"success": False, "error": "tenant context is required", "code": "MISSING_TENANT"}
+    title = str(params.get("title") or "").strip()
+    severity = str(params.get("severity") or "").strip().lower()
+    if not title:
+        return {"success": False, "error": "title is required", "code": "MISSING_ARGUMENT"}
+    if severity not in {"critical", "high", "medium", "low", "info"}:
+        return {"success": False, "code": "INVALID_ARGUMENT",
+                "error": "severity must be critical, high, medium, low or info"}
+    scanner = str(params.get("scanner") or params.get("source") or "agent").strip()[:80]
+    target = str(params.get("target") or "").strip() or None
+    details = params.get("details")
+    if details is not None and not isinstance(details, str):
+        details = _json.dumps(details)
+
+    async with async_session_factory() as session:
+        await bind_tenant(session, str(tenant))
+        row = (await session.execute(_text(
+            "INSERT INTO security_findings (tenant_id, scanner, title, severity, status, cve, cvss, details) "
+            "VALUES (:t, :s, :ti, :sev, 'open', :cve, :cvss, CAST(:d AS jsonb)) RETURNING id"),
+            {"t": str(tenant), "s": scanner, "ti": title, "sev": severity,
+             "cve": params.get("cve"), "cvss": params.get("cvss"),
+             "d": details or (_json.dumps({"target": target}) if target else None)})).mappings().first()
+        await session.commit()
+    return {"success": True, "tool": "store_finding", "finding_id": row["id"] if row else None,
+            "tenant_id": str(tenant), "title": title, "severity": severity, "scanner": scanner,
+            "target": target, "status": "open"}
+
+
 async def _list_open_findings(params: dict) -> dict:
     """Open findings from the live security_findings table. Was a hardcoded empty list."""
     return await platform_data.open_findings(
@@ -599,8 +720,11 @@ async def _check_domain_security(params: dict) -> dict:
         return {"success": False, "tool": "check_domain_security", "error": str(e)}
 
 async def _check_url_security_headers(params: dict) -> dict:
-    """Check URL security headers (alias for check_url_headers)."""
-    return await _check_url_headers(params)
+    """Check URL security headers (the name the reasoning schema advertises for check_url_headers)."""
+    target = params.get("target") or params.get("url") or ""
+    if not target:
+        return {"success": False, "error": "target required (a URL)", "code": "MISSING_ARGUMENT"}
+    return await _check_url_headers({**params, "target": target})
 
 async def _review_compliance_posture(params: dict) -> dict:
     """Per-framework pass/fail from compliance_assessments. Was a hardcoded 28 percent."""
@@ -786,6 +910,12 @@ TOOL_REGISTRY = {
     "engineering_plan_mission": _ops_tools.engineering_plan_mission,
     "engineering_execute_session": _ops_tools.engineering_execute_session,
     "remediation_plan_image_upgrade": _ops_tools.remediation_plan_image_upgrade,
+    "get_findings": _get_findings,
+    "store_finding": _store_finding,
+    "httpx_scan": _httpx_probe,
+    "security_headers_check": _check_url_security_headers,
+    "osv_check": _search_osv_vulnerabilities,
+    "cisa_kev_check": _check_cisa_kev,
 }
 
 

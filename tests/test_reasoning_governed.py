@@ -23,11 +23,11 @@ def test_resolver_returns_none_when_no_single_capability_declares_the_tool():
 
     Updated 19 Nov 2026: nmap_scan is now deliberately declared as network.port_scan
     (RED team only, target-authorisation gated) because the tool is registered and agents
-    legitimately need it. masscan_scan is registered in the gateway but still has no
+    legitimately need it. check_url_headers is registered in the gateway but still has no
     declaration, so it remains the live example of a tool that resolves to nothing.
     """
     assert resolve_capability_for_tool("nmap_scan") == "network.port_scan"
-    assert resolve_capability_for_tool("masscan_scan") is None
+    assert resolve_capability_for_tool("check_url_headers") is None
     assert resolve_capability_for_tool("nonexistent_tool") is None
 
 
@@ -54,9 +54,9 @@ def test_unmapped_tool_is_refused_with_its_own_code():
             user_id="3f3f6d1e-0000-4000-8000-000000000000",
             mission_id="4f4f6d1e-0000-4000-8000-000000000000",
             agent_id="ai-vuln-director",
-            # Updated 19 Nov 2026: nmap_scan now has a declaration, so masscan_scan (registered
+            # Updated 19 Nov 2026: nmap_scan now has a declaration, so check_url_headers (registered
             # gateway tool, still undeclared) carries the unmapped-tool case instead.
-            tool_name="masscan_scan",
+            tool_name="check_url_headers",
             args={},
         )
     )
