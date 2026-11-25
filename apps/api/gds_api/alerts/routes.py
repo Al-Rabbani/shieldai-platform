@@ -85,8 +85,12 @@ async def create_rule(
         created_at=datetime.now(UTC),
     )
     db.add(rule)
-    await db.commit()
+    # Refresh BEFORE the commit: these tables are FORCE RLS, so a commit can drop the tenant context
+    # from the connection and db.refresh() then raises InvalidRequestError "Could not refresh
+    # instance" - measured 25 Nov 2026, POST /red-team/targets returned 500 after the row was written.
+    await db.flush()
     await db.refresh(rule)
+    await db.commit()
     return {
         "id": str(rule.id),
         "tenant_id": str(rule.tenant_id),
@@ -254,8 +258,12 @@ async def update_rule(
     for field, val in update_data.items():
         setattr(rule, field, val)
 
-    await db.commit()
+    # Refresh BEFORE the commit: these tables are FORCE RLS, so a commit can drop the tenant context
+    # from the connection and db.refresh() then raises InvalidRequestError "Could not refresh
+    # instance" - measured 25 Nov 2026, POST /red-team/targets returned 500 after the row was written.
+    await db.flush()
     await db.refresh(rule)
+    await db.commit()
     return {
         "id": str(rule.id),
         "tenant_id": str(rule.tenant_id),
@@ -383,8 +391,12 @@ async def acknowledge_event(
     event.acknowledged_by = user.user_id
     event.acknowledged_at = datetime.now(UTC)
 
-    await db.commit()
+    # Refresh BEFORE the commit: these tables are FORCE RLS, so a commit can drop the tenant context
+    # from the connection and db.refresh() then raises InvalidRequestError "Could not refresh
+    # instance" - measured 25 Nov 2026, POST /red-team/targets returned 500 after the row was written.
+    await db.flush()
     await db.refresh(event)
+    await db.commit()
     return {
         "id": str(event.id),
         "tenant_id": str(event.tenant_id),
@@ -410,8 +422,12 @@ async def resolve_event(
     event.status = "resolved"
     event.resolved_at = datetime.now(UTC)
 
-    await db.commit()
+    # Refresh BEFORE the commit: these tables are FORCE RLS, so a commit can drop the tenant context
+    # from the connection and db.refresh() then raises InvalidRequestError "Could not refresh
+    # instance" - measured 25 Nov 2026, POST /red-team/targets returned 500 after the row was written.
+    await db.flush()
     await db.refresh(event)
+    await db.commit()
     return {
         "id": str(event.id),
         "tenant_id": str(event.tenant_id),

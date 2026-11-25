@@ -210,8 +210,12 @@ async def cancel_workflow_run(
         action="workflow.canceled",
         detail={"workflow_run_id": str(run.id), "mission_id": str(run.mission_id)},
     )
-    await db.commit()
+    # Refresh BEFORE the commit: these tables are FORCE RLS, so a commit can drop the tenant context
+    # from the connection and db.refresh() then raises InvalidRequestError "Could not refresh
+    # instance" - measured 25 Nov 2026, POST /red-team/targets returned 500 after the row was written.
+    await db.flush()
     await db.refresh(run)
+    await db.commit()
     await db.refresh(mission)
     # So a real open SSE tab (streaming.py) sees the cancellation immediately, instead of
     # waiting for the polling fallback - the same terminal event synthesize_report and

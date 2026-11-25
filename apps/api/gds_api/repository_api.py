@@ -221,8 +221,12 @@ async def refresh_repository_endpoint(
     except RepositoryNotFound as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Repository not found") from exc
     await refresh_repository_status(db, repo)
-    await db.commit()
+    # Refresh BEFORE the commit: these tables are FORCE RLS, so a commit can drop the tenant context
+    # from the connection and db.refresh() then raises InvalidRequestError "Could not refresh
+    # instance" - measured 25 Nov 2026, POST /red-team/targets returned 500 after the row was written.
+    await db.flush()
     await db.refresh(repo)
+    await db.commit()
     return _repo_to_out(repo)
 
 
@@ -367,8 +371,12 @@ async def _get_or_create_browse_mission(
         status="running",
     )
     db.add(mission)
-    await db.commit()
+    # Refresh BEFORE the commit: these tables are FORCE RLS, so a commit can drop the tenant context
+    # from the connection and db.refresh() then raises InvalidRequestError "Could not refresh
+    # instance" - measured 25 Nov 2026, POST /red-team/targets returned 500 after the row was written.
+    await db.flush()
     await db.refresh(mission)
+    await db.commit()
     return mission
 
 

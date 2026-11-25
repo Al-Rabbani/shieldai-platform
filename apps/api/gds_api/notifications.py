@@ -42,8 +42,12 @@ async def mark_read(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Notification not found")
     if notification.read_at is None:
         notification.read_at = datetime.now(UTC)
-        await db.commit()
+        # Refresh BEFORE the commit: these tables are FORCE RLS, so a commit can drop the tenant context
+        # from the connection and db.refresh() then raises InvalidRequestError "Could not refresh
+        # instance" - measured 25 Nov 2026, POST /red-team/targets returned 500 after the row was written.
+        await db.flush()
         await db.refresh(notification)
+        await db.commit()
     return notification
 
 

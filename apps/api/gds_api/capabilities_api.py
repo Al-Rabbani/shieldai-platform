@@ -405,8 +405,12 @@ async def admin_patch_capability_state(
         action="capability.state.patch",
         detail={"capability_key": stable_key, "disabled": body.disabled, "reason": body.reason},
     )
-    await db.commit()
+    # Refresh BEFORE the commit: these tables are FORCE RLS, so a commit can drop the tenant context
+    # from the connection and db.refresh() then raises InvalidRequestError "Could not refresh
+    # instance" - measured 25 Nov 2026, POST /red-team/targets returned 500 after the row was written.
+    await db.flush()
     await db.refresh(state)
+    await db.commit()
     return CapabilityStateOut(
         capability_key=state.capability_key,
         tenant_id=state.tenant_id,

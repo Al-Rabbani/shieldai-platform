@@ -183,8 +183,12 @@ async def create_target(
         action="redteam.target_authorized",
         detail={"target": target, "scope_description": body.scope_description},
     )
-    await db.commit()
+    # Refresh BEFORE the commit: these tables are FORCE RLS, so a commit can drop the tenant context
+    # from the connection and db.refresh() then raises InvalidRequestError "Could not refresh
+    # instance" - measured 25 Nov 2026, POST /red-team/targets returned 500 after the row was written.
+    await db.flush()
     await db.refresh(authorized_target)
+    await db.commit()
     return authorized_target
 
 
@@ -209,8 +213,12 @@ async def revoke_target(
         action="redteam.target_revoked",
         detail={"target": row.target},
     )
-    await db.commit()
+    # Refresh BEFORE the commit: these tables are FORCE RLS, so a commit can drop the tenant context
+    # from the connection and db.refresh() then raises InvalidRequestError "Could not refresh
+    # instance" - measured 25 Nov 2026, POST /red-team/targets returned 500 after the row was written.
+    await db.flush()
     await db.refresh(row)
+    await db.commit()
     return row
 
 
@@ -366,8 +374,12 @@ async def create_engagement(
         action="redteam.engagement_created",
         detail={"engagement_id": str(engagement.id), "mission_id": str(body.mission_id)},
     )
-    await db.commit()
+    # Refresh BEFORE the commit: these tables are FORCE RLS, so a commit can drop the tenant context
+    # from the connection and db.refresh() then raises InvalidRequestError "Could not refresh
+    # instance" - measured 25 Nov 2026, POST /red-team/targets returned 500 after the row was written.
+    await db.flush()
     await db.refresh(engagement)
+    await db.commit()
     return await _engagement_out(db, engagement)
 
 
@@ -398,8 +410,12 @@ async def authorize_engagement(
         action="redteam.engagement_authorized",
         detail={"engagement_id": str(row.id)},
     )
-    await db.commit()
+    # Refresh BEFORE the commit: these tables are FORCE RLS, so a commit can drop the tenant context
+    # from the connection and db.refresh() then raises InvalidRequestError "Could not refresh
+    # instance" - measured 25 Nov 2026, POST /red-team/targets returned 500 after the row was written.
+    await db.flush()
     await db.refresh(row)
+    await db.commit()
     return await _engagement_out(db, row)
 
 
@@ -427,6 +443,10 @@ async def abort_engagement(
         action="redteam.engagement_aborted",
         detail={"engagement_id": str(row.id)},
     )
-    await db.commit()
+    # Refresh BEFORE the commit: these tables are FORCE RLS, so a commit can drop the tenant context
+    # from the connection and db.refresh() then raises InvalidRequestError "Could not refresh
+    # instance" - measured 25 Nov 2026, POST /red-team/targets returned 500 after the row was written.
+    await db.flush()
     await db.refresh(row)
+    await db.commit()
     return await _engagement_out(db, row)

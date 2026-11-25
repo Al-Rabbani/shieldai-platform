@@ -213,8 +213,12 @@ async def create_correlation_rule(
         origin="tenant",
     )
     db.add(rule)
-    await db.commit()
+    # Refresh BEFORE the commit: these tables are FORCE RLS, so a commit can drop the tenant context
+    # from the connection and db.refresh() then raises InvalidRequestError "Could not refresh
+    # instance" - measured 25 Nov 2026, POST /red-team/targets returned 500 after the row was written.
+    await db.flush()
     await db.refresh(rule)
+    await db.commit()
     return rule
 
 
@@ -254,8 +258,12 @@ async def update_correlation_rule(
     changes = body.model_dump(exclude_unset=True)
     for field, value in changes.items():
         setattr(rule, field, value)
-    await db.commit()
+    # Refresh BEFORE the commit: these tables are FORCE RLS, so a commit can drop the tenant context
+    # from the connection and db.refresh() then raises InvalidRequestError "Could not refresh
+    # instance" - measured 25 Nov 2026, POST /red-team/targets returned 500 after the row was written.
+    await db.flush()
     await db.refresh(rule)
+    await db.commit()
     return rule
 
 
@@ -339,8 +347,12 @@ async def resolve_correlated_incident(
     if body.notes:
         incident.summary += f"\nResolution Notes: {body.notes}"
 
-    await db.commit()
+    # Refresh BEFORE the commit: these tables are FORCE RLS, so a commit can drop the tenant context
+    # from the connection and db.refresh() then raises InvalidRequestError "Could not refresh
+    # instance" - measured 25 Nov 2026, POST /red-team/targets returned 500 after the row was written.
+    await db.flush()
     await db.refresh(incident)
+    await db.commit()
     return incident
 
 

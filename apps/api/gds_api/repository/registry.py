@@ -69,8 +69,12 @@ async def register_repository(
             "status": repo.status,
         },
     )
-    await db.commit()
+    # Refresh BEFORE the commit: these tables are FORCE RLS, so a commit can drop the tenant context
+    # from the connection and db.refresh() then raises InvalidRequestError "Could not refresh
+    # instance" - measured 25 Nov 2026, POST /red-team/targets returned 500 after the row was written.
+    await db.flush()
     await db.refresh(repo)
+    await db.commit()
     return repo
 
 
@@ -167,8 +171,12 @@ async def archive_repository(
         action="repository.archived",
         detail={"repository_id": str(repository_id)},
     )
-    await db.commit()
+    # Refresh BEFORE the commit: these tables are FORCE RLS, so a commit can drop the tenant context
+    # from the connection and db.refresh() then raises InvalidRequestError "Could not refresh
+    # instance" - measured 25 Nov 2026, POST /red-team/targets returned 500 after the row was written.
+    await db.flush()
     await db.refresh(repo)
+    await db.commit()
     return repo
 
 
@@ -191,8 +199,12 @@ async def update_repository_policy(
         action="repository.policy_updated",
         detail={"repository_id": str(repository_id), "updates": updates},
     )
-    await db.commit()
+    # Refresh BEFORE the commit: these tables are FORCE RLS, so a commit can drop the tenant context
+    # from the connection and db.refresh() then raises InvalidRequestError "Could not refresh
+    # instance" - measured 25 Nov 2026, POST /red-team/targets returned 500 after the row was written.
+    await db.flush()
     await db.refresh(policy)
+    await db.commit()
     return policy
 
 
@@ -215,6 +227,10 @@ async def update_workspace_policy(
         action="repository.workspace_policy_updated",
         detail={"repository_id": str(repository_id), "updates": updates},
     )
-    await db.commit()
+    # Refresh BEFORE the commit: these tables are FORCE RLS, so a commit can drop the tenant context
+    # from the connection and db.refresh() then raises InvalidRequestError "Could not refresh
+    # instance" - measured 25 Nov 2026, POST /red-team/targets returned 500 after the row was written.
+    await db.flush()
     await db.refresh(policy)
+    await db.commit()
     return policy

@@ -330,8 +330,12 @@ async def start_cloud_posture_evaluation(
         )
     except CloudPostureEvaluationStartError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, exc.reason) from exc
-    await db.commit()
+    # Refresh BEFORE the commit: these tables are FORCE RLS, so a commit can drop the tenant context
+    # from the connection and db.refresh() then raises InvalidRequestError "Could not refresh
+    # instance" - measured 25 Nov 2026, POST /red-team/targets returned 500 after the row was written.
+    await db.flush()
     await db.refresh(run)
+    await db.commit()
     return _run_to_out(run)
 
 
@@ -383,8 +387,12 @@ async def cancel_cloud_posture_evaluation(
         raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc
     except CloudPostureEvaluationStartError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, exc.reason) from exc
-    await db.commit()
+    # Refresh BEFORE the commit: these tables are FORCE RLS, so a commit can drop the tenant context
+    # from the connection and db.refresh() then raises InvalidRequestError "Could not refresh
+    # instance" - measured 25 Nov 2026, POST /red-team/targets returned 500 after the row was written.
+    await db.flush()
     await db.refresh(run)
+    await db.commit()
     return _run_to_out(run)
 
 
@@ -546,8 +554,12 @@ async def request_cloud_posture_finding_suppression(
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
     except DuplicateActiveSuppression as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
-    await db.commit()
+    # Refresh BEFORE the commit: these tables are FORCE RLS, so a commit can drop the tenant context
+    # from the connection and db.refresh() then raises InvalidRequestError "Could not refresh
+    # instance" - measured 25 Nov 2026, POST /red-team/targets returned 500 after the row was written.
+    await db.flush()
     await db.refresh(suppression)
+    await db.commit()
     return _suppression_to_out(suppression)
 
 

@@ -200,8 +200,12 @@ async def create_cloud_environment(
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
     except CloudEnvironmentNotFound as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc
-    await db.commit()
+    # Refresh BEFORE the commit: these tables are FORCE RLS, so a commit can drop the tenant context
+    # from the connection and db.refresh() then raises InvalidRequestError "Could not refresh
+    # instance" - measured 25 Nov 2026, POST /red-team/targets returned 500 after the row was written.
+    await db.flush()
     await db.refresh(env)
+    await db.commit()
     return _environment_to_out(env)
 
 
@@ -250,8 +254,12 @@ async def create_cloud_connection_profile(
         )
     except InvalidAuthenticationType as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
-    await db.commit()
+    # Refresh BEFORE the commit: these tables are FORCE RLS, so a commit can drop the tenant context
+    # from the connection and db.refresh() then raises InvalidRequestError "Could not refresh
+    # instance" - measured 25 Nov 2026, POST /red-team/targets returned 500 after the row was written.
+    await db.flush()
     await db.refresh(profile)
+    await db.commit()
     return _connection_profile_to_out(profile)
 
 
@@ -288,8 +296,12 @@ async def validate_cloud_connection(
         )
     except CloudConnectionProfileNotFound as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc
-    await db.commit()
+    # Refresh BEFORE the commit: these tables are FORCE RLS, so a commit can drop the tenant context
+    # from the connection and db.refresh() then raises InvalidRequestError "Could not refresh
+    # instance" - measured 25 Nov 2026, POST /red-team/targets returned 500 after the row was written.
+    await db.flush()
     await db.refresh(validation)
+    await db.commit()
     return CloudConnectionValidationOut(
         id=validation.id,
         tenant_id=validation.tenant_id,
@@ -369,8 +381,12 @@ async def start_cloud_discovery(
     # under NullPool. Re-bind before committing or refreshing, or the refresh reads a FORCE-RLS table
     # unbound and finds nothing.
     await bind_tenant(db, current_user.tenant_id)
-    await db.commit()
+    # Refresh BEFORE the commit: these tables are FORCE RLS, so a commit can drop the tenant context
+    # from the connection and db.refresh() then raises InvalidRequestError "Could not refresh
+    # instance" - measured 25 Nov 2026, POST /red-team/targets returned 500 after the row was written.
+    await db.flush()
     await db.refresh(job)
+    await db.commit()
     return _discovery_job_to_out(job)
 
 
@@ -426,8 +442,12 @@ async def cancel_cloud_discovery_job(
         raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc
     except CloudDiscoveryStartError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, exc.reason) from exc
-    await db.commit()
+    # Refresh BEFORE the commit: these tables are FORCE RLS, so a commit can drop the tenant context
+    # from the connection and db.refresh() then raises InvalidRequestError "Could not refresh
+    # instance" - measured 25 Nov 2026, POST /red-team/targets returned 500 after the row was written.
+    await db.flush()
     await db.refresh(job)
+    await db.commit()
     return _discovery_job_to_out(job)
 
 
