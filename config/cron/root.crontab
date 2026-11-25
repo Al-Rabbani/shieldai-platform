@@ -31,3 +31,9 @@
 # Approvals expire on their own. Nothing expired them, so a request from a path that no longer exists kept
 # looking like a decision the platform was waiting for. Expiring is neither approving nor rejecting.
 15 * * * * cd /opt/gds-os && set -a && . /opt/.env 2>/dev/null && set +a && PYTHONPATH=apps/api ./apps/api/venv/bin/python3.11 scripts/ops/expire_stale_approvals.py >> /var/log/gds-approval-expiry.log 2>&1
+
+# Liveness: an agent that cannot be observed alive cannot be operated. Measured 25 Nov 2026: agent_heartbeats held
+# ONE row, for blue_team, dated 18 Nov, so /agents/fleet/status read 'unknown' for 22 of 23 roles. The worker derives
+# each role's health from whether its declared tools resolve and their binaries exist, then signs and records it.
+# FRESH_WITHIN_SECONDS is 180, so a 2-minute cadence keeps every role inside the fresh window.
+*/2 * * * * cd /opt/gds-os && set -a && . /opt/.env 2>/dev/null && set +a && PYTHONPATH=apps/api ./apps/api/venv/bin/python3.11 scripts/ops/agent_heartbeat.py >> /var/log/gds-heartbeat.log 2>&1
