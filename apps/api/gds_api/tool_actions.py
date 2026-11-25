@@ -378,10 +378,14 @@ async def coordinate_pentest_engagement(
         for row in authorised:
             await session.execute(
                 text(
-                    "INSERT INTO engagement_targets (engagement_id, authorized_target_id) VALUES (:e, :a) "
-                    "ON CONFLICT DO NOTHING"
+                    # tenant_id is NOT NULL and the FORCE-RLS policy checks tenant_id = current_setting(
+                    # 'gds.tenant_id'). Measured 25 Nov 2026: this insert omitted it, so every engagement
+                    # failed with "new row violates row-level security policy for table engagement_targets"
+                    # and the pentest coordinator could not create an engagement at all.
+                    "INSERT INTO engagement_targets (engagement_id, authorized_target_id, tenant_id) "
+                    "VALUES (:e, :a, :t) ON CONFLICT DO NOTHING"
                 ),
-                {"e": engagement_id, "a": row["id"]},
+                {"e": engagement_id, "a": row["id"], "t": tenant},
             )
         await session.commit()
     return {
