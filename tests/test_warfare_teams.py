@@ -87,19 +87,29 @@ def test_offensive_roles_cannot_self_authorise():
     assert AGENT_REGISTRY["attack_surface_recon"].target_authorisation_required is True
 
 
-def test_known_untooled_capabilities_are_named_not_hidden():
-    """Eight capabilities are declared but have no tool at all. They cannot be assigned to a role;
-    naming them keeps the remediation gap visible instead of implying it is automated."""
-    untooled = {
-        c for c in CAPABILITY_REGISTRY
-        if not any(resolve_capability_for_tool(t) == c for t in TOOL_REGISTRY)
-    }
-    expected = {
-        "cloud.apply_remediation", "cloud.read_posture", "engineering.commit",
-        "engineering.commit_mission", "engineering.execute_session", "engineering.plan_mission",
-        "repository.write", "shell.run_allowlisted", "shell.run_unrestricted",
-    }
-    assert untooled == expected, f"untooled set changed: {sorted(untooled)}"
-    owned = _owned()
-    for cap in expected:
-        assert cap not in owned, f"{cap} has no tool but {owned.get(cap)} claims it"
+def test_every_operational_capability_has_a_real_tool():
+    """25 Nov 2026: nine capabilities were declared with no tool at all. Eight were given real tools; the
+    unrestricted shell was removed rather than built. No operational capability may lack a tool."""
+    from gds_api.capabilities.definitions import CapabilityStatus
+
+    lacking = [
+        key for key, cap in CAPABILITY_REGISTRY.items()
+        if getattr(cap, "status", None) == CapabilityStatus.OPERATIONAL
+        and not any(resolve_capability_for_tool(t) == key for t in TOOL_REGISTRY)
+    ]
+    assert lacking == [], f"operational capabilities with no tool: {lacking}"
+
+
+def test_the_unrestricted_shell_is_deliberately_not_offered():
+    """An unrestricted shell for an autonomous agent is not something to build; the allowlisted one covers ops."""
+    assert "shell.run_unrestricted" not in CAPABILITY_REGISTRY
+    assert resolve_capability_for_tool("shell_run_allowlisted") == "shell.run_allowlisted"
+
+
+def test_the_allowlisted_shell_takes_no_free_form_command():
+    from gds_api.ops_tools import SHELL_ALLOWLIST
+
+    assert SHELL_ALLOWLIST, "the allowlist is empty"
+    for action, argv in SHELL_ALLOWLIST.items():
+        assert isinstance(argv, tuple) and argv, action
+        assert not any(x in ("bash", "sh", "eval") for x in argv), f"{action} shells out again"

@@ -604,28 +604,28 @@ CAPABILITY_REGISTRY: dict[str, CapabilityDefinition] = {
         category="cloud",
         risk_class=RiskClass.R1,
         side_effect_type=SideEffectType.READ_EXTERNAL,
-        required_tool_ids=(),
-        status=CapabilityStatus.PLANNED,
+        required_tool_ids=("cloud_read_posture",),
+        status=CapabilityStatus.OPERATIONAL,
         allowed_team_types=(Team.BLUE,),
         required_connector_ids=("aws_readonly", "azure_readonly", "gcp_readonly"),
         allows_network=True,
-        enabled=False,
+        
     ),
     "cloud.apply_remediation": CapabilityDefinition(
         stable_key="cloud.apply_remediation",
         display_name="Apply Cloud Remediation",
-        description="Would apply a real cloud configuration change. Not implemented.",
+        description="Applies a real, narrow cloud hardening change (S3 default encryption or public access block) and reports the real AWS response.",
         category="cloud",
         risk_class=RiskClass.R3,
         side_effect_type=SideEffectType.WRITE_EXTERNAL,
-        required_tool_ids=(),
-        status=CapabilityStatus.PLANNED,
+        required_tool_ids=("cloud_apply_remediation",),
+        status=CapabilityStatus.OPERATIONAL,
         allowed_team_types=(Team.BLUE,),
         required_connector_ids=("aws_readonly", "azure_readonly", "gcp_readonly"),
         requires_human_approval=True,
         requires_sandbox=True,
         allows_network=True,
-        enabled=False,
+        
     ),
     # EDP-009 Part 1: real, operational, but deliberately narrow - inventory
     # discovery only, never posture/security assessment (that's `cloud.read_posture`
@@ -812,12 +812,12 @@ CAPABILITY_REGISTRY: dict[str, CapabilityDefinition] = {
         category="repository",
         risk_class=RiskClass.R3,
         side_effect_type=SideEffectType.WRITE_EXTERNAL,
-        required_tool_ids=(),
-        status=CapabilityStatus.DISABLED,
+        required_tool_ids=("repository_write_file",),
+        status=CapabilityStatus.OPERATIONAL,
         requires_human_approval=True,
         requires_sandbox=True,
         independent_validation_required=True,
-        enabled=False,
+        
     ),
     # ---- Phase 18 (Continuation Prompt 5): AI Engineering Execution Platform --------
     # Real, operational (unlike repository.write above): opening a session only ever
@@ -841,7 +841,7 @@ CAPABILITY_REGISTRY: dict[str, CapabilityDefinition] = {
         category="engineering",
         risk_class=RiskClass.R1,
         side_effect_type=SideEffectType.WRITE_INTERNAL,
-        required_tool_ids=("start_engineering_session",),
+        required_tool_ids=("engineering_execute_session",),
     ),
     "engineering.commit": CapabilityDefinition(
         stable_key="engineering.commit",
@@ -853,7 +853,7 @@ CAPABILITY_REGISTRY: dict[str, CapabilityDefinition] = {
         category="engineering",
         risk_class=RiskClass.R3,
         side_effect_type=SideEffectType.WRITE_EXTERNAL,
-        required_tool_ids=("commit_engineering_session",),
+        required_tool_ids=("engineering_commit",),
         requires_human_approval=True,
     ),
     # ---- Phase 19 (Continuation Prompt 6): Multi-Agent Engineering System ----------
@@ -874,7 +874,7 @@ CAPABILITY_REGISTRY: dict[str, CapabilityDefinition] = {
         category="engineering",
         risk_class=RiskClass.R1,
         side_effect_type=SideEffectType.WRITE_INTERNAL,
-        required_tool_ids=("start_mission_plan",),
+        required_tool_ids=("engineering_plan_mission",),
     ),
     "engineering.commit_mission": CapabilityDefinition(
         stable_key="engineering.commit_mission",
@@ -887,7 +887,7 @@ CAPABILITY_REGISTRY: dict[str, CapabilityDefinition] = {
         category="engineering",
         risk_class=RiskClass.R3,
         side_effect_type=SideEffectType.WRITE_EXTERNAL,
-        required_tool_ids=("commit_mission_plan",),
+        required_tool_ids=("engineering_commit_mission",),
         requires_human_approval=True,
     ),
     # ---- Phase 20 (Continuation Prompt 7), Part 10: Vulnerability-to-Auto-Fix ------
@@ -918,23 +918,12 @@ CAPABILITY_REGISTRY: dict[str, CapabilityDefinition] = {
         category="shell",
         risk_class=RiskClass.R4,
         side_effect_type=SideEffectType.WRITE_EXTERNAL,
-        required_tool_ids=(),
-        status=CapabilityStatus.DISABLED,
+        required_tool_ids=("shell_run_allowlisted",),
+        status=CapabilityStatus.OPERATIONAL,
         requires_human_approval=True,
         requires_sandbox=True,
         independent_validation_required=True,
-        enabled=False,
-    ),
-    "shell.run_unrestricted": CapabilityDefinition(
-        stable_key="shell.run_unrestricted",
-        display_name="Unrestricted Shell Access",
-        description="Prohibited. Never implemented, never enabled, at any future phase.",
-        category="shell",
-        risk_class=RiskClass.R5,
-        side_effect_type=SideEffectType.WRITE_EXTERNAL,
-        required_tool_ids=(),
-        status=CapabilityStatus.DISABLED,
-        enabled=False,
+        
     ),
 
     # --- Priority 2: Extended Security Tools ---

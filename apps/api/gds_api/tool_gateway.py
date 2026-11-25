@@ -991,3 +991,17 @@ async def execute_tool_governed(
         tenant_id=str(tenant_id),
         mission_id=str(mission_id) if mission_id else "",
     )
+
+
+# --- real tools behind the capabilities that previously had none (see gds_api/ops_tools.py) ---
+from gds_api import ops_tools as _ops_tools  # noqa: E402
+
+TOOL_REGISTRY.update({
+    "shell_run_allowlisted": _ops_tools.shell_run_allowlisted,
+    "repository_write_file": _ops_tools.repository_write_file,
+    "engineering_commit": _ops_tools.engineering_commit,
+    "engineering_commit_mission": _ops_tools.engineering_commit_mission,
+    "cloud_read_posture": _ops_tools.cloud_read_posture,
+    "cloud_apply_remediation": _ops_tools.cloud_apply_remediation,
+    "engineering_plan_mission": _ops_tools.engineering_plan_mission,
+    "engineering_execute_session": _ops_tools.engineering_execute_session,})
