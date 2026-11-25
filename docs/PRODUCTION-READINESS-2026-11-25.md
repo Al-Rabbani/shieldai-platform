@@ -283,3 +283,26 @@ WHAT IS LEFT, AND WHY EACH IS A DECISION NOT A DEFECT. `red_team`, `penetration_
 `defensive_remediation_autofix` hold offensive or write capabilities that require human approval by design; approving
 an offensive action against our own estate is the owner's call. `validation_retest` needs a finding whose type has a
 deterministic re-test (a pinned dependency advisory with a fixed version).
+
+## Why validation_retest stays degraded, and why that is correct — 2026-11-25
+
+I did not leave this as "needs a deterministic re-test" without finding out why none exists.
+
+THE CODE IS RIGHT. `tool_actions.retest_finding` only re-tests a finding whose `target` matches `_PINNED`
+(`package==version`), queries OSV for that exact pinned pair, and returns RE_TEST_UNSUPPORTED with the reason for
+anything else. It refuses to invent a clean verdict, which is the correct design.
+
+THE OPEN DATA CANNOT BE RE-TESTED. All 60 open `osv` findings store `target` as a BARE package name ("pyjwt", "mcp")
+and their `raw_data` carries no version at all (only `schema_version`), so there is nothing to pin and no honest
+re-test to run. The 14 rows that DO carry `pkg==version` are all already `resolved`.
+
+THE CURRENT WRITER IS ALREADY FIXED. The insert in workflows/monitoring_activities.py writes
+`target = f"{package}=={installed_version}"`, so every finding created from now on is re-testable. The bare rows are
+historical.
+
+THE ESTATE IS ACTUALLY CLEAN RIGHT NOW. I ran the dependency watch by hand (scripts/ops/osv_check.py, normally cron
+04:40): 209 packages scanned, 0 affected, 0 advisories, 0 new findings. There is genuinely nothing to re-test.
+
+CONCLUSION. `validation_retest` is degraded because there is no open, re-testable finding, not because the tool is
+broken. It will earn its receipt the first time the daily dependency watch creates a new pinned advisory. Fabricating
+a finding to give the agent a green tick would be exactly the dishonesty this platform exists to avoid.
