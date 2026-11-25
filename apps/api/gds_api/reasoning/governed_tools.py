@@ -131,6 +131,24 @@ def _derive_target(args: dict[str, Any], capability: Any) -> tuple[str | None, s
         if isinstance(candidate, str) and candidate.strip():
             value = candidate.strip()
             break
+
+    if value is None:
+        # List-valued target arguments. Measured 25 Nov 2026: coordinate_pentest_engagement takes
+        # `targets` as a list, so the scalar scan above found nothing, the broker saw target_type=None
+        # and refused with "The requested target type is not valid for this capability" - the same class
+        # of defect as the original unconditional None. The first entry is used as the authorisation
+        # reference (AuthorizedTarget is checked per host); the full list still reaches the tool.
+        for key in ("targets", "target_list", "hosts", "domains"):
+            candidate = (args or {}).get(key)
+            if isinstance(candidate, (list, tuple)):
+                for item in candidate:
+                    if isinstance(item, str) and item.strip():
+                        value = item.strip()
+                        break
+            elif isinstance(candidate, str) and candidate.strip():
+                value = candidate.strip()
+            if value is not None:
+                break
     if not value:
         return None, None
     host = value.split("://", 1)[1] if "://" in value else value
