@@ -685,3 +685,36 @@ each execution is recorded separately rather than hidden behind the original app
 MIGRATIONS: m085 (approvals.standing, standing_until, standing_granted_by_user_id, standing_reason + index),
 m086 (approvals.standing_source_approval_id). Tests: tests/test_standing_approvals.py (7, executing both real
 queries against real rows), plus the existing reuse test updated to the separated design. 11 pass.
+
+## The five-stage cyber-warfare workflow runs unattended — 25 Nov 2026
+
+This is what the standing approvals were for. Campaign `4ca20860` ("Unattended five-stage proof") ran all five
+stages against app.globaldigitalsecurity.io with NO human in the loop: **5 executed, 0 blocked, 0 skipped**.
+
+| # | stage | agent | tool | real result |
+|---|-------|-------|------|-------------|
+| 1 | Vulnerability Assessment | vulnerability_assessment | nuclei_scan | executed, 23 findings |
+| 2 | Vulnerability Management | vulnerability_management | list_open_findings | executed, 50 open findings |
+| 3 | Vulnerability Remediation | defensive_remediation_autofix | auto_fix_finding | executed: verified upgrade plan for minio/minio:latest, 303 fixable (7 critical, 125 high, 171 medium), resolvable=False, nothing applied |
+| 4 | Incident Response | incident_response | list_open_incidents | executed, live tenant-scoped |
+| 5 | Penetration Testing | red_team | assess_attack_surface | executed |
+
+Waves ran concurrently as designed (max 3): stages 1/4/5 together, then 2, then 3, so a dependent stage waits
+for the stage it names and the independent ones do not queue behind each other.
+
+HOW THE GATES WERE OPENED, HONESTLY. Stages 1 and 5 are approval-gated and both returned REQUIRE_APPROVAL on
+the first attempt. For each, the approval was granted through the REAL route (POST /approvals/{id}/decide with
+a scoped API key, HTTP 200), then made standing for two hours with scripts/ops/grant_standing.py. The campaign
+then consumed those standing approvals through the carry mechanism. Nothing was pre-approved by editing the
+database, and the two standing grants were revoked and the API key deleted after the proof, so no authorisation
+is left standing.
+
+TWO REAL LIMITS, STATED RATHER THAN DRESSED UP:
+  1. Stage 3 still does not APPLY a fix. It produces a verified upgrade plan because the fixable findings are
+     compiled into the container image rather than being package upgrades; `resolvable=False` is the tool
+     reporting that minio/minio:latest cannot be re-pulled from the registries this host can reach (Docker Hub
+     object not found, quay.io 401). Closing that needs either a reachable registry credential or an image
+     rebuild pipeline. The campaign says so instead of claiming remediation.
+  2. Stage 1's finding count varies run to run (23 here, 25 earlier). That is a live scanner against a live
+     host, not a fixture.
+
