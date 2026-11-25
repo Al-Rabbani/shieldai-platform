@@ -123,6 +123,14 @@ async def run_campaign(
     campaign_name = name or f"Cyber warfare campaign vs {target or 'own estate'}"
     async with async_session_factory() as session:
         await bind_tenant(session, tenant_id)
+
+        async def _commit() -> None:
+            """Commit, then re-bind: the tenant setting is transaction-local, so after a commit the next
+            statement runs with no gds.tenant_id and FORCE RLS rejects the row. Measured 25 Nov 2026: the
+            campaign row inserted and the first stage insert then failed with "new row violates row-level
+            security policy for table warfare_campaign_stages"."""
+            await session.commit()
+            await bind_tenant(session, tenant_id)
         campaign_id = str(
             (
                 await session.execute(
@@ -134,7 +142,7 @@ async def run_campaign(
                 )
             ).scalar()
         )
-        await session.commit()
+        await _commit()
 
         results: list[dict[str, Any]] = []
         executed = blocked = 0
@@ -156,7 +164,7 @@ async def run_campaign(
                     )
                 ).scalar()
             )
-            await session.commit()
+            await _commit()
 
             status = "executed"
             findings_count: Optional[int] = None
@@ -234,7 +242,7 @@ async def run_campaign(
                 ),
                 {"e": executed, "b": blocked, "c": campaign_id},
             )
-            await session.commit()
+            await _commit()
             results.append(
                 {
                     "stage": stage["number"],
@@ -258,7 +266,7 @@ async def run_campaign(
             ),
             {"s": final_status, "sm": _json(summary_json), "c": campaign_id},
         )
-        await session.commit()
+        await _commit()
 
     return {
         "campaign_id": campaign_id,
