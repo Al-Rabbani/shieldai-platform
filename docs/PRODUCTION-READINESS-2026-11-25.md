@@ -1012,3 +1012,47 @@ byte-for-byte. One real defect fixed while writing them: `parallel_groups` could
 contradicted the limit it reported). A wave is now split to the ceiling. With today's five stages the widest wave
 is exactly three, so the real plan is unchanged - the split matters the moment a sixth independent stage is added,
 which is precisely when nobody would notice.
+
+## A customer can now obtain an API key — 25 Nov 2026, releases b57b50c and 9b224d5
+
+The readiness list carried "0 API keys issued" as a P2, which read like a customer not bothering. Measured: the
+routes existed (GET/POST/DELETE /admin/api-keys, gated on users:manage) and NOTHING in the product reached them.
+No page named them, the adapter had no method, and api_keys held 0 rows. A client could not integrate with the
+platform at all, because the only way to get a credential was for me to write one into the database.
+
+BUILT: `base44.admin.apiKeys / permissionCatalogue / issueApiKey / revokeApiKey` in the adapter,
+`pages/ApiKeysPage.jsx` routed at `/settings/api-keys`, and an "API Keys" entry under PLATFORM in the sidebar.
+
+THE SCREEN KEEPS TWO RULES THE API ALREADY ENFORCED, rather than papering over them:
+  * The key is shown ONCE, at issue time, because only its SHA-256 is stored. The panel says exactly that instead
+    of implying it can be looked up later.
+  * Scopes are chosen explicitly, grouped Read / Write and act / Everything else. A key with no scopes
+    authenticates and is authorised for nothing, so the server refuses one and the form will not submit one.
+
+PROVED IN A REAL BROWSER, with a probe account on the admin role. Enrolment is mandatory for that role and already
+overdue, so the probe was enrolled through the DB-owner path with the platform's own crypto and signed in with a
+real TOTP: the page rendered with all 87 catalogue scopes, a key named `probe-ui-key` with `findings:read` was
+issued through the form, the one-time panel showed it, and the key then answered 200 on `/findings` and 403 on
+`/admin/api-keys` - it can do exactly what it names. Revoking it in the UI took Active keys 1 -> 0, the row read
+`revoked`, `last_used_at` had recorded the use, and the key immediately answered 401. Probe purged afterwards:
+5 users, 0 api_keys, probe login 401.
+
+## A defect the screen exposed: revoke answered 500 for a revoke that had succeeded
+
+`DELETE /admin/api-keys/{id}` returned 500. The key really had been revoked - it answered 401 immediately after
+and the audit row was written - so the UI would have told a customer the revoke failed when it had worked, and
+invited them to try again on a credential that was already dead.
+
+CAUSE, MEASURED: the route read the row back AFTER `commit()` and that read returned nothing, so `fetchone()` was
+None and building the response raised. FIXED by taking the row from the write itself with
+`UPDATE ... RETURNING`, so no statement runs after commit.
+
+I WROTE THE WRONG EXPLANATION FIRST AND CORRECTED IT IN PLACE: I claimed `_bind` sets `gds.tenant_id` with
+`is_local=true`, so the binding died with the transaction. Reading it showed `set_config('gds.tenant_id', :tid,
+false)` - session-scoped. The measured fact is that the post-commit read returned nothing; the plausible mechanism
+is that the statement landed on a different pooled connection that never received the binding, and `api_keys` is
+FORCE-RLS so an unbound read sees zero rows rather than an error. The comment now states the behaviour as measured
+and labels the mechanism as inference, because the fix does not depend on it.
+
+Guard: `tests/test_revoke_after_commit.py` - the revoke must use RETURNING and no statement may follow its commit.
+Suite 1448 passed, 0 skipped.
