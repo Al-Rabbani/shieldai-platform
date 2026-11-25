@@ -232,6 +232,12 @@ async def execute_governed_tool(
         }
 
     payload = dict(args or {})
+    # Mission-scoped tools cannot work without the context the governance layer already holds. Measured
+    # 25 Nov 2026: coordinate_pentest_engagement refused with MISSION_REQUIRED because engagements.mission_id is
+    # NOT NULL and the wrapper never supplied it, so the tool demanded a value the agent has no way to know.
+    # Supply the governed mission and actor; an explicit value from the caller still wins.
+    payload.setdefault("mission_id", str(mid))
+    payload.setdefault("_actor_id", str(uid))
     async with async_session_factory() as session:
         await bind_tenant(session, tid)
         # An approval is granted against ONE persisted capability request. Measured 25 Nov 2026: this wrapper
