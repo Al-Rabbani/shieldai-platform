@@ -356,32 +356,10 @@ def create_gap_routers(get_db):
         cols = result.keys()
         return [dict(zip(cols, row)) for row in rows]
 
-    @approvals_router.post("/{approval_id}/decide")
-    async def decide_approval(
-        approval_id: str,
-        decision: str,
-        user: CurrentUser = Depends(get_current_user),
-        session: AsyncSession = Depends(get_db),
-    ):
-        if decision not in ("approved", "rejected"):
-            raise HTTPException(status_code=400, detail="Decision must be 'approved' or 'rejected'")
-
-        tid = _tenant_id(user)
-        # Both the existence check and the update are tenant-scoped, so an approval id
-        # from another tenant can neither be read nor decided.
-        result = await session.execute(text(
-            "SELECT id FROM approvals WHERE id = :aid AND tenant_id = :tenant_id "
-            "AND status = 'pending'"
-        ), {"aid": approval_id, "tenant_id": tid})
-        if not result.fetchone():
-            raise HTTPException(status_code=404, detail="Approval not found or already decided")
-
-        await session.execute(text(
-            "UPDATE approvals SET status = :decision, decided_at = now() "
-            "WHERE id = :aid AND tenant_id = :tenant_id"
-        ), {"decision": decision, "aid": approval_id, "tenant_id": tid})
-        await session.commit()
-        return {"approval_id": approval_id, "status": decision, "message": f"Approval {decision}"}
-
+    # POST /approvals/{approval_id}/decide used to be defined HERE as well, on this same router, with the
+    # decision read as a QUERY parameter, guarded only by get_current_user, and recording no decider, no standing
+    # window and no audit row. Both routers are mounted, so FastAPI logged a duplicate operation id and the two
+    # definitions disagreed about what deciding an approval means. The real route lives in gds_api.approvals
+    # (body-based, gated on approvals:decide, records decided_by_user_id, standing and audit). Removed 25 Nov 2026.
     return (ciem_router, cloud_router, agents_router, security_tools_router,
             policy_router, approvals_router)

@@ -921,3 +921,40 @@ domain (3 real findings), security_headers_check on both hosts, then nuclei_scan
 actions, zero refused, engagement `completed` with a report summary that states the counts and says no
 exploitation was attempted. The standing approvals the rule created were revoked afterwards, restoring the
 zero-standing baseline. Eight guards in tests/test_engagement_runner.py.
+
+## The deploy gate was skipping its own guarantees — 25 Nov 2026
+
+The gate ran the suite on every deploy and reported green. Measured: 24 tests skipped on EVERY run, and they
+were the ones that matter most — tenant isolation (5), password storage (2), provider discovery (7), the
+authenticated platform stream (1), the MSSP guard (1), network target authorisation (1), table isolation (3),
+and the execution-claim tests (4). Every one skipped with a reason like "no DATABASE_URL in this environment".
+
+The cause was not a missing database. `/opt/.env` already carried DATABASE_URL (role `gds`, so RLS applies),
+GDS_TENANT_ID, GDS_OWNER_USER_ID and SECURITY_ALERT_TENANT_ID. The test process simply never read it: the gate
+invokes pytest directly, and `tests/conftest.py` loaded nothing. So the platform's isolation and password
+guarantees were never executed by the gate that exists to prove them.
+
+FIX: `tests/conftest.py` now loads `/opt/.env` when the variables are absent, in one place, so the gate and a
+manual run exercise the same guarantees. Where the file is unreadable it degrades to the old skip rather than an
+error, so a developer without host access is not blocked.
+
+RESULT, measured: the seven files that used to skip now run and pass (44 passed), and the full suite moved from
+1410 passed / 24 skipped to **1434 passed / 4 skipped**. The four remaining skips are legitimate: they need an
+ISOLATED PostgreSQL URL for execution-claim contention tests, which this host does not provide, and they say so.
+
+## A second approval-decision route, weaker than the real one — found and removed
+
+The same suite run printed a warning that had been scrolling past unread: "Duplicate Operation ID
+decide_approval_approvals__approval_id__decide_post for function decide_approval at gap_routes.py".
+
+Both `gds_api.approvals` and `gds_api.gap_routes` defined POST /approvals/{approval_id}/decide, and
+`create_gap_routers()` is mounted too, so both were registered. They disagreed about the most security-relevant
+part of the action: the real route takes the decision in a request BODY, is gated on `approvals:decide`, and
+records `decided_by_user_id`, the standing window and an audit row. The gap_routes copy read the decision as a
+QUERY parameter, was gated only on `get_current_user`, and recorded none of those.
+
+It was unreachable in practice because Starlette matches the first registered route, so the real one answered.
+That is luck, not design: a reordering would have silently substituted the weaker implementation for a
+governance action, and the two definitions already disagreed in the OpenAPI document. The duplicate is removed
+and the removal is commented in place; `list_approvals` on that router is untouched. The duplicate operation-id
+warning is gone and the live route is the gated one.
