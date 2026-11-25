@@ -211,3 +211,46 @@ STILL OPEN, STATED PLAINLY. The 16 remaining roles are degraded because they hav
 the mechanism is now proved, so each needs real work routed to it. `app.globaldigitalsecurity.io` is a REVOKED
 AuthorizedTarget (www.globaldigitalsecurity.io is the active one), so checks against the app hostname are refused
 until the owner re-authorises it; that is a security decision, not a bug to flip.
+
+## Owner authorization, the RLS refresh defect, and 18 of 23 agents executing — 2026-11-25, release 28ee3af
+
+THE OWNER AUTHORISED THE APP HOST. `app.globaldigitalsecurity.io` was a REVOKED AuthorizedTarget, so every check
+against it was refused. Sidique authorized it on 25 Nov 2026 and it is now an ACTIVE target (target_type domain,
+valid to 25 Dec 2026, max 20 actions/hour, authorized_by his user id), created through the platform's own
+POST /red-team/targets so the authorization is audited rather than written by hand. Proved: api_application_security
+-> check_url_security_headers against https://app.globaldigitalsecurity.io now executes and returns live headers.
+
+A DEFECT THAT MADE 46 WRITE ROUTES LIE. POST /red-team/targets created the row and THEN returned 500, so the operator
+saw failure for an authorization that existed. Cause: `await db.refresh(...)` AFTER `await db.commit()` on a FORCE-RLS
+table. Once the session commits, the tenant context can be gone from the connection, so the refresh cannot see the
+row and SQLAlchemy raises InvalidRequestError "Could not refresh instance". The fix is to flush and refresh INSIDE the
+still-bound transaction, then commit. Found at 46 call sites across repository_api.py, siem/, workflow_runs.py,
+workflows/ and redteam.py; all 46 fixed. Guard: tests/test_refresh_before_commit.py fails if the shape returns, and
+also asserts the guard matches the shape it forbids so it cannot pass vacuously. Proved after deploy: the same POST
+returned HTTP 200 and the revoke route returned 200, on a throwaway target that was then removed.
+
+TWO READ-ONLY CAPABILITIES DEMANDED A HUMAN, AND THE MESSAGE LIED ABOUT WHY. vulnerability.scan_dependencies and
+threat_intel.lookup_malware_hash were declared RiskClass.R3 with requires_human_approval=True while their
+side_effect_type was READ_EXTERNAL, so an agent could never scan its own dependencies or look up a hash unattended.
+The refusal also said "This action changes an external system" for a read. Both are now R1 with approval False, and
+the message is derived from side_effect_type (READ_EXTERNAL -> "reads an external system", WRITE_EXTERNAL ->
+"changes...", OFFENSIVE -> "runs an offensive action against a target"). Offensive and write capabilities still
+require approval, asserted by a test so the fix did not open the gate. 4 tests in tests/test_read_only_capabilities.py.
+
+WORK ROUTED TO THE DEGRADED ROLES, THROUGH GOVERNANCE, WITH REAL RESULTS. 15 roles were given real read-only work:
+api_application_security headers on the app host, platform_operations health, data_intelligence metrics (201 missions),
+automation_workflow approvals (0), threat_intelligence CISA KEV (1,795), incident_response incidents (2),
+knowledge_memory search (qdrant + documents), security_architecture (104 tables), identity_access_management posture,
+compliance_grc posture, digital_forensics evidence integrity (verdict intact), devsecops dependency scan (193 packages
+via OSV), blue_team findings, network_security nmap, threat_hunting, executive_advisor, risk_business_intelligence.
+
+RESULT. Fleet status went from 7 online / 16 degraded to **18 online / 5 degraded / 0 unknown**, every one backed by
+an executed governed receipt.
+
+THE FIVE THAT REMAIN, AND WHY EACH IS CORRECT. `red_team` and `penetration_testing_coordinator` and
+`defensive_remediation_autofix` hold offensive or write capabilities that require human approval by design - the gate
+is working, and approving an offensive action is the owner's decision, not something to self-approve.
+`validation_retest` needs a finding whose type has a deterministic re-test (a pinned dependency advisory); the open
+findings sampled have none, which the tool states. `malware_analysis` is blocked by an EXTERNAL dependency: abuse.ch
+now returns HTTP 401 Unauthorized for the MalwareBazaar query API without an Auth-Key (verified by direct probe; the
+code already documents this), so hash reputation needs a free abuse.ch Auth-Key before that role can work.
