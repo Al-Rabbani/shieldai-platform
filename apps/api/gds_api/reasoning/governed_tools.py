@@ -244,7 +244,7 @@ async def execute_governed_tool(
                       AND cr.capability_key = :ck
                       AND cr.requested_tool_id = :tool
                       AND a.status IN ('pending', 'approved')
-                    ORDER BY cr.requested_at DESC
+                    ORDER BY (a.status = 'approved') DESC, cr.requested_at DESC
                     LIMIT 1
                     """
                 ),
