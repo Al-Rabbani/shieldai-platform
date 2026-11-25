@@ -5,6 +5,7 @@ import MissionModal from "./MissionModal";
 import GlobalSidebar from "./GlobalSidebar";
 import PageTransition from "@/components/layout/PageTransition";
 import DataAvailabilityBanner from "./DataAvailabilityBanner";
+import WriteFailureBanner from "./WriteFailureBanner";
 
 function gradeColor(grade) {
   if (grade === "A") return "text-emerald-600 border-emerald-500/30 bg-emerald-500/10";
@@ -60,6 +61,7 @@ export default function PlatformShell() {
         </header>
 
         <div className="flex-1 flex flex-col overflow-hidden">
+        <WriteFailureBanner />
         <DataAvailabilityBanner key={location.pathname} pathname={location.pathname} />
         <main className="flex-1 overflow-auto">
           <PageTransition key={location.pathname}>

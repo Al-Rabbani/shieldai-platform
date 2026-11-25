@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
+import { attemptWrite, reportWriteFailure } from "@/lib/writeFailure";
 import { base44 } from "@/api/base44Client";
 import { invokeAction } from "@/lib/invokeAction";
 import { buildLiveDataOverride } from "@/lib/liveDataOverride";
@@ -80,8 +81,8 @@ export default function IncidentResponsePage() {
   }
 
   async function completeTask(task) {
-    await base44.entities.IncidentTask.update(task.id, { status: "completed", completed_at: new Date().toISOString() }).catch(() => {});
-    setTasks(prev => prev.map(t => t.id === task.id ? { ...t, status: "completed" } : t));
+    const saved = await attemptWrite("complete the task", () => base44.entities.IncidentTask.update(task.id, { status: "completed", completed_at: new Date().toISOString() }));
+    if (saved !== null) setTasks(prev => prev.map(t => t.id === task.id ? { ...t, status: "completed" } : t));
   }
 
   async function triageIncident(incident) {
@@ -101,13 +102,14 @@ export default function IncidentResponsePage() {
       priority,
       assignee_name: engineer,
       status: "open",
-    }).catch(() => {});
+    }).catch((error) => reportWriteFailure("add the task", error));
 
     /* Only the assignment is written. "investigating" is not a status the incidents table holds (it has open, and
      * resolved_at marks closure), so sending it recorded nothing and would have hidden the incident from every count
      * that reads status = 'open'. An investigation in progress is derived from the assignment itself. */
-    await base44.entities.Incident.update(incident.id, { assigned_to: engineer }).catch(() => {});
-    load();
+    const saved = await attemptWrite("assign the incident", () => base44.entities.Incident.update(incident.id, { assigned_to: engineer }));
+    // Reload only after the write landed, so the panel shows the stored assignee rather than a hopeful one.
+    if (saved !== null) load();
   }
 
   async function runAIAction(incident, commandType, label) {

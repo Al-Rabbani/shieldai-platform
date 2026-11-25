@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { attemptWrite } from "@/lib/writeFailure";
 import { base44 } from "@/api/base44Client";
 import NotificationFilterTabs from "@/components/notifications/NotificationFilterTabs";
 import NotificationRow from "@/components/notifications/NotificationRow";
@@ -14,8 +15,8 @@ export default function NotificationCenterPage() {
   }, []);
 
   async function markRead(n) {
-    await base44.entities.Notification.update(n.id, { is_read: true }).catch(() => {});
-    setNotifications(prev => prev.map(x => x.id === n.id ? { ...x, is_read: true } : x));
+    const saved = await attemptWrite("mark the notification read", () => base44.entities.Notification.update(n.id, { is_read: true }));
+    if (saved !== null) setNotifications(prev => prev.map(x => x.id === n.id ? { ...x, is_read: true } : x));
   }
 
   const unreadCount = notifications.filter(n => !n.is_read).length;

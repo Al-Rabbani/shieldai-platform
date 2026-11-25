@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { attemptWrite } from "@/lib/writeFailure";
 import { base44 } from "@/api/base44Client";
 import IncidentCommsPanel from "./IncidentCommsPanel";
 import IncidentQuickTemplates from "./IncidentQuickTemplates";
@@ -23,8 +24,9 @@ export default function IncidentDetailPanel({ incident, onClose, onAIAction }) {
 
   async function toggleTask(t) {
     const status = t.status === "completed" ? "open" : "completed";
-    await base44.entities.IncidentTask.update(t.id, { status }).catch(() => {});
-    setTasks(prev => prev.map(x => x.id === t.id ? { ...x, status } : x));
+    const saved = await attemptWrite("change a task's status", () => base44.entities.IncidentTask.update(t.id, { status }));
+    // Reflect the change only once the platform accepted it: IncidentTask has no store here.
+    if (saved !== null) setTasks(prev => prev.map(x => x.id === t.id ? { ...x, status } : x));
   }
 
   const stageIdx = STAGES.indexOf(incident.status);
@@ -32,10 +34,10 @@ export default function IncidentDetailPanel({ incident, onClose, onAIAction }) {
   async function applyTemplate(key) {
     setApplyingKey(key);
     const tpl = INCIDENT_TEMPLATES[key];
-    const created = await base44.entities.IncidentTask.bulkCreate(
+    const created = await attemptWrite("add the template's tasks", () => base44.entities.IncidentTask.bulkCreate(
       tpl.steps.map(s => ({ incident_id: incident.id, title: s.title, priority: s.priority, assignee_name: s.assignee_name, status: "open" }))
-    ).catch(() => []);
-    setTasks(prev => [...prev, ...(created || [])]);
+    ));
+    if (created !== null) setTasks(prev => [...prev, ...(created || [])]);
     setApplyingKey(null);
   }
 

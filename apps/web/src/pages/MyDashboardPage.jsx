@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { attemptWrite } from "@/lib/writeFailure";
 import { base44 } from "@/api/base44Client";
 import { Code2, LayoutDashboard, ShieldCheck } from "lucide-react";
 import AdminDashboardView from "@/components/dashboard/roles/AdminDashboardView";
@@ -51,7 +52,8 @@ export default function MyDashboardPage() {
   function choose(next) {
     setRole(next);
     localStorage.setItem(ROLE_KEY, next);
-    base44.auth.updateMe({ dashboard_role: next }).catch(() => {});
+    // The local choice still applies this session; the banner says if the account never recorded it.
+    attemptWrite("save your dashboard role to your account", () => base44.auth.updateMe({ dashboard_role: next }));
   }
 
   const active = ROLE_TABS.find((tab) => tab.key === role) || ROLE_TABS[0];
