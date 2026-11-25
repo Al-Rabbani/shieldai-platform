@@ -43,6 +43,17 @@ APPROVAL_REUSE_SQL = """
                       -- mission its own approval. Measured 25 Nov 2026, returning the foreign request here
                       -- made every standing run fail the binding check instead of carrying the approval.
                       AND cr.mission_id = :mid
+                         -- A request that has ALREADY EXECUTED is not a reuse candidate. Measured 25 Nov
+                         -- 2026: an approval for remediation_apply_host_hardening(fix_key=A) was handed to
+                         -- remediation_apply_host_hardening(fix_key=B) and failed with "This request cannot
+                         -- be executed again". The execution gate was right; reuse should never have offered
+                         -- a spent request. A different action on the same tool now mints its own request
+                         -- and needs its own approval. Standing carry is deliberately untouched: it grants a
+                         -- new mission its own approval and must keep working after the first use.
+                         AND NOT EXISTS (
+                             SELECT 1 FROM capability_decisions dx
+                             WHERE dx.request_id = cr.id AND dx.executed_at IS NOT NULL
+                         )
                       AND a.status IN ('pending', 'approved')
                     ORDER BY (a.status = 'approved') DESC,
                              d.decided_at DESC NULLS LAST,

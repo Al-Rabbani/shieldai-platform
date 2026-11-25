@@ -911,6 +911,7 @@ TOOL_REGISTRY = {
     "engineering_execute_session": _ops_tools.engineering_execute_session,
     "remediation_plan_image_upgrade": _ops_tools.remediation_plan_image_upgrade,
     "remediation_apply_config_fix": _ops_tools.remediation_apply_config_fix,
+    "remediation_apply_host_hardening": _ops_tools.remediation_apply_host_hardening,
     "get_findings": _get_findings,
     "store_finding": _store_finding,
     "httpx_scan": _httpx_probe,

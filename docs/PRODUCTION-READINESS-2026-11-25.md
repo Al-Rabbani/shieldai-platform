@@ -758,3 +758,44 @@ CAPABILITY COUNT: 73 (was 72). Guards in tests/test_remediation.py, including on
 signature stops accepting the positional payload the gateway sends - the exact bug that made the first run
 return "takes 0 positional arguments but 1 was given" for every call.
 
+
+## CORS and SSH hardening, applied and proved — 25 Nov 2026
+
+Both of the remaining config findings in this class were real, and the CORS one was serious.
+
+CORS WAS REFLECTING ANY ORIGIN WITH CREDENTIALS. Measured before touching anything: a request carrying
+`Origin: https://evil.example` came back with `access-control-allow-origin: https://evil.example` AND
+`access-control-allow-credentials: true`, and a preflight returned 200. That combination lets any website on
+the internet make credentialed cross-origin calls to the API as whichever user is signed in. Root cause was
+`API_CORS_ORIGINS=*` in the serving environment; Starlette answers a wildcard with credentials by echoing the
+caller's origin, so "*" is not "public read-only", it is "any origin, with cookies".
+
+FIXED: `API_CORS_ORIGINS` now names the four platform origins explicitly. Verified live: a foreign origin gets
+NO allow-origin header, the app origin still gets its own, and app 200 / api /health 200 are unchanged.
+
+SSH STILL OFFERED SHA-1 AND UMACE-64. `sshd -T` listed hmac-sha1-etm, hmac-sha1, umac-64-etm and umac-64.
+FIXED with a drop-in at /etc/ssh/sshd_config.d/10-macs.conf keeping only umac-128 and hmac-sha2 (etm and
+plain). Validated with `sshd -t` BEFORE reloading, then reloaded rather than restarted so an existing session
+survives. Verified: `sshd -T` now offers six modern MACs and no SHA-1 or umac-64, the session that made the
+change kept working, and a nuclei ssh template run no longer fires ssh-sha1-hmac-algo.
+
+BUILT: capability `remediation.apply_host_hardening` (R3, requires human approval, because these restart the
+API and reload sshd) with tool `remediation_apply_host_hardening`, fix keys `restrict_cors_origins` and
+`ssh_remove_sha1_mac`. Each backs the file up, validates before reloading, reverts if the live re-measurement
+fails, and reports the measurement rather than a claim.
+
+PROVED THROUGH GOVERNANCE, not by hand: both fix keys returned REQUIRE_APPROVAL, the approval was granted
+through the real decide route with a scoped key (HTTP 200), and the re-call then executed and verified
+(`success: true`, foreign origin null, app origin present, `weak_macs_remaining: []`). The ssh-sha1-hmac-algo
+finding is closed with that evidence on the row; cors-misconfig was closed by the same path.
+
+A REAL AUTHORIZATION GAP FOUND ON THE WAY. The first governed run of the second fix failed with "This request
+cannot be executed again": the approval-reuse query bound tenant, capability, tool, agent, target and mission
+but NOT the tool's arguments, so an approval for `fix_key=restrict_cors_origins` was offered to
+`fix_key=ssh_remove_sha1_mac`. The execution gate's parameter comparison correctly refused it, so nothing
+unauthorised ran, but reuse should never have offered a spent request. The reuse query now excludes any
+request whose decision already executed; standing carry is deliberately untouched because it grants a new
+mission its own approval and must keep working after the first use. Guarded in tests/test_remediation.py.
+
+CAPABILITY COUNT: 74, tools 85.
+

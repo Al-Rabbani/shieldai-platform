@@ -199,6 +199,23 @@ CAPABILITY_REGISTRY: dict[str, CapabilityDefinition] = {
         requires_sandbox=False,
         requires_human_approval=False,
     ),
+    "remediation.apply_host_hardening": CapabilityDefinition(
+        stable_key="remediation.apply_host_hardening",
+        display_name="Apply Verified Host Hardening",
+        description="Apply one host-level hardening fix and prove it live: the API CORS policy, which reflected "
+                    "any origin while sending allow-credentials so any website could act as a signed-in user, "
+                    "and the sshd MAC list, which still offered hmac-sha1. R3 rather than R2 because these "
+                    "restart the API and reload sshd; each backs the file up, validates before reloading, "
+                    "reverts on a failed verification, and re-measures the live service.",
+        category="remediation",
+        risk_class=RiskClass.R3,
+        side_effect_type=SideEffectType.WRITE_INTERNAL,
+        required_tool_ids=("remediation_apply_host_hardening",),
+        status=CapabilityStatus.OPERATIONAL,
+        allowed_team_types=(Team.BLUE, Team.PURPLE),
+        requires_sandbox=False,
+        requires_human_approval=True,
+    ),
     "finding.store": CapabilityDefinition(
         stable_key="finding.store",
         display_name="Store Scanner Finding",

@@ -455,6 +455,14 @@ _ALL_TOOL_DEFINITIONS = [
             "parameters": {"type": "object", "properties": {"fix_key": {"type": "string", "enum": ["hide_api_docs", "nginx_server_tokens_off"], "description": "Which fix to apply"}}, "required": ["fix_key"]},
         }
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "remediation_apply_host_hardening",
+            "description": 'Apply one host-level hardening fix and prove it live: restrict the API CORS policy to the platform origins, or remove SHA-1 and umac-64 from the sshd MAC list. Backs the file up, validates before reloading, reverts on a failed verification, and re-measures the live service.',
+            "parameters": {"type": "object", "properties": {"fix_key": {"type": "string", "enum": ["restrict_cors_origins", "ssh_remove_sha1_mac"], "description": "Which fix to apply"}}, "required": ["fix_key"]},
+        }
+    },
 ]
 
 

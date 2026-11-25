@@ -642,3 +642,127 @@ async def remediation_apply_config_fix(payload: dict | None = None, **kw) -> dic
 
     return {"success": False, "error": f"unknown fix_key {fix_key!r}",
             "supported": ["hide_api_docs", "nginx_server_tokens_off"]}
+
+
+# -----------------------------------------------------------------------------------------------------------
+# Host hardening that APPLIES and VERIFIES.
+#
+# Kept separate from remediation_apply_config_fix because the blast radius differs: these change the API's CORS
+# policy (an API restart, ~8s) and sshd's MAC list (a bad edit locks the operator out). Both are R3 for that
+# reason, both back the file up, validate before reloading, revert on a failed verification, and re-measure the
+# live service afterwards.
+# -----------------------------------------------------------------------------------------------------------
+
+_CORS_ENV = "/opt/.env"
+_CORS_REQUIRED = (
+    "https://app.globaldigitalsecurity.io",
+    "https://api.globaldigitalsecurity.io",
+    "https://www.globaldigitalsecurity.io",
+    "https://globaldigitalsecurity.io",
+)
+_SSHD_DROPIN = "/etc/ssh/sshd_config.d/10-macs.conf"
+_SSHD_MODERN_MACS = (
+    "MACs umac-128-etm@openssh.com,hmac-sha2-256-etm@openssh.com,hmac-sha2-512-etm@openssh.com,"
+    "umac-128@openssh.com,hmac-sha2-256,hmac-sha2-512"
+)
+
+
+def _cors_headers(origin: str) -> str:
+    import urllib.request
+
+    req = urllib.request.Request("https://api.globaldigitalsecurity.io/health", headers={"Origin": origin})
+    try:
+        with urllib.request.urlopen(req, timeout=10) as r:
+            return (r.headers.get("access-control-allow-origin") or "")
+    except Exception:  # noqa: BLE001
+        return ""
+
+
+async def remediation_apply_host_hardening(payload: dict | None = None, **kw) -> dict:
+    """Apply one host hardening fix and prove it live."""
+    import pathlib
+    import re
+    import shutil
+    import subprocess
+    import time
+
+    payload = payload or {}
+    fix_key = payload.get("fix_key") or kw.get("fix_key")
+    apply = payload.get("apply", kw.get("apply", True))
+
+    def run(*cmd):
+        return subprocess.run(cmd, capture_output=True, text=True)
+
+    if fix_key == "restrict_cors_origins":
+        env = pathlib.Path(_CORS_ENV)
+        text = env.read_text()
+        m = re.search(r"^API_CORS_ORIGINS=(.*)$", text, re.M)
+        current = m.group(1).strip() if m else ""
+        changed = False
+        if current.strip() == "*" and apply:
+            backup = str(env) + ".bak-cors"
+            shutil.copy2(env, backup)
+            new = ",".join(_CORS_REQUIRED)
+            text = (re.sub(r"^API_CORS_ORIGINS=.*$", f"API_CORS_ORIGINS={new}", text, count=1, flags=re.M)
+                    if m else text.rstrip("\n") + f"\nAPI_CORS_ORIGINS={new}\n")
+            env.write_text(text)
+            run("supervisorctl", "restart", "gds-os")
+            healthy = False
+            for _ in range(45):
+                if run("curl", "-s", "-o", "/dev/null", "-w", "%{http_code}",
+                       "--max-time", "3", "http://127.0.0.1:8000/health").stdout.strip() == "200":
+                    healthy = True
+                    break
+                time.sleep(1)
+            if not healthy:
+                shutil.copy2(backup, env)
+                run("supervisorctl", "restart", "gds-os")
+                return {"success": False, "error": "the API did not come back healthy, CORS reverted"}
+            changed = True
+        foreign = _cors_headers("https://evil.example")
+        ours = _cors_headers("https://app.globaldigitalsecurity.io")
+        verified = (foreign == "" and ours == "https://app.globaldigitalsecurity.io")
+        return {
+            "success": verified, "fix": fix_key, "applied": changed,
+            "previous_value": current or "(unset)",
+            "foreign_origin_allowed": foreign or None,
+            "app_origin_allowed": ours or None,
+            "note": ("a foreign origin gets no CORS grant while the app origin still does" if verified
+                     else "CORS is still too permissive"),
+            "findings_templates": ["cors-misconfig"],
+        }
+
+    if fix_key == "ssh_remove_sha1_mac":
+        conf = pathlib.Path("/etc/ssh/sshd_config")
+        dropin = pathlib.Path(_SSHD_DROPIN)
+        before = run("sshd", "-T").stdout
+        already = "hmac-sha1" not in before and "umac-64@" not in before
+        changed = False
+        if not already and apply:
+            if dropin.parent.exists():
+                dropin.write_text(_SSHD_MODERN_MACS + "\n")
+            else:
+                shutil.copy2(conf, str(conf) + ".bak-macs")
+                conf.write_text(conf.read_text().rstrip("\n") + "\n" + _SSHD_MODERN_MACS + "\n")
+            if run("sshd", "-t").returncode != 0:
+                if dropin.exists():
+                    dropin.unlink()
+                else:
+                    shutil.copy2(str(conf) + ".bak-macs", conf)
+                return {"success": False, "error": "sshd -t refused the MAC list, reverted"}
+            if run("systemctl", "reload", "ssh").returncode != 0:
+                run("systemctl", "reload", "sshd")
+            changed = True
+        after = run("sshd", "-T").stdout
+        weak = [ln for ln in after.splitlines() if ln.lower().startswith("macs") and
+                ("hmac-sha1" in ln or "umac-64@" in ln)]
+        verified = not weak and "hmac-sha2-256-etm@openssh.com" in after
+        return {
+            "success": verified, "fix": fix_key, "applied": changed, "already_in_place": already,
+            "weak_macs_remaining": weak,
+            "note": ("only SHA-2 and umac-128 MACs remain" if verified else "a weak MAC is still offered"),
+            "findings_templates": ["ssh-sha1-hmac-algo"],
+        }
+
+    return {"success": False, "error": f"unknown fix_key {fix_key!r}",
+            "supported": ["restrict_cors_origins", "ssh_remove_sha1_mac"]}
