@@ -24,9 +24,12 @@ SHELL_ALLOWLIST: dict[str, tuple[str, ...]] = {
     "disk_usage": ("df", "-h"),
     "memory": ("free", "-m"),
     "load": ("uptime",),
-    "api_service": ("systemctl", "is-active", "gds-os"),
-    "worker_service": ("systemctl", "is-active", "gds-worker"),
-    "kernel_service": ("systemctl", "is-active", "gds-kernel"),
+    # supervisor runs the API, worker and kernel on this host, not systemd: `systemctl is-active gds-os`
+    # answered "inactive" while the service was healthy, which would read as an outage.
+    "api_service": ("supervisorctl", "status", "gds-os"),
+    "worker_service": ("supervisorctl", "status", "gds-worker"),
+    "kernel_service": ("supervisorctl", "status", "gds-kernel"),
+    "supervisor_all": ("supervisorctl", "status"),
     "git_status": ("git", "-C", "/opt/gds-os", "status", "--porcelain"),
     "git_log": ("git", "-C", "/opt/gds-os", "log", "--oneline", "-n", "10"),
     "git_branch": ("git", "-C", "/opt/gds-os", "rev-parse", "--abbrev-ref", "HEAD"),

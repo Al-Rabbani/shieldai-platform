@@ -53,3 +53,37 @@ def test_the_two_teams_both_fight():
 def test_both_targeted_stages_are_marked_as_needing_a_target():
     targeted = {s["key"] for s in STAGES if s["needs_target"]}
     assert targeted == {"vulnerability_assessment", "penetration_testing"}, targeted
+
+
+def test_stages_that_do_not_depend_on_each_other_run_together():
+    """The war is not a queue: assessment, incident response and penetration testing are independent."""
+    from gds_api.warfare.campaign import parallel_groups
+
+    waves = [[s["key"] for s in w] for w in parallel_groups(list(STAGES))]
+    assert waves[0] == ["vulnerability_assessment", "incident_response", "penetration_testing"], waves
+    assert waves[1] == ["vulnerability_management"], waves
+    assert waves[2] == ["vulnerability_remediation"], waves
+
+
+def test_every_dependency_names_a_real_stage_and_runs_before_it():
+    from gds_api.warfare.campaign import parallel_groups
+
+    keys = {s["key"] for s in STAGES}
+    for stage in STAGES:
+        for dep in stage["depends_on"]:
+            assert dep in keys, f"{stage['key']} depends on unknown stage {dep}"
+    waves = [[s["key"] for s in w] for w in parallel_groups(list(STAGES))]
+    position = {k: i for i, w in enumerate(waves) for k in w}
+    for stage in STAGES:
+        for dep in stage["depends_on"]:
+            assert position[dep] < position[stage["key"]], f"{stage['key']} runs before its dependency {dep}"
+
+
+def test_management_receives_the_assessment_result_as_a_handoff():
+    """A downstream stage must be given what upstream really produced, not just run after it."""
+    import pathlib
+
+    src = (pathlib.Path(__file__).resolve().parents[1] / "apps" / "api" / "gds_api" / "warfare"
+           / "campaign.py").read_text()
+    assert 'args["_upstream"] = handoff' in src
+    assert "shared[stage[\"key\"]] = {" in src
