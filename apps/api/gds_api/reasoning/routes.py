@@ -207,3 +207,12 @@ async def auto_execute(req: MissionRequest, request: Request, user: CurrentUser 
         "iterations": result.iterations,
         "duration_ms": result.duration_ms
     }
+
+
+@router.post("/missions/reap")
+async def reap_missions(dry_run: bool = False, older_than_minutes: int = 120,
+                        current_user: dict = _Depends(require_permission("missions:write"))) -> dict:
+    """Close missions that were opened and never finished. A mission must never be left running."""
+    from gds_api.reasoning.mission_reaper import reap_stale_missions
+
+    return await reap_stale_missions(older_than_minutes=older_than_minutes, dry_run=dry_run)

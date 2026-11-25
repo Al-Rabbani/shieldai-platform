@@ -42,3 +42,6 @@
 # guaranteed to still serve it: minio/minio:latest answers "object not found" on Docker Hub and quay.io
 # refuses anonymous queries (401), measured 25 Nov 2026. Weekly, so a pruned image or a lost archive heals.
 17 3 * * 0 /opt/gds-os/scripts/ops/image_archive.sh >> /var/log/gds-image-archive.log 2>&1
+
+# Close missions that were opened and never finished (measured: 73 abandoned on 25 Nov 2026)
+*/30 * * * * cd /opt/gds-os && PYTHONPATH=/opt/gds-os/apps/api /opt/gds-os/apps/api/venv/bin/python -c "import asyncio;from gds_api.reasoning.mission_reaper import reap_stale_missions;print(asyncio.run(reap_stale_missions()))" >> /var/log/gds/mission-reaper.log 2>&1

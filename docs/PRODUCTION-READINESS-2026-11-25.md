@@ -29,11 +29,12 @@ Everything that was on this list as a build item is now closed. What remains is 
 
 1. **A physical microphone has never been used.** The API, the browser's own webm/opus format and the round trip are
    proved; the remaining unknown is a person speaking into a device. Not a code item.
-2. **The Co-Pilot's memory is operator-stated only, by design.** Proved 25 Nov (release `3723c00`): a memory recorded
-   through `/v2/copilot/memory` reaches the model and shapes the answer, the mission reports how many it used, and
-   another tenant's memory is neither counted nor applied. But nothing records a memory from a mission's own
-   outcome, so the Co-Pilot does not yet learn from work it has done. That is the next honest gap in "give the
-   Co-Pilot a brain", and it needs a rule for what is safe to remember automatically before it is built.
+2. ~~**The Co-Pilot's memory is operator-stated only, by design.**~~ **CLOSED 25 Nov 2026, release
+   `de737f7`.** It learns from its own governed execution receipts under an enforced rule: consequential actions
+   only, never counts, never raw tool output, never the model's own prose, never secrets or personal data, and
+   reads teach nothing. Proved live: a mission that applied a fix recorded one observed fact, a second run
+   upserted it instead of duplicating, a read-only mission taught nothing, and the next mission received the
+   fact in its goal. See "The Co-Pilot learns from its own missions" below.
 
 Closed since the previous list: alert delivery (a real email and a real Slack message, both recorded); the Stripe
 card entry (a real £1 live payment, refunded); owner MFA enrolment (04:20 UTC, 10 recovery codes); the GitHub PAT
@@ -848,3 +849,28 @@ THREE DEFECTS FOUND WHILE BUILDING IT, each invisible to a green suite:
 
 Tests: tests/test_mission_memory.py (8 guards).
 
+
+## Missions that were opened and never closed, and the sweep that now ends them — 25 Nov 2026
+
+Measuring the learning work surfaced a separate leak. `set_mission_outcome`'s own docstring says a mission must
+never be left running. Measured: **73 missions in status `running`**, every one created that day, and **not one
+carrying a report** - so none had ever completed. Nothing swept them: the route that opens a mission has no
+counterpart that closes it when the caller dies, the process restarts mid-run, or a script executes a tool
+without closing the mission it opened.
+
+BUILT: `gds_api/reasoning/mission_reaper.py` plus `POST /reasoning/missions/reap`, scheduled every 30 minutes in
+`config/cron/root.crontab` (the source of truth). It closes only what is provably abandoned: status `running`,
+older than the threshold, and with NO report, so a mission that recorded an outcome but stayed running is left
+alone to be seen rather than silently buried. Each closed mission records why, distinguishably from a real
+failure: `report.reaped = {at, threshold_minutes}` and `reasoning.summary = "closed by the mission reaper: no
+outcome was ever recorded"`.
+
+A DEFECT INSIDE THE FIRST VERSION: it swept ZERO missions and reported success. The app role is tenant-bound
+under FORCE RLS, so `SELECT id FROM tenants` returned nothing and the loop iterated over no tenants at all. The
+sweep now lives in `gds_reap_stale_missions(p_minutes, p_dry_run)`, a SECURITY DEFINER function owned by the
+superuser, revoked from PUBLIC and granted to `gds`/`gds_runtime`, returning counts only and never tenant data.
+
+PROVED LIVE: dry run at a 60-minute threshold reported 67 candidates and closed 0; the real run closed 67 and
+`running` fell from 73 to 6, which are the missions younger than the threshold and were correctly left alone. A
+reaped mission was then read back and carries the reason. Four guards in `tests/test_reaper.py`, including that
+the function is definer-owned and not executable by PUBLIC.
