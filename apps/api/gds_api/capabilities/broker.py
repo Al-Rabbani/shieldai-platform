@@ -662,8 +662,18 @@ async def _evaluate_and_decide(
         _step("policy_evaluation", policy_decision)
 
         decision_type = "REQUIRE_APPROVAL" if approval_required else "ALLOW"
+        # The message must name what the action actually does. Measured 25 Nov 2026: a READ_EXTERNAL capability
+        # (a dependency scan, a malware hash lookup) was described as "changes an external system", which is false
+        # and made an operator think the agent wanted to write somewhere.
+        _effect = str(getattr(capability, "side_effect_type", "") or "").rsplit(".", 1)[-1].upper()
+        _verb = {
+            "READ_EXTERNAL": "reads an external system",
+            "WRITE_EXTERNAL": "changes an external system",
+            "OFFENSIVE": "runs an offensive action against a target",
+            "NONE": "runs locally",
+        }.get(_effect, "runs an external action")
         safe_message = (
-            "This action changes an external system and requires approval."
+            f"This capability {_verb} and requires approval."
             if approval_required
             else "This capability is permitted for this mission."
         )
