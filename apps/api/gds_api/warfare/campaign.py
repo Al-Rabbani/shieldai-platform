@@ -194,12 +194,34 @@ async def run_campaign(
                     else:
                         args["finding_id"] = finding_id
 
+                mission_row_id: Optional[str] = None
                 if status == "executed":
+                    # Governance attaches every capability request to a real mission. Measured 25 Nov 2026:
+                    # passing mission_id=None made every stage refuse with "mission_id is not a UUID: None",
+                    # so the campaign recorded five refusals and did no work. Each stage gets its own mission
+                    # row, which also gives the operator a mission to open for that stage.
+                    mission_row_id = str(
+                        (
+                            await session.execute(
+                                text(
+                                    "INSERT INTO missions (id, tenant_id, requested_by_user_id, objective, status, "
+                                    "mission_type) VALUES (gen_random_uuid(), :t, :u, :o, 'running', "
+                                    "'warfare_stage') RETURNING id"
+                                ),
+                                {
+                                    "t": tenant_id,
+                                    "u": user_id,
+                                    "o": f"[warfare {stage['number']}/5] {stage['label']} vs {target or 'own estate'}",
+                                },
+                            )
+                        ).scalar()
+                    )
+                    await _commit()
                     try:
                         result = await execute_governed_tool(
                             tenant_id=tenant_id,
                             user_id=user_id,
-                            mission_id=None,
+                            mission_id=mission_row_id,
                             agent_id=stage["owner_agent"],
                             tool_name=tool_name,
                             args=args,
@@ -232,9 +254,10 @@ async def run_campaign(
             await session.execute(
                 text(
                     "UPDATE warfare_campaign_stages SET status = :s, findings_count = :f, result_summary = :sm, "
-                    "detail = CAST(:d AS jsonb), completed_at = now() WHERE id = :i"
+                    "detail = CAST(:d AS jsonb), mission_id = :m, completed_at = now() WHERE id = :i"
                 ),
-                {"s": status, "f": findings_count, "sm": summary, "d": _json(detail), "i": stage_row_id},
+                {"s": status, "f": findings_count, "sm": summary, "d": _json(detail),
+                 "m": mission_row_id, "i": stage_row_id},
             )
             await session.execute(
                 text(
