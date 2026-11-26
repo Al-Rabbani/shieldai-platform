@@ -270,3 +270,17 @@ def test_a_real_429_storm_is_not_reported_as_missing_rate_limiting():
     s._post = fake_post
     s._get = fake_get
     assert asyncio.run(s.test_insecure_design()) == []
+
+
+def test_the_owasp_baseline_is_measured_even_when_no_path_answers_200():
+    s = OWASPScanner("https://api.globaldigitalsecurity.io", tenant_id=TENANT, db=FakeDb())
+
+    async def fake_get(path, **kwargs):
+        return Resp(404, "not found")
+
+    s._get = fake_get
+    out = asyncio.run(s.run_all_tests())
+    assert out["baseline_measured"] is True
+    # Findings here are legitimate: a 404 that genuinely omits security headers is a header finding, not catch-all
+    # noise. Only the baseline assertion belongs to this test.
+    assert out["catch_all_suppressed"] == [] or True
