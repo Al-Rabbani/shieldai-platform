@@ -34,6 +34,7 @@ from sqlalchemy import text
 
 from gds_api.db import async_session_factory
 from gds_api.scanner_persistence import persist_scan_output
+from gds_api.scan_schedules import stamp_schedule
 
 TENANT = os.environ.get("GDS_TENANT_ID", "")
 #: scanner name -> (governed tool, needs a URL rather than a bare host)
@@ -182,28 +183,11 @@ async def _record(db, tenant: str, results: list[dict]) -> None:
              "targets": len(rows), "new": created, "dupe": sum(r["duplicates"] for r in rows),
              "failed": failed, "outcome": outcome, "detail": __import__("json").dumps(detail)},
         )
-        # The schedule row is what the freshness objective and the "scanner silent" alert read.
-        await db.execute(
-            text(
-                "INSERT INTO scan_schedules (tenant_id, name, monitor_type, target_config, interval_minutes, "
-                "auto_triage, auto_escalate, status, last_run_at, next_run_at, last_run_findings, total_runs, "
-                "total_findings) VALUES (:tid, :name, 'estate_sweep', '{}'::jsonb, 1440, true, false, 'active', "
-                ":last, CAST(:last AS timestamptz) + make_interval(mins => 1440), :new, 1, :new) "
-                "ON CONFLICT DO NOTHING"
-            ),
-            {"tid": str(tenant), "name": f"Estate sweep: {scanner}", "last": now, "new": created},
-        )
-        await db.execute(
-            text(
-                "UPDATE scan_schedules SET last_run_at = CAST(:last AS timestamptz), "
-                "next_run_at = CAST(:last AS timestamptz) + make_interval(mins => interval_minutes), "
-                "last_run_findings = :new, total_runs = total_runs + 1, "
-                "total_findings = total_findings + :new, last_error = :err, updated_at = CAST(:last AS timestamptz) "
-                "WHERE tenant_id = :tid AND name = :name"
-            ),
-            {"tid": str(tenant), "name": f"Estate sweep: {scanner}", "last": now, "new": created,
-             "err": None if outcome == "ok" else outcome},
-        )
+        # ONE row per scanner, upserted. The old code inserted with ON CONFLICT DO NOTHING and no conflict target
+        # against a table with no unique constraint, so it added a row every run (nikto reached eight) and the UPDATE
+        # below then bumped the counters on all of them.
+        await stamp_schedule(db, tenant, f"Estate sweep: {scanner}", "estate_sweep", 1440,
+                             findings=created, error=None if outcome == "ok" else outcome)
     await db.commit()
 
 

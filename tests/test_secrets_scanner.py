@@ -13,6 +13,12 @@ from gds_api.tool_gateway import _gitleaks_scan, GITLEAKS_FIXTURE_MARKERS
 
 REPO = pathlib.Path("/opt/gds-os")
 
+#: The canary is ASSEMBLED, not written as a literal. The first version put a full ghp_ token in this file, the scanner
+#: found it in the tree the moment it ran (correctly), and it was already in history from the commit that added the
+#: test. A secret scanner's own test suite must not be the thing it reports. Split so no line matches the pattern;
+#: gitleaks still sees the joined value inside the temp tree at run time.
+_GHP = "ghp_" + "16C7e42F292c6912E7710c838347Ae178B4a"
+
 
 def _scan(path, scope="tree"):
     return asyncio.run(_gitleaks_scan({"target": str(path), "scope": scope}))
@@ -22,7 +28,7 @@ def test_a_real_looking_secret_in_a_fresh_tree_is_found(tmp_path):
     """The canary. If this passes with zero findings the scanner is blind, whatever else is green."""
     (tmp_path / "config.py").write_text(
         'AWS_ACCESS_KEY_ID = "AKIAIOSFODNN7EXAMPLE"\n'
-        'github = "ghp_16C7e42F292c6912E7710c838347Ae178B4a"\n'
+        f'github = "{_GHP}"\n'
     )
     out = _scan(tmp_path)
     assert out["success"] is True
@@ -30,10 +36,10 @@ def test_a_real_looking_secret_in_a_fresh_tree_is_found(tmp_path):
 
 
 def test_the_secret_value_is_never_returned(tmp_path):
-    (tmp_path / "config.py").write_text('token = "ghp_16C7e42F292c6912E7710c838347Ae178B4a"\n')
+    (tmp_path / "config.py").write_text(f'token = "{_GHP}"\n')
     out = _scan(tmp_path)
     blob = repr(out)
-    assert "16C7e42F292c6912E7710c838347Ae178B4a" not in blob, "the raw credential must never leave the scanner"
+    assert _GHP not in blob, "the raw credential must never leave the scanner"
 
 
 def test_repository_placeholders_are_not_findings():

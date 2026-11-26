@@ -17,6 +17,10 @@ regexes = [
   '''lin_api_key''',
   # a deleted autofix module's illustrative key, present only in history
   '''sk-1234567890abcdef''',
+  # a test fixture token that existed in the working tree between 82ee7e8 and this commit, and remains in
+  # history. Verified dead: api.github.com/user answers 401 with it. The test now assembles the value at run
+  # time so the literal is no longer in the tree.
+  '''ghp_16C7e42F292c6912E7710c838347Ae178B4a''',
   # the stress harness example token, now read from the environment instead
   '''REDACTED_SET_BRIDGE_API_KEY''',
 ]

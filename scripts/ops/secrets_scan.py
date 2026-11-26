@@ -21,6 +21,7 @@ sys.path.insert(0, "/opt/gds-os/apps/api")
 from sqlalchemy import text  # noqa: E402
 
 from gds_api.db import async_session_factory  # noqa: E402
+from gds_api.scan_schedules import stamp_schedule  # noqa: E402
 from gds_api.scanner_persistence import persist_scan_output  # noqa: E402
 from gds_api.tenant_binding import bind_tenant  # noqa: E402
 from gds_api.tool_gateway import _gitleaks_scan  # noqa: E402
@@ -58,6 +59,13 @@ async def main() -> int:
         print(f"  {f['scope']:<8} {f['rule']:<20} {f['file'].replace(TARGET + '/', '')}:{f['line']}  {f['masked']}")
 
     await _record_run(tenant, started, duration_ms, result, created, dupes, failed, before, after)
+    # A nightly scan whose silence nobody can see is not coverage. This row is what scan_health and the "scanner
+    # silent" alert read, so a night that does not run is reported as overdue instead of assumed clean.
+    async with async_session_factory() as session:
+        await bind_tenant(session, tenant)
+        await stamp_schedule(session, tenant, SCANNER_LABEL, "secrets_scan", 1440,
+                             findings=created, error=None if not failed else f"{failed} finding(s) failed to persist")
+        await session.commit()
     return 0
 
 
