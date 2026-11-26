@@ -52,6 +52,53 @@ async def measure(tenant_id: str) -> dict:
         return await build_report(db, tenant_id)
 
 
+
+def close_recovered(tenant_id: str, report: dict) -> list[str]:
+    """Acknowledge any open SLO alert whose objective is no longer breached, naming the measurement.
+
+    Runs as postgres for the same reason the raiser does: it must see every tenant's notifications and the table is
+    FORCE-RLS. Acknowledging stops the delivery ladder; it does not delete the row.
+    """
+    from gds_api.slo_recovery import recovered_alert_types, recovery_note
+
+    query = (
+        "SELECT DISTINCT type FROM notifications "
+        "WHERE type LIKE 'slo_breach:%' AND acknowledged_at IS NULL"
+    )
+    read = subprocess.run(
+        ["sudo", "-u", "postgres", "psql", "-d", "gds_os", "-Atc", query],
+        capture_output=True, text=True,
+    )
+    if read.returncode != 0:
+        print(f"slo_check: could not read open alerts: {(read.stderr or '').strip()[:200]}", file=sys.stderr)
+        return []
+    open_types = [line.strip() for line in (read.stdout or "").splitlines() if line.strip()]
+
+    notes: list[str] = []
+    for alert_type in recovered_alert_types(report, open_types):
+        note = recovery_note(alert_type, report)
+        written = subprocess.run(
+            ["sudo", "-u", "postgres", "psql", "-d", "gds_os", "-v", "ON_ERROR_STOP=1",
+             "-c", f"UPDATE notifications SET acknowledged_at = now(), last_delivery = '{note}' "
+                   f"WHERE type = '{alert_type}' AND acknowledged_at IS NULL"],
+            capture_output=True, text=True,
+        )
+        if written.returncode == 0:
+            # A closure is a governance act even when no human performed it, so it is recorded with user_id left
+            # NULL rather than attributed to an operator who did not decide anything.
+            subprocess.run(
+                ["sudo", "-u", "postgres", "psql", "-d", "gds_os", "-v", "ON_ERROR_STOP=1", "-c",
+                 "INSERT INTO audit_events (id, tenant_id, user_id, action, detail, created_at) VALUES "
+                 f"(gen_random_uuid(), '{tenant_id}', NULL, 'slo.recovered', "
+                 f"jsonb_build_object('alert_type', '{alert_type}', 'note', '{note}'), now())"],
+                capture_output=True, text=True,
+            )
+            notes.append(f"{alert_type} ({note})")
+        else:
+            print(f"slo_check: could not close {alert_type}: {(written.stderr or '').strip()[:200]}",
+                  file=sys.stderr)
+    return notes
+
 def main() -> int:
     _load_env()
     tenant_id = os.environ.get("GDS_TENANT_ID")
@@ -70,6 +117,10 @@ def main() -> int:
     objectives = report.get("objectives") or []
     summary = ", ".join(f"{o.get('id')}={o.get('status')}" for o in objectives)
     print(f"slo_check: {len(objectives)} objectives: {summary}")
+
+    closed = close_recovered(tenant_id, report)
+    for note in closed:
+        print(f"slo_check: closed {note}")
 
     alerts = breach_alerts(report)
     if not alerts:
