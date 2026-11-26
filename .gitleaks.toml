@@ -1,0 +1,26 @@
+# Reasons, not a blanket mute. Every entry here was measured on 26 Nov 2026 by reading the line it matches.
+# A broad path or regex allowlist would hide a real leak, which is the failure this file must never cause.
+title = "GDS OS gitleaks allowlist"
+
+# WITHOUT THIS THE ALLOWLIST SILENCES EVERYTHING. Passing --config REPLACES gitleaks' default rule set, so a file
+# containing only [allowlist] detected nothing at all: a canary holding an AWS access key and a GitHub token went from
+# 1 finding to 0. Proved 26 Nov 2026. useDefault keeps the real rules and adds only the suppressions below.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Placeholder strings the repository's own tests, docs and stress harness contain"
+regexes = [
+  # test fixtures: an obvious fake in tests/test_mfa.py, test_secrets_posture.py, test_linear_sync.py
+  '''ABCDEF234567''',
+  '''gds_live_ab1''',
+  '''lin_api_key''',
+  # a deleted autofix module's illustrative key, present only in history
+  '''sk-1234567890abcdef''',
+  # the stress harness example token, now read from the environment instead
+  '''REDACTED_SET_BRIDGE_API_KEY''',
+]
+paths = [
+  # retired page fixtures the frontend no longer routes to, carrying "YOUR_API_KEY" in curl examples
+  '''apps/web/src/_retired/.*''',
+]

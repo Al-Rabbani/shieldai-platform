@@ -484,6 +484,25 @@ CAPABILITY_REGISTRY: dict[str, CapabilityDefinition] = {
         # not for a wider sweep.
         maximum_duration_seconds=180,
     ),
+    # Added 26 Nov 2026. The platform had NO secrets scanner: the two real exposures in its own estate (a live GitHub
+    # token in .git/config and a stale apps/api/.env carrying the production JWT signing key) were both found by hand.
+    # No target_types because this reads a local path rather than reaching a host - so the broker's target
+    # authorisation does not apply, and the path is validated as an existing directory inside the handler.
+    "code.secrets_scan": CapabilityDefinition(
+        stable_key="code.secrets_scan",
+        display_name="Hardcoded Secret Scan",
+        description=(
+            "Real gitleaks scan of a local source tree and, optionally, its full git history. Returns the rule, the "
+            "file, the line and a masked prefix - never the secret itself."
+        ),
+        category="code",
+        risk_class=RiskClass.R1,
+        side_effect_type=SideEffectType.NONE,
+        required_tool_ids=("gitleaks_scan",),
+        allowed_team_types=(Team.BLUE, Team.PURPLE),
+        allows_network=False,
+        maximum_duration_seconds=600,
+    ),
     "network.vulnerability_scan": CapabilityDefinition(
         stable_key="network.vulnerability_scan",
         display_name="Template Vulnerability Scan",

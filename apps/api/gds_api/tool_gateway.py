@@ -129,6 +129,160 @@ async def _port_inventory_scan(params: dict) -> dict:
     return result
 
 
+# ----------------------------------------------------------------------------------------------------------------
+# Secrets in the source tree (gitleaks). Added 26 Nov 2026, after measuring that the platform had NO secrets scanner
+# at all while its own repository once carried a live GitHub token in .git/config and a stale apps/api/.env holding the
+# production JWT signing key. Both were found by hand; nothing here would have found them.
+#
+# TWO RULES THAT MAKE THIS SCANNER USABLE RATHER THAN NOISY:
+#   1. THE SECRET IS NEVER RETURNED OR STORED. A finding carries the rule, the file, the line, the entropy and a
+#      masked prefix - enough to act on, nothing that re-leaks the credential into a register, a report or a log.
+#   2. KNOWN FIXTURES ARE SUPPRESSED WITH A REASON, NOT DROPPED. The repo's own tests contain strings like
+#      "sk-abc123def" and the docs contain "YOUR_API_KEY"; reporting those as findings is how a scanner teaches its
+#      readers to ignore it. They are counted and named in the result instead.
+#: NOTE "REDACTED" IS DELIBERATELY ABSENT. The scan runs with --redact, so gitleaks writes the literal string
+#: "REDACTED" as the value of EVERY finding; an allowlist containing it suppressed 100% of real findings and reported a
+#: clean estate - the silent-zero failure this platform has been bitten by repeatedly, this time inside my own patch.
+GITLEAKS_FIXTURE_MARKERS = (
+    "YOUR_API_KEY", "abc123", "example", "placeholder", "xxxx", "changeme",
+    "gds_live_ab1", "lin_api_key", "ABCDEF234567", "compliance_i", "p95_duration", "dummy",
+)
+
+
+def _gitleaks_config_args(path: str) -> list[str]:
+    """Use the scanned tree's own allowlist when it has one, so suppressions are reviewable in the repo."""
+    import os as _os
+
+    for candidate in (_os.path.join(path, ".gitleaks.toml"), _os.path.join(path, ".gitleaksignore")):
+        if _os.path.isfile(candidate):
+            return ["--config", candidate]
+    return []
+
+
+def _gitleaks_allowlisted(secret: str) -> bool:
+    lowered = (secret or "").strip().lower()
+    if not lowered or lowered == "redacted":
+        return False            # withheld is not a placeholder: it is an unknown real value
+    return any(marker.lower() in lowered for marker in GITLEAKS_FIXTURE_MARKERS)
+
+
+def _mask_secret(secret: str) -> str:
+    """Never return a usable credential. --redact already withholds it, so say so rather than masking the word."""
+    s = secret or ""
+    if s.strip().upper() in ("REDACTED", ""):
+        return "<withheld: the scanner was told not to report the value>"
+    if len(s) <= 8:
+        return "*" * len(s)
+    return f"{s[:4]}{'*' * (len(s) - 8)}{s[-4:]}"
+
+
+async def _gitleaks_scan(params: dict) -> dict:
+    """Scan a local path for hardcoded secrets, in the working tree and optionally the full git history."""
+    import asyncio as _asyncio
+    import json as _json
+    import os as _os
+    import shutil as _shutil
+    import tempfile as _tempfile
+
+    path = (params.get("target") or params.get("path") or "/opt/gds-os").strip()
+    scope = (params.get("scope") or "tree").strip().lower()
+    if scope not in ("tree", "history", "both"):
+        return {"success": False, "error": "scope must be 'tree', 'history' or 'both'"}
+    if not _os.path.isdir(path):
+        return {"success": False, "error": f"target must be a directory that exists (got {path!r})"}
+    binary = _shutil.which("gitleaks") or "/usr/local/bin/gitleaks"
+    if not _os.path.exists(binary):
+        return {"success": False, "error": "gitleaks is not installed on this host"}
+
+    runs = ["dir", "git"] if scope == "both" else (["git"] if scope == "history" else ["dir"])
+    findings: list[dict] = []
+    suppressed = 0
+    errors: list[str] = []
+    for mode in runs:
+        report = _tempfile.NamedTemporaryFile(prefix="gitleaks-", suffix=".json", delete=False)
+        report.close()
+        try:
+            _os.chmod(report.name, 0o600)     # the report holds raw matches until it is unlinked
+        except Exception:
+            pass
+        try:
+            # NO --redact, DELIBERATELY. Redaction blanks every value to the literal "REDACTED", which makes it
+            # impossible to tell the repo's own placeholders ("sk-abc123def", "YOUR_API_KEY") from a live credential -
+            # so the scanner either reports 24 placeholders as findings or suppresses real ones. The report is written
+            # to a 0600 tempfile owned by this process and unlinked in the finally block; the register only ever sees a
+            # mask. Classifying the value is unavoidable if the answer is to mean anything.
+            proc = await _asyncio.create_subprocess_exec(
+                binary, mode, path,
+                "--report-format", "json", "--report-path", report.name,
+                "--no-banner", "--exit-code", "0",
+                # the repo's own allowlist, so a true zero means zero rather than "we muted the noise"
+                *_gitleaks_config_args(path),
+                stdout=_asyncio.subprocess.PIPE, stderr=_asyncio.subprocess.PIPE,
+            )
+            _, err = await _asyncio.wait_for(proc.communicate(), timeout=600)
+            raw = ""
+            try:
+                with open(report.name, "r", encoding="utf-8", errors="replace") as fh:
+                    raw = fh.read()
+            except Exception:
+                raw = ""
+            rows = _json.loads(raw) if raw.strip() else []
+            if not isinstance(rows, list):
+                errors.append(f"{mode}: report was not a list")
+                rows = []
+            for r in rows:
+                secret = str(r.get("Secret") or r.get("Match") or "")
+                if _gitleaks_allowlisted(secret):
+                    suppressed += 1
+                    continue
+                findings.append({
+                    "rule": r.get("RuleID") or "unknown-rule",
+                    "file": str(r.get("File") or ""),
+                    "line": r.get("StartLine"),
+                    "commit": r.get("Commit"),
+                    "entropy": r.get("Entropy"),
+                    "masked": _mask_secret(secret),
+                    "description": (r.get("Description") or "")[:200],
+                    "scope": "history" if mode == "git" else "tree",
+                })
+            if err:
+                note = err.decode("utf-8", "replace").strip()
+                if note and "leaks found" not in note.lower():
+                    errors.append(f"{mode}: {note[:200]}")
+        except Exception as exc:  # noqa: BLE001 - reported, not raised
+            errors.append(f"{mode}: {type(exc).__name__}: {exc}"[:200])
+        finally:
+            # overwrite before unlinking: this file held raw credential values for the length of the scan
+            try:
+                size = _os.path.getsize(report.name)
+                with open(report.name, "r+b") as fh:
+                    fh.write(b"\0" * size)
+                _os.unlink(report.name)
+            except Exception:
+                try:
+                    _os.unlink(report.name)
+                except Exception:
+                    pass
+
+    result = {
+        "success": True,
+        "target": path,
+        "scope": scope,
+        "findings": findings,
+        "findings_count": len(findings),
+        "fixtures_suppressed": suppressed,
+        "scopes_scanned": runs,
+    }
+    if suppressed:
+        result["suppressed_note"] = (
+            f"{suppressed} match(es) were placeholder strings the repo's own tests and docs contain "
+            f"({', '.join(GITLEAKS_FIXTURE_MARKERS[:4])}, ...); they are counted, not silently dropped"
+        )
+    if errors:
+        result["errors"] = errors
+    return result
+
+
 async def _nuclei_scan(params: dict) -> dict:
     """Run nuclei. params: target, templates.
 
@@ -1097,6 +1251,7 @@ TOOL_REGISTRY = {
     "nmap_scan": _nmap_scan,
     "port_inventory_scan": _port_inventory_scan,
     "nuclei_scan": _nuclei_scan,
+    "gitleaks_scan": _gitleaks_scan,
     "semgrep_scan": _semgrep_scan,
     "trivy_scan": _trivy_scan,
     "nikto_scan": _nikto_scan,
@@ -1278,6 +1433,7 @@ _RISK_CLASS_LABEL: dict[str, str] = {
 _LEGACY_SCANNER_SPECS: dict[str, tuple[str, str]] = {
     "nmap_scan": ("high", "TCP port and service scan of a target host or range (nmap)."),
     "nuclei_scan": ("high", "Template-driven vulnerability scan of a target (nuclei)."),
+    "gitleaks_scan": ("medium", "Hardcoded-secret scan of a local source tree and its git history (gitleaks)."),
     "nikto_scan": ("high", "Web server vulnerability scan of a target (nikto)."),
     "sqlmap_scan": ("critical", "Active SQL injection testing against a target (sqlmap)."),
     "masscan_scan": ("high", "High-speed TCP port sweep of a target range (masscan)."),

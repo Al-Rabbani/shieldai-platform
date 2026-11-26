@@ -75,3 +75,6 @@
 # one, so three had last produced a finding on 1 August. One scanner per row in scan_runs, so a silent scanner is
 # visible instead of looking like a quiet estate.
 30 1 * * * cd /opt/gds-os/apps/api && set -a && . /opt/.env && set +a && PYTHONPATH=/opt/gds-os/apps/api ./venv/bin/python run_estate_sweep.py >> /var/log/gds-estate-sweep.log 2>&1
+# Hardcoded-secret scan of the platform source tree and its git history (gitleaks). Added 26 Nov 2026: nothing in
+# the platform looked for secrets, and both real exposures found in this estate were found by hand.
+10 5 * * * cd /opt/gds-os && set -a && . /opt/.env 2>/dev/null; set +a; PYTHONPATH=apps/api apps/api/venv/bin/python scripts/ops/secrets_scan.py >> /var/log/gds-secrets-scan.log 2>&1

@@ -81,7 +81,7 @@ curl -s -X POST https://api.globaldigitalsecurity.io/admin/api-keys \
 Returns `201` with `key` — **shown once, never recoverable**:
 
 ```json
-{"id":"6e3079cf-…","key_prefix":"gds_W2oOuL1a","scopes":[],"key":"gds_W2oOuL1aLLMiHGVTJrY0r7lwSymJs44…"}
+{"id":"6e3079cf-…","key_prefix":"gds_EXAMPLE","scopes":[],"key":"gds_EXAMPLE_this_is_not_a_real_key_see_notes"}
 ```
 
 Proved: `GET /findings` with `Authorization: Bearer <key>` returned `200` and 0 rows — the key authenticates, binds

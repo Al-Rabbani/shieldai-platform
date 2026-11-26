@@ -155,6 +155,38 @@ def _gobuster(item: dict, target: str) -> dict:
     }
 
 
+def _gitleaks_scan(item: dict, target: str) -> dict:
+    """A hardcoded secret, recorded WITHOUT the secret.
+
+    The row carries the rule, the file, the line, the entropy and a masked prefix. Storing the credential itself would
+    move it from one leaky place to another, and the register is read by more people than the file was.
+    """
+    rule = item.get("rule") or "unknown-rule"
+    where = item.get("file") or ""
+    if where.startswith(target.rstrip("/") + "/"):
+        where = where[len(target.rstrip("/")) + 1:]
+    line = item.get("line")
+    masked = item.get("masked") or ""
+    scope = item.get("scope") or "tree"
+    in_history = scope == "history"
+    # A secret in the current tree is live exposure; one that exists only in history is a credential that must be
+    # rotated but is no longer served by the code.
+    severity = "high" if in_history else "critical"
+    return {
+        "title": f"hardcoded secret ({rule}) in {where}:{line}"[:250],
+        "severity": severity,
+        "target": target.rstrip("/"),
+        "description": (
+            f"gitleaks matched rule '{rule}' at {where}:{line} ({scope}); value starts {masked}. "
+            + ("The file is no longer in the working tree, so this is a credential that must be rotated and purged "
+               "from history." if in_history else
+               "The value is in the current working tree and must be removed and rotated.")
+        ),
+        "raw": {"rule": rule, "file": where, "line": line, "masked": masked, "scope": scope,
+                "commit": item.get("commit"), "entropy": item.get("entropy")},
+    }
+
+
 def _subfinder(item: dict, target: str) -> dict:
     name = item.get("subdomain") or target
     return {
@@ -195,6 +227,7 @@ EXTRACTORS: dict[str, Callable[[dict, str], dict]] = {
     "gobuster_scan": _gobuster,
     # httpx and subfinder returned their own shapes with no findings list, so neither could ever be recorded.
     "subfinder_scan": _subfinder,
+    "gitleaks_scan": _gitleaks_scan,
 }
 
 

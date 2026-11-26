@@ -334,7 +334,7 @@ echo ""
 echo "[5/6] Bridge test under memory pressure..."
 
 BRIDGE_RESULT=$(curl -s -X POST http://127.0.0.1:8000/bridge/agent/ai-vuln-director/invoke \
-  -H "Authorization: Bearer REDACTED_SET_BRIDGE_API_KEY" \
+  -H "Authorization: Bearer ${BRIDGE_API_KEY:?set BRIDGE_API_KEY first}" \
   -H "Content-Type: application/json" \
   -d '{"goal":"Run cisa_kev_check and report total count","context":{}}' 2>/dev/null)
 

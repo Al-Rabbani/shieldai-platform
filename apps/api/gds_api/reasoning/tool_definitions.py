@@ -111,6 +111,28 @@ _ALL_TOOL_DEFINITIONS = [
     {
         "type": "function",
         "function": {
+            "name": "gitleaks_scan",
+            "description": (
+                "Scan a LOCAL source tree and optionally its full git history for hardcoded secrets (API keys, tokens, "
+                "private keys, passwords). Use this when asked whether the codebase leaks credentials. Returns each "
+                "finding's rule, file, line and a MASKED value - the secret itself is never returned. Placeholder "
+                "strings the repo's own tests and docs contain are counted separately, not reported as findings."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "target": {"type": "string",
+                               "description": "Absolute path of a directory on this host to scan. Default: /opt/gds-os"},
+                    "scope": {"type": "string", "enum": ["tree", "history", "both"],
+                              "description": "tree = files as they are now; history = every commit; both = both. Default: tree"},
+                },
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "nuclei_scan",
             "description": "Run Nuclei vulnerability templates against a target. Use AFTER nmap to check for known CVEs, misconfigurations, and exposures on discovered ports. Returns list of vulnerabilities found.",
             "parameters": {
@@ -481,7 +503,7 @@ _AGENT_TOOL_MAP = {
     "ai-incident-commander": ["get_findings", "store_finding", "nmap_scan", "nuclei_scan"],
     "ai-autofix-agent": ["get_findings", "store_finding"],
     "ai-supply-chain-agent": ["trivy_scan", "osv_check", "semgrep_scan", "store_finding"],
-    "ai-devsecops-director": ["semgrep_scan", "trivy_scan", "osv_check", "store_finding"],
+    "ai-devsecops-director": ["semgrep_scan", "trivy_scan", "osv_check", "gitleaks_scan", "store_finding"],
     "ai-report-agent": ["get_findings"],
     "ai-chief-ciso": ["get_findings", "aws_iam_scan", "security_headers_check", "nmap_scan"],
     "ai-soc-director": ["get_findings", "nmap_scan", "nuclei_scan", "store_finding"],
