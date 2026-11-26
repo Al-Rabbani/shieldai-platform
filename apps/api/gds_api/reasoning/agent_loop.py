@@ -92,6 +92,15 @@ PARAM_MAP = {
 
 
 
+#: Told to the model, once, when the iteration budget is nearly spent.
+CLOSING_DIRECTIVE = (
+    "BUDGET NOTICE: you have {remaining} iteration(s) left and cannot investigate further. Do NOT call another tool. "
+    "Answer now, in prose, using only what the tool results above already establish. State plainly what you verified, "
+    "what you could not verify within the budget, and what should be checked next. An honest partial answer is "
+    "required; silence is not an option."
+)
+
+
 def exhausted_summary(max_iterations: int, tool_call_count: int, last_error: str | None) -> str:
     """Why a reasoning run stopped, said plainly.
 
@@ -111,6 +120,12 @@ class AgenticLoop:
     """The core reasoning engine — agents that THINK, not just execute."""
     
     MAX_ITERATIONS = 10
+    # MEASURED 26 Nov 2026: the ai-vuln-director CISA KEV mission failed on EVERY six-hourly run - "10 iteration(s) and
+    # 38 tool call(s) without a final answer; nothing raised an error; the model kept calling tools". The budget was
+    # reachable and the failure was certain, because nothing ever told the model the budget existed. Two changes:
+    # near the end it is told, and on the last iteration it is not offered a tool at all, so the run yields an honest
+    # partial answer rather than a guaranteed failure.
+    CLOSING_ITERATIONS = int(os.getenv("AGENT_CLOSING_ITERATIONS", "2"))
     # Item 43: measured 107,218 input tokens for one posture run because nothing was ever compacted. Older tool results
     # are shortened to a head; the most recent stay verbatim because they are what the next step reasons about.
     KEEP_TOOL_RESULTS = int(os.getenv("AGENT_CONTEXT_KEEP_RESULTS", "3"))
@@ -173,9 +188,16 @@ analyze them and decide the next step. When done, provide a summary.
         logger.info(f"Available tools: {tool_names}")
         
         last_error = None
-        
+        closing_notice_given = False
+
         for iteration in range(self.MAX_ITERATIONS):
             logger.info(f"Iteration {iteration + 1}/{self.MAX_ITERATIONS}")
+            remaining = self.MAX_ITERATIONS - iteration
+            is_final_iteration = remaining == 1
+            if not is_final_iteration and remaining <= self.CLOSING_ITERATIONS and not closing_notice_given:
+                messages.append({"role": "system", "content": CLOSING_DIRECTIVE.format(remaining=remaining)})
+                closing_notice_given = True
+                logger.info(f"  Budget notice given: {remaining} iteration(s) left")
             
             try:
                 messages, _compacted = trim_tool_results(
@@ -193,7 +215,9 @@ analyze them and decide the next step. When done, provide a summary.
                     model=self.model,
                     messages=messages,
                     tools=tools,
-                    tool_choice="auto",
+                    # On the final iteration the model is not offered a tool: it either answers or the run fails, and
+                    # it has been told why. Without this the loop is guaranteed to end in exhausted_summary.
+                    tool_choice="none" if is_final_iteration else "auto",
                     temperature=0.1,
                     max_tokens=4096,
                 )
@@ -275,6 +299,12 @@ analyze them and decide the next step. When done, provide a summary.
                 
                 # No tool call → agent is done
                 summary = msg.content or "No summary provided."
+                if is_final_iteration:
+                    summary = (
+                        f"PARTIAL ANSWER: the iteration budget ({self.MAX_ITERATIONS}) was reached after "
+                        f"{len(tool_calls)} tool call(s), so the model was asked to answer from what it had. "
+                        f"{summary}"
+                    )
                 total_ms = int((time.time() - start_time) * 1000)
                 
                 logger.info(f"Done in {iteration + 1} iterations, {total_ms}ms")

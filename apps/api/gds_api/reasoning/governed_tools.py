@@ -383,6 +383,74 @@ async def execute_governed_tool(
             }
 
 
+#: Which declared mission type a reasoning role's work is.
+#:
+#: MEASURED 26 Nov 2026: open_reasoning_mission created the missions row with no mission_type at all, so every
+#: scheduled reasoning run - 191 completed, 9 failed - was untyped. The SLO counts untyped rows as real work but cannot
+#: say what KIND of work, and any report grouped by mission type silently omits the platform's own autonomy. The
+#: taxonomy is authoritative and fails closed on an unknown type, so this maps to values that are DECLARED, and returns
+#: None (rather than inventing one) for a role it does not recognise - an unlabelled run is a gap to fix, not a guess.
+AGENT_MISSION_TYPES: dict[str, str] = {
+    "ai-vuln-director": "vulnerability_assessment",
+    "ai-threat-hunter": "threat_hunt",
+    "ai-chief-ciso": "executive_reporting",
+    "ai-cloud-director": "cloud_security_assessment",
+    "ai-incident-commander": "incident_investigation",
+    "ai-compliance-director": "compliance_assessment",
+    "ai-remediation-director": "remediation",
+    "ai-supply-chain-agent": "supply_chain_assessment",
+    "ai-devsecops-director": "application_security_review",
+    "ai-identity-director": "identity_security_assessment",
+    "ai-redteam-director": "adversary_emulation",
+    "ai-red-team-director": "adversary_emulation",
+    "ai-threat-intel-director": "threat_intelligence",
+    "ai-ciem-director": "identity_security_assessment",
+    "ai-predictive-risk-director": "exposure_assessment",
+    "ai-risk-director": "exposure_assessment",
+    "ai-executive-advisor": "executive_reporting",
+    "ai-soc-director": "alert_triage",
+    "ai-dark-web-monitor": "threat_intelligence",
+    "ai-zero-trust-architect": "identity_security_assessment",
+    "ai-security-director": "application_security_review",
+    "ai-recon-agent": "exposure_assessment",
+    "ai-triage-agent": "alert_triage",
+    "ai-autofix-agent": "auto_fix",
+}
+
+#: Fallback by keyword, for a role added after this table was written. Order matters: the first match wins.
+_MISSION_TYPE_KEYWORDS: tuple[tuple[str, str], ...] = (
+    ("redteam", "adversary_emulation"),
+    ("red-team", "adversary_emulation"),
+    ("hunt", "threat_hunt"),
+    ("vuln", "vulnerability_assessment"),
+    ("cloud", "cloud_security_assessment"),
+    ("incident", "incident_investigation"),
+    ("compliance", "compliance_assessment"),
+    ("remediation", "remediation"),
+    ("supply", "supply_chain_assessment"),
+    ("identity", "identity_security_assessment"),
+    ("intel", "threat_intelligence"),
+    ("ciso", "executive_reporting"),
+    ("executive", "executive_reporting"),
+)
+
+
+def mission_type_for_agent(agent_id: str) -> str | None:
+    """The declared mission type for a reasoning role, or None when the role is not one this platform knows."""
+    from gds_api.mission_taxonomy import MISSION_TYPES
+
+    key = (agent_id or "").strip()
+    if key in AGENT_MISSION_TYPES:
+        candidate = AGENT_MISSION_TYPES[key]
+        if candidate in MISSION_TYPES:
+            return candidate
+    lowered = key.lower()
+    for needle, candidate in _MISSION_TYPE_KEYWORDS:
+        if needle in lowered and candidate in MISSION_TYPES:
+            return candidate
+    return None
+
+
 async def open_reasoning_mission(*, tenant_id: Any, user_id: Any, goal: str, agent_id: str) -> uuid.UUID:
     """Create the real missions row a governed execution needs.
 
@@ -397,11 +465,18 @@ async def open_reasoning_mission(*, tenant_id: Any, user_id: Any, goal: str, age
     uid = _as_uuid(user_id, "user_id")
     async with async_session_factory() as session:
         await bind_tenant(session, tid)
+        mission_type = mission_type_for_agent(agent_id)
+        if mission_type is None:
+            logger.warning(
+                "reasoning mission for unrecognised role %r has no declared mission type; it will count as untyped "
+                "work. Add the role to AGENT_MISSION_TYPES.", agent_id,
+            )
         mission = Mission(
             tenant_id=tid,
             requested_by_user_id=uid,
             objective=f"Reasoning mission: {agent_id} - {str(goal)[:180]}",
             status="running",
+            mission_type=mission_type,
         )
         session.add(mission)
         await session.commit()
