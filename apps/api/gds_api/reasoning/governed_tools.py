@@ -333,7 +333,7 @@ async def execute_governed_tool(
                 "execution_mode": "not_executed",
             }
         try:
-            return await execute_capability_request(
+            result = await execute_capability_request(
                 session,
                 tenant_id=tid,
                 request_id=evaluation.request_id,
@@ -342,6 +342,15 @@ async def execute_governed_tool(
                 user_id=uid,
                 mission_id=mid,
             )
+            # A scan that found something must record it. Measured 26 Nov 2026: governed nuclei runs returned 25 real
+            # findings and the register held zero nuclei rows for the month, because the handler hands its findings to
+            # the caller and nothing wrote them down.
+            if isinstance(result, dict) and result.get("success") is True and isinstance(result.get("findings"), list):
+                from gds_api.scanner_persistence import persist_scan_output
+
+                target = str(payload.get("target") or payload.get("url") or "")
+                result["persistence"] = await persist_scan_output(tid, tool_name, target, result)
+            return result
         except Exception as exc:  # noqa: BLE001 - the loop must render a failure, not die
             _logger.exception("governed tool execution failed: %s", tool_name)
             return {
