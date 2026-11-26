@@ -110,6 +110,55 @@ def _httpx(item: dict, target: str) -> dict:
 
 # Every tool whose handler puts a `findings` list on its result. A guard test fails if a handler starts producing
 # findings for a tool that is missing here.
+def _ffuf(item: dict, target: str) -> dict:
+    url = item.get("url") or target
+    status = item.get("status")
+    return {
+        "title": f"discovered path {url} ({status})"[:250],
+        "severity": "info",
+        "target": url,
+        "description": f"ffuf found a {status} response ({item.get('length')} bytes).",
+        "raw": {"status": status, "length": item.get("length"), "words": item.get("words"),
+                "content_type": item.get("content_type")},
+    }
+
+
+def _gobuster(item: dict, target: str) -> dict:
+    path = item.get("path") or "/"
+    status = item.get("status")
+    return {
+        "title": f"discovered path {path} ({status})"[:250],
+        "severity": "info",
+        "target": f"{target.rstrip('/')}{path}",
+        "description": f"gobuster found a {status} response ({item.get('size')} bytes).",
+        "raw": {"status": status, "size": item.get("size")},
+    }
+
+
+def _subfinder(item: dict, target: str) -> dict:
+    name = item.get("subdomain") or target
+    return {
+        "title": f"discovered subdomain {name}"[:250],
+        "severity": "info",
+        "target": name,
+        "description": f"Passive enumeration of {item.get('root_domain') or target} resolved {name}.",
+        "raw": {"root_domain": item.get("root_domain")},
+    }
+
+
+def _httpx(item: dict, target: str) -> dict:
+    url = item.get("url") or item.get("host") or target
+    status = item.get("status_code")
+    tech = ", ".join(item.get("tech") or []) or "no technology detected"
+    return {
+        "title": f"live endpoint {url} ({status})"[:250],
+        "severity": "info",
+        "target": url,
+        "description": f"{item.get('webserver') or 'server not disclosed'}; {tech}; title {item.get('title')!r}.",
+        "raw": {"status_code": status, "webserver": item.get("webserver"), "tech": item.get("tech")},
+    }
+
+
 EXTRACTORS: dict[str, Callable[[dict, str], dict]] = {
     "nuclei_scan": _nuclei,
     "nikto_scan": _nikto,
@@ -121,6 +170,11 @@ EXTRACTORS: dict[str, Callable[[dict, str], dict]] = {
     "port_inventory_scan": _nmap,
     "security_headers_check": _security_headers,
     "check_url_security_headers": _security_headers,
+    # Added 26 Nov 2026: neither content-discovery tool parsed its own output, so neither could be recorded.
+    "ffuf_scan": _ffuf,
+    "gobuster_scan": _gobuster,
+    # httpx and subfinder returned their own shapes with no findings list, so neither could ever be recorded.
+    "subfinder_scan": _subfinder,
 }
 
 

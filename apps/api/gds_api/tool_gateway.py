@@ -38,8 +38,13 @@ def _find_tool(name: str) -> str:
 async def _run_tool(cmd: list[str], timeout: int = 300) -> dict[str, Any]:
     """Execute a command and return structured output."""
     try:
+        # MEASURED 26 Nov 2026: the child inherited an open stdin, and the projectdiscovery tools (httpx, nuclei,
+        # subfinder) read targets from stdin when it is not a terminal - so a run that takes 25ms from a shell hung
+        # until the tool's own timeout when launched from here, and every probe came back empty. DEVNULL makes stdin
+        # closed and unambiguous for every tool this gateway runs.
         proc = await asyncio.create_subprocess_exec(
             *cmd,
+            stdin=asyncio.subprocess.DEVNULL,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
@@ -435,6 +440,9 @@ async def _subfinder_scan(params: dict) -> dict:
         "enumerated_scope": root,
         "scope_widened": root != domain.lower().strip(),
         "subdomains": subs,
+        # The persistence contract: a discovered subdomain is an asset, so it is a finding at info. Without this list
+        # the handler was unpersistable and enumeration never reached the register.
+        "findings": [{"subdomain": name, "root_domain": root} for name in subs],
         "count": len(subs),
         "note": note,
         "exit_code": proc.returncode,
@@ -446,23 +454,120 @@ async def _httpx_probe(params: dict) -> dict:
     """Run httpx. params: target, ports."""
     target = params.get("target", "localhost")
     
-    cmd = [_find_tool("httpx"), "-u", target, "-json"]
-    result = await _run_tool(cmd, timeout=300)
+    # MEASURED 26 Nov 2026: this httpx build (v1.10.0) IGNORES -u. It printed its banner, probed nothing and exited 0,
+    # so every probe returned zero findings - and "no live endpoint" is indistinguishable from "never looked". The same
+    # target given on stdin produces a full JSON record. Targets go through -l, with -silent to keep the banner out of
+    # the JSONL and an explicit timeout so a dead host cannot hold the tool for five minutes.
+    import tempfile
+
+    targets = tempfile.NamedTemporaryFile(prefix="httpx-", suffix=".txt", delete=False, mode="w")
+    targets.write(target.rstrip("\n") + "\n")
+    targets.close()
+    cmd = [
+        _find_tool("httpx"), "-l", targets.name, "-json", "-silent",
+        "-timeout", "10", "-retries", "1",
+    ]
+    result = await _run_tool(cmd, timeout=180)
     result["tool"] = "httpx"
+    result["targets_file"] = targets.name
+    # MEASURED 26 Nov 2026: this handler returned raw stdout with no findings list, so every httpx result was
+    # unpersistable by ANY caller and a live endpoint could never reach the register. httpx emits JSONL, one object per
+    # probed host.
+    import json
+
+    findings: list[dict] = []
+    for line in (result.get("stdout") or "").splitlines():
+        line = line.strip()
+        if not line.startswith("{"):
+            continue
+        try:
+            item = json.loads(line)
+        except ValueError:
+            continue
+        findings.append(
+            {
+                "host": item.get("host") or item.get("input") or target,
+                "url": item.get("url"),
+                "status_code": item.get("status_code"),
+                "title": item.get("title"),
+                "webserver": item.get("webserver"),
+                "tech": item.get("tech") or [],
+            }
+        )
+    if not findings and (result.get("stdout") or "").strip():
+        result["parse_error"] = "httpx returned output that was not JSONL"
+    result["findings"] = findings
     return result
+
+
+#: MEASURED 26 Nov 2026: both handlers defaulted to /opt/tools/wordlists/directory-list-2.3-medium.txt, a file that
+#: did not exist because the directory did not exist - so ffuf and gobuster failed instantly and returned no findings,
+#: which reads exactly like a web server with nothing on it. common.txt (4,751 entries) is installed and finishes well
+#: inside the 600s tool budget; the 220k-entry medium list does not.
+DEFAULT_WORDLIST = "/opt/tools/wordlists/common.txt"
+
+
+def _require_wordlist(path: str) -> str | None:
+    """Return an error string when the wordlist cannot be read, so an absent list is never reported as a clean target."""
+    import os
+
+    if not path:
+        return "no wordlist given and no default installed"
+    if not os.path.isfile(path):
+        return f"wordlist not found: {path}"
+    if os.path.getsize(path) == 0:
+        return f"wordlist is empty: {path}"
+    return None
 
 
 async def _ffuf_scan(params: dict) -> dict:
     """Run ffuf. params: url, wordlist."""
     url = params.get("target") or params.get("url") or ""
-    wordlist = params.get("wordlist", "/opt/tools/wordlists/directory-list-2.3-medium.txt")
+    wordlist = params.get("wordlist", DEFAULT_WORDLIST)
     
     if not url:
         return {"success": False, "error": "target required (a URL)"}
     
-    cmd = [_find_tool("ffuf"), "-u", url + "/FUZZ", "-w", wordlist, "-json"]
+    problem = _require_wordlist(wordlist)
+    if problem:
+        return {"success": False, "tool": "ffuf", "error": problem}
+
+    # -ac auto-calibrates against the host's catch-all so a host that answers 200 to every path does not fill the
+    # register with invented directories. -of json -o writes a parseable report; the handler previously returned raw
+    # stdout with no findings list at all, so nothing ffuf found could be recorded by any caller.
+    import json
+    import tempfile
+
+    report = tempfile.NamedTemporaryFile(prefix="ffuf-", suffix=".json", delete=False)
+    report_path = report.name
+    report.close()
+    cmd = [
+        _find_tool("ffuf"), "-u", url.rstrip("/") + "/FUZZ", "-w", wordlist,
+        "-ac", "-of", "json", "-o", report_path, "-s",
+    ]
     result = await _run_tool(cmd, timeout=600)
     result["tool"] = "ffuf"
+    result["report_path"] = report_path
+    findings: list[dict] = []
+    try:
+        with open(report_path, encoding="utf-8", errors="replace") as handle:
+            payload = json.load(handle)
+        for item in payload.get("results") or []:
+            status = item.get("status")
+            if status in (404, 400):
+                continue
+            findings.append(
+                {
+                    "url": item.get("url") or "",
+                    "status": status,
+                    "length": item.get("length"),
+                    "words": item.get("words"),
+                    "content_type": item.get("content-type"),
+                }
+            )
+    except Exception as exc:  # noqa: BLE001 - an unparsed scan is not a clean scan
+        result["parse_error"] = f"ffuf report unreadable: {exc}"
+    result["findings"] = findings
     return result
 
 
@@ -470,14 +575,62 @@ async def _gobuster_scan(params: dict) -> dict:
     """Run gobuster. params: url, mode, wordlist."""
     url = params.get("target") or params.get("url") or ""
     mode = params.get("mode", "dir")
-    wordlist = params.get("wordlist", "/opt/tools/wordlists/directory-list-2.3-medium.txt")
+    wordlist = params.get("wordlist", DEFAULT_WORDLIST)
     
     if not url:
         return {"success": False, "error": "target required (a URL)"}
     
-    cmd = [_find_tool("gobuster"), mode, "-u", url, "-w", wordlist]
+    problem = _require_wordlist(wordlist)
+    if problem:
+        return {"success": False, "tool": "gobuster", "error": problem}
+
+    # MEASURED 26 Nov 2026: gobuster REFUSED to run against www.globaldigitalsecurity.io - "the server returns a status
+    # code that matches the provided options for non existing urls ... (Length: 139)" - because that host answers every
+    # unknown path with 200 and a placeholder. So the tool was not merely finding nothing, it was declining to look.
+    # The placeholder length is measured and excluded, and the text output is parsed into findings (gobuster has no
+    # JSON output at all).
+    import re
+    import secrets
+
+    exclude_len = None
+    try:
+        import httpx
+
+        probe = f"{url.rstrip('/')}/{secrets.token_hex(8)}"
+        async with httpx.AsyncClient(timeout=10.0, verify=False) as client:
+            resp = await client.get(probe)
+        if resp.status_code < 400:
+            exclude_len = len(resp.content)
+    except Exception:  # noqa: BLE001 - if the baseline cannot be measured, scan without the exclusion
+        exclude_len = None
+
+    cmd = [_find_tool("gobuster"), mode, "-u", url, "-w", wordlist, "-q", "--no-error"]
+    if exclude_len is not None:
+        cmd.extend(["--exclude-length", str(exclude_len)])
     result = await _run_tool(cmd, timeout=600)
     result["tool"] = "gobuster"
+    result["catch_all_length_excluded"] = exclude_len
+    findings: list[dict] = []
+    # gobuster's dir mode prints the path WITHOUT a leading slash ("health               (Status: 200) [Size: 700]"),
+    # so a pattern anchored on "/" matched nothing and a successful run reported zero findings. Both forms are accepted
+    # and the path is normalised.
+    line_re = re.compile(
+        r"^(?P<path>\S*)\s+\(Status:\s*(?P<status>\d+)\)(?:\s+\[Size:\s*(?P<size>\d+)\])?"
+    )
+    for line in (result.get("stdout") or "").splitlines():
+        match = line_re.match(line.strip())
+        if not match:
+            continue
+        findings.append(
+            {
+                "path": match.group("path") if match.group("path").startswith("/") else "/" + match.group("path"),
+                "status": int(match.group("status")),
+                "size": int(match.group("size")) if match.group("size") else None,
+            }
+        )
+    if not findings and "wildcard" in (result.get("stdout") or "").lower():
+        result["parse_error"] = "gobuster reported a wildcard response it could not exclude"
+    result["findings"] = findings
     return result
 
 
