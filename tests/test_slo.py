@@ -178,6 +178,32 @@ def test_internal_proof_runs_and_campaign_stages_are_excluded_and_named():
     assert payload["detail"]["internal_runs_by_type"] == {"standing_proof": 1, "warfare_stage": 1}
 
 
+def test_the_mission_breach_message_does_not_carry_the_completed_count():
+    """Measured 26 Nov 2026: the count of completed missions moved 124 -> 126 inside half an hour, and because the
+    pager dedupes on exact text that re-paged the same breach. The count belongs on the page, not in the message."""
+    from gds_api.slo_api import breach_alerts
+
+    base = {
+        "id": "mission_success",
+        "title": "Mission success",
+        "status": "breached",
+        "actual": 0.89,
+        "target": 0.90,
+        "unit": "%",
+        "basis": "measured",
+        "window_days": 7,
+        "detail": {"completed": 124, "failed_by_type": {"cloud_security_assessment": 11}},
+    }
+    later = {
+        **base,
+        "detail": {"completed": 126, "failed_by_type": {"cloud_security_assessment": 11}},
+    }
+    first = breach_alerts({"objectives": [base]})[0]["message"]
+    second = breach_alerts({"objectives": [later]})[0]["message"]
+    assert "124" not in first and "126" not in second
+    assert first == second, "a moving completed count must not change the alert text"
+
+
 def test_a_type_the_taxonomy_does_not_declare_is_excluded_and_named():
     """`remediation_apply` is not one of the 23 mission types, so POST /missions could never have created it: the row
     came from a direct insert. Counting scaffolding as failed operator work is the same error as counting it as
@@ -293,7 +319,8 @@ def test_a_breached_objective_raises_one_alert_naming_the_measurement():
     assert alerts[0]["severity"] == "high"
     assert "89% against a target of 90.0%" in alerts[0]["message"]
     assert "11 cloud_security_assessment" in alerts[0]["message"]
-    assert "156 completed" in alerts[0]["message"]
+    # The completed count is deliberately absent: it moves every time a mission finishes. See the test below.
+    assert "156 completed" not in alerts[0]["message"]
 
 
 def test_a_met_or_at_risk_or_unmeasured_objective_raises_nothing():

@@ -586,8 +586,9 @@ def breach_alerts(report: dict[str, Any]) -> list[dict[str, str]]:
             failed = detail.get("failed_by_type") or {}
             if failed:
                 because.append(", ".join(f"{count} {name}" for name, count in list(failed.items())[:4]))
-            if detail.get("completed") is not None:
-                because.append(f"{_whole(detail['completed'])} completed")
+            # The completed count is deliberately NOT in the message: it moves every time any mission finishes, so
+            # carrying it would re-page the same breach on most ticks. The denominator is on the page. The failing
+            # breakdown stays, because a new failure is a real change worth telling someone about.
         elif objective.get("id") == "approval_timeliness":
             if detail.get("decided") is not None:
                 because.append(
