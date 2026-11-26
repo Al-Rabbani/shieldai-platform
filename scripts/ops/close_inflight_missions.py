@@ -38,6 +38,10 @@ async def main() -> int:
     when = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%SZ")
     reason = REASON.format(when=when)
     # One statement, so a mission cannot be half-closed: only rows still running are touched.
+    # ONE scalar out. The first version returned the INSERT's row plus the count, so psql printed "0\nINSERT 0 1" and
+    # int() raised - the closer failed on every deploy while the deploy carried on, which is how a step that does
+    # nothing looks identical to a step that had nothing to do. The audit row is written inside the CTE and only the
+    # count is selected.
     sql = f"""
         WITH closed AS (
             UPDATE missions
@@ -50,11 +54,13 @@ async def main() -> int:
                      )::text
              WHERE status = 'running'
          RETURNING id
+        ), logged AS (
+            INSERT INTO audit_events (id, tenant_id, action, detail)
+            SELECT gen_random_uuid(), NULL, 'mission.interrupted_by_restart',
+                   jsonb_build_object('closed', (SELECT count(*) FROM closed), 'reason', '{reason}')
+            RETURNING 1
         )
-        INSERT INTO audit_events (id, tenant_id, action, detail)
-        SELECT gen_random_uuid(), NULL, 'mission.interrupted_by_restart',
-               jsonb_build_object('closed', (SELECT count(*) FROM closed), 'reason', '{reason}')
-        RETURNING (SELECT count(*) FROM closed);
+        SELECT count(*) FROM closed;
     """
     try:
         closed = int(_psql(sql) or 0)
