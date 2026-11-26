@@ -103,8 +103,10 @@ def test_the_sweep_binds_the_tenant_before_it_reads_targets():
 def test_the_sweep_reads_the_keys_the_writer_actually_returns():
     # Three times in one night the sweep reported "0 recorded" over rows that had been written, because it guessed at
     # key names. The writer's documented keys are findings_created / duplicates_skipped / findings_total.
-    writer = pathlib.Path("apps/api/gds_api/scanner_persistence.py").read_text()
+    # The keys are produced by scanner_engines.store_findings and passed through by scanner_persistence; the sweep is
+    # the only caller that reports them to a human, so it is the file that must name them.
+    engine = pathlib.Path("apps/api/gds_api/scanner_engines.py").read_text()
     sweep = pathlib.Path("apps/api/run_estate_sweep.py").read_text()
     for key in ("findings_created", "duplicates_skipped"):
-        assert key in writer, f"{key} is no longer a key the writer returns"
+        assert key in engine, f"{key} is no longer a key the writer returns"
         assert key in sweep, f"the sweep does not read {key}, so stored findings will display as zero"
