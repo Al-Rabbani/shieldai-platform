@@ -37,8 +37,22 @@ _VALID_SEVERITY = {"critical", "high", "medium", "low", "info"}
 _MAX_STORED_PER_SCAN = 500
 
 
+#: Engines that must NOT come from the app venv.
+#:
+#: MEASURED 26 Nov 2026: semgrep's entry point in the app venv died with ImportError
+#: "cannot import name '_ExtendedAttributes' from 'opentelemetry.util.types'" - the app's own dependency pins had moved
+#: under it. semgrep shares nothing with this application, so it now lives in its own venv and the app can upgrade
+#: anything it likes without breaking a scanner. Overridable for a different host layout.
+ISOLATED_ENGINES: dict[str, str] = {
+    "semgrep": os.getenv("SEMGREP_BIN", "/opt/gds-tools/semgrep/bin/semgrep"),
+}
+
+
 def engine_path(name: str) -> str | None:
     """Resolve an engine the way the service PATH does, not the caller's."""
+    isolated = ISOLATED_ENGINES.get(name)
+    if isolated and os.path.isfile(isolated) and os.access(isolated, os.X_OK):
+        return isolated
     local = os.path.join(os.path.dirname(sys.executable), name)  # semgrep ships in our venv
     if os.path.isfile(local) and os.access(local, os.X_OK):
         return local
@@ -62,22 +76,58 @@ async def _run_async(args: list[str], timeout: int) -> subprocess.CompletedProce
 # ---- engine runners: real commands, plain dicts ---------------------------------
 
 
+#: semgrep's own severity vocabulary mapped to the register's.
+#:
+#: MEASURED 26 Nov 2026: subprocess-shell-true - a command-injection pattern - was stored as LOW, because the parser
+#: read the rule's CWE "impact" rating before semgrep's own severity. A real command injection filed as low is a finding
+#: nobody acts on. semgrep's ERROR/WARNING/INFO is the engine's judgement of the finding; "impact" describes the class.
+_SEMGREP_SEVERITY = {"error": "high", "warning": "medium", "info": "low", "inventory": "info"}
+
+
+def _semgrep_severity(extra: dict[str, Any], metadata: dict[str, Any]) -> str:
+    engine = str(extra.get("severity") or "").lower()
+    if engine in _SEMGREP_SEVERITY:
+        mapped = _SEMGREP_SEVERITY[engine]
+        # An explicit impact of HIGH or CRITICAL may only raise the engine's rating, never lower it.
+        impact = str(metadata.get("impact") or "").lower()
+        if impact in ("critical", "high") and mapped in ("medium", "low", "info"):
+            return impact
+        return mapped
+    impact = str(metadata.get("impact") or "").lower()
+    if impact in _VALID_SEVERITY:
+        return impact
+    return "medium"
+
+
 async def semgrep_findings(target_path: str, config: str = "auto", timeout: int = 600) -> list[dict[str, Any]]:
     """Semgrep JSON output as finding dicts. Exit 1 means 'findings found', not failure."""
     binary = engine_path("semgrep")
     if not binary:
         raise RuntimeError("semgrep is not installed on this host")
     completed = await _run_async([binary, "--json", "--config", config, target_path], timeout)
+    # A CRASHED SEMGREP EXITS 1, and semgrep's contract says exit 1 means "findings found". Checking the code first
+    # therefore reported a crashed scanner as a clean codebase: this is what hid the broken venv install above, and
+    # semgrep had produced nothing since 1 August. Parsability is the real test - a run that found something prints
+    # JSON with a results list, and a run that died prints nothing.
+    stdout = (completed.stdout or "").strip()
+    payload = None
+    if stdout:
+        try:
+            payload = json.loads(stdout)
+        except json.JSONDecodeError:
+            payload = None
+    if not isinstance(payload, dict) or "results" not in payload:
+        raise RuntimeError(
+            f"semgrep produced no parsable JSON (exit {completed.returncode}), so this is a failure and not a clean "
+            f"scan: {(completed.stderr or stdout or 'no output')[:400]}"
+        )
     if completed.returncode not in (0, 1):
         raise RuntimeError(f"semgrep failed: {(completed.stderr or '')[:400]}")
-    payload = json.loads(completed.stdout or "{}")
     results = []
     for item in payload.get("results", []):
         extra = item.get("extra") or {}
         metadata = extra.get("metadata") or {}
-        severity = str(metadata.get("impact") or extra.get("severity") or "medium").lower()
-        if severity not in _VALID_SEVERITY:
-            severity = "medium"
+        severity = _semgrep_severity(extra, metadata)
         results.append(
             {
                 "title": f"{str(item.get('check_id', 'semgrep')).split('.')[-1]} in {item.get('path', '')}"[:200],
@@ -87,6 +137,8 @@ async def semgrep_findings(target_path: str, config: str = "auto", timeout: int 
                 "description": str(extra.get("message") or "")[:2000],
                 "evidence": str(extra.get("lines") or "")[:1000],
                 "line": (item.get("start") or {}).get("line"),
+                # The whole matched span, so a caller can read the actual call rather than guess from one line.
+                "end_line": (item.get("end") or {}).get("line"),
                 "rule": item.get("check_id"),
             }
         )

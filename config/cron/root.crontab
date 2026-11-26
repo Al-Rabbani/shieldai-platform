@@ -78,3 +78,6 @@
 # Hardcoded-secret scan of the platform source tree and its git history (gitleaks). Added 26 Nov 2026: nothing in
 # the platform looked for secrets, and both real exposures found in this estate were found by hand.
 10 5 * * * cd /opt/gds-os && set -a && . /opt/.env 2>/dev/null; set +a; PYTHONPATH=apps/api apps/api/venv/bin/python scripts/ops/secrets_scan.py >> /var/log/gds-secrets-scan.log 2>&1
+# Static analysis of the platform's own source. Replaced nikto's nightly slot: semgrep had produced nothing since
+# 1 August because its app-venv entry point was broken and a crash exits 1, which reads as "findings found".
+20 5 * * * cd /opt/gds-os && set -a && . /opt/.env 2>/dev/null; set +a; PYTHONPATH=apps/api apps/api/venv/bin/python scripts/ops/code_scan.py >> /var/log/gds-code-scan.log 2>&1

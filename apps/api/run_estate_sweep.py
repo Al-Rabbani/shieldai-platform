@@ -40,7 +40,12 @@ TENANT = os.environ.get("GDS_TENANT_ID", "")
 #: scanner name -> (governed tool, needs a URL rather than a bare host)
 SWEEP: dict[str, tuple[str | None, bool]] = {
     "nuclei": ("nuclei_scan", True),
-    "nikto": ("nikto_scan", True),
+    # NIKTO RETIRED 26 Nov 2026, by measurement rather than preference. It has produced 3 findings ever, all dated
+    # 1 August, none of them open, and when it was repaired and run against the live estate it found nothing nuclei did
+    # not already report. The standing rule is that a scanner which solves no real problem is removed rather than kept
+    # for the appearance of coverage, so its nightly slot went to the code scan (scripts/ops/code_scan.py), which found
+    # 13 real findings in this platform's own source on its first working run. The tool remains available on demand.
+    # "nikto": ("nikto_scan", True),
     "nmap": ("nmap_scan", False),
     "security_headers": ("security_headers_check", True),
     "owasp_pentest": (None, True),
@@ -60,11 +65,11 @@ EXCLUDED: dict[str, str] = {
 }
 #: Tools that make sense for a given target type. A web_application target is not port-scanned by nmap here.
 APPLIES: dict[str, set[str]] = {
-    "host": {"nuclei", "nikto", "nmap", "security_headers", "owasp_pentest", "api_pentest",
+    "host": {"nuclei", "nmap", "security_headers", "owasp_pentest", "api_pentest",
              "httpx", "ffuf", "gobuster"},
-    "domain": {"nuclei", "nikto", "security_headers", "owasp_pentest", "api_pentest",
+    "domain": {"nuclei", "security_headers", "owasp_pentest", "api_pentest",
                "subfinder", "httpx", "ffuf", "gobuster"},
-    "web_application": {"nuclei", "nikto", "security_headers", "owasp_pentest", "api_pentest",
+    "web_application": {"nuclei", "security_headers", "owasp_pentest", "api_pentest",
                         "httpx", "ffuf", "gobuster"},
     "ip": {"nuclei", "nmap", "security_headers", "httpx"},
     "cidr": {"nmap"},
