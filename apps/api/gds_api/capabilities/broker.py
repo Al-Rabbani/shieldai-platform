@@ -39,6 +39,10 @@ from gds_api.agents.manifest import AgentStatus
 from gds_api.tenant_binding import bind_tenant
 from gds_api.agents.registry import AGENT_REGISTRY
 from gds_api.audit import record_audit_event
+from gds_api.capabilities.execution_error import (
+    append_execution_step,
+    sanitise_execution_error,
+)
 from gds_api.capabilities.catalog import CAPABILITY_REGISTRY
 from gds_api.capabilities.definitions import CapabilityDefinition, CapabilityStatus, RiskClass
 from gds_api.config import settings
@@ -786,6 +790,7 @@ async def mark_capability_execution(
     tenant_id: uuid.UUID,
     decision_id: uuid.UUID,
     status: str,
+    error: object | None = None,
 ) -> None:
     """Part I: records the real execution outcome (executed|failed) on the decision that
     authorized it. Called by gds_api.capabilities.gateway immediately after a real
@@ -795,7 +800,9 @@ async def mark_capability_execution(
     # row is invisible and this wrongly reports a missing decision.
     await bind_tenant(db, tenant_id)
     decision = await db.get(CapabilityDecisionRecord, decision_id)
-    if decision is None or decision.tenant_id != tenant_id:
+    # Compared as strings: a caller holding the tenant from config passes a str, and uuid != str silently
+    # reports a decision that exists as missing (measured 26 Nov 2026, the first run of the stale-execution reaper).
+    if decision is None or str(decision.tenant_id) != str(tenant_id):
         raise CapabilityDenied(
             "DENY", "invalid_decision", "The capability decision could not be found."
         )
@@ -806,6 +813,10 @@ async def mark_capability_execution(
         )
     decision.execution_status = status
     decision.executed_at = datetime.now(UTC)
+    # Measured 26 Nov 2026: 124 decisions in seven days were allowed and then failed with no reason on the row,
+    # because the caller held the exception or the tool's own error and passed only the status.
+    reason = sanitise_execution_error(error)
+    decision.decision_trace = append_execution_step(decision.decision_trace, status, reason)
     await db.flush()
     await record_audit_event(
         db,
@@ -817,6 +828,7 @@ async def mark_capability_execution(
             "request_id": str(decision.request_id),
             "capability_key": decision.capability_key,
             "execution_status": status,
+            "error": reason,
         },
     )
     await publish_mission_event(

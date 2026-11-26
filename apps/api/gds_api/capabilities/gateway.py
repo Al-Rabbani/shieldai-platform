@@ -145,14 +145,22 @@ async def execute_capability_request(
             workflow_run_id=workflow_run_id,
             capability_decision_id=result.decision_id,
         )
-    except Exception:
+    except Exception as exc:
         await mark_capability_execution(
-            db, tenant_id=tenant_id, decision_id=result.decision_id, status="failed"
+            db, tenant_id=tenant_id, decision_id=result.decision_id, status="failed",
+            error=f"{type(exc).__name__}: {exc}",
         )
         await db.commit()
         raise
+    succeeded = isinstance(output, dict) and output.get("success") is True
     await mark_capability_execution(
-        db, tenant_id=tenant_id, decision_id=result.decision_id, status="failed" if not isinstance(output, dict) or output.get("success") is not True else "executed"
+        db, tenant_id=tenant_id, decision_id=result.decision_id,
+        status="executed" if succeeded else "failed",
+        # A tool that answers success=False knows why; that reason used to be dropped here.
+        error=None if succeeded else (
+            (output.get("error") or output.get("code") or output.get("message"))
+            if isinstance(output, dict) else f"tool returned {type(output).__name__}, not a result dict"
+        ),
     )
     await db.commit()
     return output
