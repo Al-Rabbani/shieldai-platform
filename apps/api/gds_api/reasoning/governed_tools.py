@@ -172,6 +172,22 @@ def _derive_target(args: dict[str, Any], capability: Any) -> tuple[str | None, s
     return next((c for c in candidates if c in allowed), None), host
 
 
+async def _persist_findings_safely(tenant_id: Any, tool_name: str, target: str, result: dict[str, Any]) -> dict[str, Any]:
+    """Write a scan's findings, and never let that write decide whether the scan succeeded.
+
+    The scan already ran and already produced real output; that output is the tool result the agent loop renders. A
+    failure to record it is reported as a failure to record, next to the findings, not as a failed scan.
+    """
+    try:
+        from gds_api.scanner_persistence import persist_scan_output
+
+        return await persist_scan_output(tenant_id, tool_name, target, result)
+    except Exception as exc:  # noqa: BLE001 - a bookkeeping fault is reported, never raised
+        _logger.exception("scan persistence failed for %s; the scan result is kept", tool_name)
+        return {"persisted": False, "reason": f"{type(exc).__name__}: {exc}"[:300],
+                "note": "the scan succeeded and its findings are in this result, but they were not written to the register"}
+
+
 async def execute_governed_tool(
     *,
     tenant_id: Any,
@@ -345,11 +361,16 @@ async def execute_governed_tool(
             # A scan that found something must record it. Measured 26 Nov 2026: governed nuclei runs returned 25 real
             # findings and the register held zero nuclei rows for the month, because the handler hands its findings to
             # the caller and nothing wrote them down.
+            #
+            # RECORDING THE FINDINGS MUST NOT BE ABLE TO FAIL THE SCAN. This call first sat inside the same try that
+            # wraps the execution, so an ImportError, a connection reset or a cancellation during the write would have
+            # taken the except branch and returned EXECUTION_FAILED - discarding a successful scan and every finding it
+            # had just produced, which is the exact loss this release exists to stop, reintroduced by its own patch.
+            # It would also have written the bookkeeping fault into the governance trace as a tool failure, so the SLO
+            # would have blamed the scanner for it.
             if isinstance(result, dict) and result.get("success") is True and isinstance(result.get("findings"), list):
-                from gds_api.scanner_persistence import persist_scan_output
-
                 target = str(payload.get("target") or payload.get("url") or "")
-                result["persistence"] = await persist_scan_output(tid, tool_name, target, result)
+                result["persistence"] = await _persist_findings_safely(tid, tool_name, target, result)
             return result
         except Exception as exc:  # noqa: BLE001 - the loop must render a failure, not die
             _logger.exception("governed tool execution failed: %s", tool_name)
