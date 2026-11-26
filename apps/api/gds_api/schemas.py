@@ -78,6 +78,10 @@ class ApprovalOut(BaseModel):
     decided_by_user_id: uuid.UUID | None
     created_at: datetime
     decided_at: datetime | None
+    # Measured 26 Nov 2026: the queue listed requests with no deadline on them, so a decider reading it could not tell
+    # a request raised a minute ago from one that dies in an hour. Both are computed from the one window definition.
+    expires_at: datetime | None = None
+    hours_remaining: float | None = None
 
 
 class ApprovalDecisionRequest(BaseModel):

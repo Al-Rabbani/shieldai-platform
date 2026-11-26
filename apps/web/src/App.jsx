@@ -90,6 +90,7 @@ import ExecutiveOverviewPage from '@/pages/ExecutiveOverviewPage';
 import MfaSettingsPage from '@/pages/MfaSettingsPage';
 import ApiKeysPage from '@/pages/ApiKeysPage';
 import SloPage from '@/pages/SloPage';
+import ApprovalsQueuePage from '@/pages/ApprovalsQueuePage';
 import BillingSettingsPage from '@/pages/BillingSettingsPage';
 import FixCalendarPage from '@/pages/FixCalendarPage';
 import DriveReportsPage from '@/pages/DriveReportsPage';
@@ -218,6 +219,7 @@ const AuthenticatedApp = () => {
           <Route path="/settings/mfa" element={<MfaSettingsPage />} />
           <Route path="/settings/api-keys" element={<ApiKeysPage />} />
           <Route path="/operations/slo" element={<SloPage />} />
+          <Route path="/operations/approvals" element={<ApprovalsQueuePage />} />
           <Route path="/settings/billing" element={<BillingSettingsPage />} />
           <Route path="/vulnerability-fixes" element={<VulnerabilityFixesPage />} />
           <Route path="/triage" element={<TriageQueuePage />} />

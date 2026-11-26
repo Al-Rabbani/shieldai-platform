@@ -31,6 +31,7 @@ import httpx
 from fastapi import APIRouter, Depends
 from sqlalchemy import text
 
+from gds_api.approval_window import APPROVAL_WINDOW_HOURS
 from gds_api.db import get_db
 from gds_api.mission_taxonomy import MISSION_TYPES
 from gds_api.scan_health_api import _verdict
@@ -46,7 +47,7 @@ _AT_RISK_BUDGET_PCT = 25.0
 
 # Approval timeliness has no per-row deadline in the approvals table, so the objective carries its own threshold
 # and says that in its basis. 24 hours is the point at which an undecided request starts blocking someone's work.
-_APPROVAL_THRESHOLD_HOURS = 24
+_APPROVAL_THRESHOLD_HOURS = APPROVAL_WINDOW_HOURS
 
 # Latency objective: the 95th percentile of API response time, in milliseconds.
 _LATENCY_TARGET_MS = 800.0

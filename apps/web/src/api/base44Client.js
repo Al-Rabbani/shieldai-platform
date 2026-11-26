@@ -1178,3 +1178,14 @@ export async function scanHealth() {
 export async function sloStatus() {
   return request('/slo');
 }
+
+/** The approval queue. `status_filter` empty means every status, newest first. */
+export async function listApprovals(statusFilter) {
+  return request('/approvals', { query: statusFilter ? { status_filter: statusFilter } : undefined });
+}
+
+/** Records a real decision. The route refuses anything but approved|rejected, and refuses a row already decided. */
+export async function decideApproval(approvalId, decision) {
+  return request(`/approvals/${approvalId}/decide`, { method: 'POST', body: { decision } });
+}
+

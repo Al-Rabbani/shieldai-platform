@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from gds_api.approval_window import expires_at, hours_remaining
 from gds_api.audit import record_audit_event
 from gds_api.db import get_db
 from gds_api.models import Approval, Notification
@@ -12,6 +13,26 @@ from gds_api.schemas import ApprovalDecisionRequest, ApprovalOut
 from gds_api.security import CurrentUser, require_permission
 
 router = APIRouter(prefix="/approvals", tags=["approvals"])
+
+
+def _out(approval: Approval) -> ApprovalOut:
+    """The row plus the two fields that make its urgency readable.
+
+    A decided or expired row keeps the deadline it had: what a request's window was is part of its record, not
+    something to recompute later against a different constant.
+    """
+    return ApprovalOut(
+        id=approval.id,
+        risk_class=approval.risk_class,
+        action_description=approval.action_description,
+        status=approval.status,
+        requested_by_user_id=approval.requested_by_user_id,
+        decided_by_user_id=approval.decided_by_user_id,
+        created_at=approval.created_at,
+        decided_at=approval.decided_at,
+        expires_at=expires_at(approval.created_at),
+        hours_remaining=hours_remaining(approval.created_at),
+    )
 
 
 @router.get("", response_model=list[ApprovalOut])
@@ -24,7 +45,7 @@ async def list_approvals(
     if status_filter:
         query = query.where(Approval.status == status_filter)
     result = await db.execute(query.order_by(Approval.created_at.desc()))
-    return list(result.scalars().all())
+    return [_out(row) for row in result.scalars().all()]
 
 
 @router.post("/{approval_id}/decide", response_model=ApprovalOut)

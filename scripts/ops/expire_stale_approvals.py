@@ -25,12 +25,13 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from sqlalchemy import select  # noqa: E402
 
+from gds_api.approval_window import APPROVAL_WINDOW_HOURS
 from gds_api.audit import record_audit_event  # noqa: E402
 from gds_api.db import async_session_factory  # noqa: E402
 from gds_api.models import Approval, Notification  # noqa: E402
 from gds_api.tenant_binding import bind_tenant  # noqa: E402
 
-DEFAULT_MAX_AGE_HOURS = 24
+DEFAULT_MAX_AGE_HOURS = APPROVAL_WINDOW_HOURS
 
 
 def configured_tenants(explicit: list[str] | None) -> list[uuid.UUID]:

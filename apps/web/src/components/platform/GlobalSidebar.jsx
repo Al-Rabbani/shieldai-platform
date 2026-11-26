@@ -97,6 +97,7 @@ const SECTIONS = [
   { label: "PLATFORM", items: [
     { icon: Cpu, label: "Agent Fleet", path: "/settings/agents" },
     { icon: Activity, label: "Service Levels", path: "/operations/slo" },
+    { icon: ShieldCheck, label: "Approval Queue", path: "/operations/approvals" },
     { icon: Gauge, label: "Fleet Autoscaling", path: "/settings/fleet-scaling" },
     { icon: Zap, label: "Auto-Remediation", path: "/settings/auto-remediation" },
     { icon: BellRing, label: "Escalation Rules", path: "/settings/escalation" },

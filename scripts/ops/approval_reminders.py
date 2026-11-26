@@ -34,7 +34,9 @@ from datetime import UTC, datetime, timedelta
 
 sys.path.insert(0, os.environ.get("GDS_API_PATH", "/opt/gds-os/apps/api"))
 
-from sqlalchemy import text  # noqa: E402
+from sqlalchemy import text
+
+from gds_api.approval_window import APPROVAL_WINDOW_HOURS  # noqa: E402
 
 from gds_api.audit import record_audit_event  # noqa: E402
 from gds_api.db import async_session_factory  # noqa: E402
@@ -42,7 +44,7 @@ from gds_api.tenant_binding import bind_tenant  # noqa: E402
 
 # The window an approval lives for, matching expire_stale_approvals.DEFAULT_MAX_AGE_HOURS so a reminder can never be
 # computed against a different deadline than the one that expires the row.
-DEFAULT_WINDOW_HOURS = 24
+DEFAULT_WINDOW_HOURS = APPROVAL_WINDOW_HOURS
 DEFAULT_THRESHOLDS = (12, 20)
 NOTIFICATION_TYPE = "approval.awaiting_decision"
 DEDUPE_DAYS = 7
