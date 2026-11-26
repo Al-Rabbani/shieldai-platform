@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { attemptWrite } from "@/lib/writeFailure";
-import { decideApproval, listApprovals } from "@/api/base44Client";
+import { decideApproval, listApprovals, standingApprovals } from "@/api/base44Client";
 
 /**
  * The approval queue, which did not exist.
@@ -50,16 +50,19 @@ function ageLabel(createdAt) {
 export default function ApprovalsQueuePage() {
   const [pending, setPending] = useState([]);
   const [decided, setDecided] = useState([]);
+  const [standing, setStanding] = useState([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(null);
   const [error, setError] = useState(null);
 
   const load = useCallback(async () => {
     try {
-      const [open, closed] = await Promise.all([
+      const [open, closed, standingRows] = await Promise.all([
         listApprovals("pending"),
         listApprovals(""),
+        standingApprovals().catch(() => []),
       ]);
+      setStanding(standingRows || []);
       setPending(open);
       setDecided(
         (closed || [])
@@ -166,6 +169,34 @@ export default function ApprovalsQueuePage() {
           ))}
         </div>
       )}
+
+      <div className="pt-2">
+        <h2 className="text-sm font-semibold text-slate-200">Standing authority</h2>
+        <p className="mt-0.5 max-w-3xl text-[11px] leading-relaxed text-slate-500">
+          An approval here authorises the same action again without asking a human, until the stated time. It is the
+          most consequential state an approval holds, so it is listed separately from single decisions.
+        </p>
+        {standing.length === 0 ? (
+          <div className="mt-1 text-xs text-slate-500">No action currently holds standing authority.</div>
+        ) : (
+          <div className="mt-1 space-y-1">
+            {standing.map((row) => (
+              <div key={row.id} className="flex flex-wrap items-center gap-2 rounded border border-amber-500/30 bg-amber-500/5 px-2 py-1.5">
+                <span className={`rounded border px-1.5 py-0.5 text-[10px] font-mono uppercase ${riskStyle(row.risk_class)}`}>
+                  {row.risk_class || "unclassified"}
+                </span>
+                <span className={`text-[11px] font-mono ${remainingTone(row.hours_remaining)}`}>
+                  {row.hours_remaining === null ? "no expiry" : `until ${new Date(row.standing_until).toISOString().slice(0, 16).replace("T", " ")} UTC (${row.hours_remaining.toFixed(1)}h)`}
+                </span>
+                <span className="text-[11px] text-slate-300">{row.action_description}</span>
+                <span className="text-[10px] font-mono text-slate-500">
+                  {row.uses} use(s){row.last_used ? `, last ${new Date(row.last_used).toISOString().slice(0, 16).replace("T", " ")}` : ""}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       <div className="pt-2">
         <h2 className="text-sm font-semibold text-slate-200">Recently decided</h2>

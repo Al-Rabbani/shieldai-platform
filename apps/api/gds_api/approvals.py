@@ -48,6 +48,57 @@ async def list_approvals(
     return [_out(row) for row in result.scalars().all()]
 
 
+@router.get("/standing", response_model=list[dict])
+async def list_standing_approvals(
+    current_user: CurrentUser = Depends(require_permission("approvals:read")),
+    db: AsyncSession = Depends(get_db),
+) -> list[dict]:
+    """Approvals that authorise repeated use of an action until a stated time.
+
+    MEASURED 26 Nov 2026: six standing approvals were granted for the Q4 external surface review, giving named tools
+    authority to run against two hosts for seven days with no further human decision, and nothing in the platform
+    listed them. Standing authority is the most consequential state an approval can hold - it is the difference
+    between "someone said yes once" and "this runs unattended for a week" - so it must be readable without querying
+    the database by hand.
+
+    Reads the columns the migration added rather than the ORM model, which predates them.
+    """
+    from sqlalchemy import text
+
+    await db.execute(text("SELECT set_config('gds.tenant_id', :t, false)"), {"t": str(current_user.tenant_id)})
+    rows = (await db.execute(text(
+        """
+        SELECT a.id, a.risk_class, a.action_description, a.decided_at, a.standing_until,
+               a.standing_reason, a.decided_by_user_id,
+               (SELECT count(*) FROM capability_decisions d WHERE d.approval_id = a.id) AS uses,
+               (SELECT max(d.executed_at) FROM capability_decisions d WHERE d.approval_id = a.id) AS last_used
+          FROM approvals a
+         WHERE a.tenant_id = :t
+           AND a.status = 'approved'
+           AND a.standing
+           AND a.standing_until > now()
+         ORDER BY a.standing_until
+        """
+    ), {"t": str(current_user.tenant_id)})).mappings().all()
+
+    now = datetime.now(UTC)
+    return [
+        {
+            "id": str(row["id"]),
+            "risk_class": row["risk_class"],
+            "action_description": row["action_description"],
+            "granted_by_user_id": str(row["decided_by_user_id"]) if row["decided_by_user_id"] else None,
+            "standing_until": row["standing_until"].isoformat() if row["standing_until"] else None,
+            "hours_remaining": round((row["standing_until"] - now).total_seconds() / 3600.0, 1)
+            if row["standing_until"] else None,
+            "reason": row["standing_reason"],
+            "uses": row["uses"],
+            "last_used": row["last_used"].isoformat() if row["last_used"] else None,
+        }
+        for row in rows
+    ]
+
+
 @router.post("/{approval_id}/decide", response_model=ApprovalOut)
 async def decide_approval(
     approval_id: uuid.UUID,

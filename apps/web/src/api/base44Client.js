@@ -1184,6 +1184,11 @@ export async function listApprovals(statusFilter) {
   return request('/approvals', { query: statusFilter ? { status_filter: statusFilter } : undefined });
 }
 
+/** Approvals that authorise repeated use until a stated time - the most consequential state an approval holds. */
+export async function standingApprovals() {
+  return request('/approvals/standing');
+}
+
 /** Records a real decision. The route refuses anything but approved|rejected, and refuses a row already decided. */
 export async function decideApproval(approvalId, decision) {
   return request(`/approvals/${approvalId}/decide`, { method: 'POST', body: { decision } });
