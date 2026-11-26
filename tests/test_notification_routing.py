@@ -43,6 +43,9 @@ def test_every_writer_names_a_real_page():
         "scripts/ops/approval_reminders.py": "/operations/approvals",
         "scripts/ops/expire_stale_approvals.py": "/operations/approvals",
         "scripts/ops/slo_check.py": "/operations/slo",
+        # The API's own writers: the broker's "an approval needs you" and the decide route's answer.
+        "apps/api/gds_api/policy.py": "/operations/approvals",
+        "apps/api/gds_api/approvals.py": "/operations/approvals",
     }
     for script, page in writers.items():
         body = _read(script)

@@ -75,6 +75,7 @@ async def decide_approval(
             tenant_id=approval.tenant_id,
             user_id=approval.requested_by_user_id,
             type="approval.decided",
+            action_url="/operations/approvals",
             message=f"Your request '{approval.action_description}' was {body.decision}",
         )
     )

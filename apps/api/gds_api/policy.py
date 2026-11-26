@@ -82,6 +82,8 @@ async def evaluate_policy(
                 tenant_id=tenant_id,
                 user_id=approver.id,
                 type="approval.pending",
+                # Where the decider acts. Without it the notification names a decision with nowhere to make it.
+                action_url="/operations/approvals",
                 message=f"Approval requested: {action_description} (risk: {risk_class})",
             )
         )
