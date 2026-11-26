@@ -64,3 +64,8 @@
 # oldest for 247 hours, and the ledger reported work in progress that had stopped ten days earlier. Sixty minutes is
 # the threshold because no governed tool here runs longer than the scanners, which the gateway already caps.
 */30 * * * * cd /opt/gds-os && set -a && . /opt/.env 2>/dev/null && set +a && PYTHONPATH=apps/api ./apps/api/venv/bin/python scripts/ops/reap_stale_executions.py >> /var/log/gds/stale-executions.log 2>&1
+
+# Coverage is measured weekly, not on every deploy: the suite takes 104 seconds and an incident fix must not wait for it.
+# The floor in config/coverage-baseline.json may only be raised, so this catches a quarter of untested code arriving
+# while every test still passes. MEASURED 26 Nov 2026, first ever: 1,550 tests, 38.18% of 28,432 statements.
+10 5 * * 1 cd /opt/gds-os && set -a && . /opt/.env 2>/dev/null && set +a && PYTHONPATH=apps/api ./apps/api/venv/bin/python scripts/ops/coverage_gate.py --run --raise-alert >> /var/log/gds/coverage.log 2>&1

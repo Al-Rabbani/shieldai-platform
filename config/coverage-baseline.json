@@ -1,0 +1,12 @@
+{
+  "percent": 38.18,
+  "statements": 28432,
+  "covered": 10854,
+  "note": "Floor may only be raised. Untested-by-design modules are listed so the number is read honestly rather than gamed.",
+  "unreachable_by_design": {
+    "security_scope.py": "Phase C, not wired into any route; its own docstring says so",
+    "ai_ml/anomaly_detection.py": "no route or agent calls it",
+    "ai_ml/behavioral_analytics.py": "no route or agent calls it",
+    "ai_ml/quantum_crypto.py": "no route or agent calls it"
+  }
+}
