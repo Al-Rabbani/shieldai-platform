@@ -378,9 +378,28 @@ async def open_reasoning_mission(*, tenant_id: Any, user_id: Any, goal: str, age
         return mission.id
 
 
+
+def _bounded_detail(detail: dict, max_items: int = 20, max_chars: int = 4000) -> dict:
+    """Keep a failure's detail on the mission row, bounded so a pathological run cannot bloat it."""
+    out: dict = {}
+    for key, value in detail.items():
+        if isinstance(value, list):
+            trimmed = value[:max_items]
+            out[key] = trimmed
+            if len(value) > max_items:
+                out[f"{key}_truncated_from"] = len(value)
+        elif isinstance(value, (str, int, float, bool)) or value is None:
+            out[key] = value
+        else:
+            out[key] = str(value)[:500]
+    encoded = json.dumps(out)
+    if len(encoded) > max_chars:
+        return {"detail_truncated": True, "keys": sorted(out), "encoded_chars": len(encoded)}
+    return out
+
 async def set_mission_outcome(*, mission_id: Any, tenant_id: Any, success: bool, summary: str,
                              iterations: int | None = None, tool_call_count: int | None = None,
-                             model: str | None = None) -> bool:
+                             model: str | None = None, detail: dict | None = None) -> bool:
     """Close a reasoning mission, and let it learn from itself. A mission must never be left running.
 
     iterations and tool_call_count are recorded because they are what distinguishes a reasoning run from a
@@ -419,6 +438,11 @@ async def set_mission_outcome(*, mission_id: Any, tenant_id: Any, success: bool,
             "tool_call_count": tool_call_count,
             "model": model,
         }
+        # Measured 25 Nov 2026: the engagement runner computed a per-action refusal reason for all five refusals
+        # and then wrote only "0 action(s) succeeded, 5 refused" to the mission, so the reason was lost with the
+        # process. A failed mission that cannot say why is a failure an operator has to reproduce from scratch.
+        if detail:
+            report["reasoning"]["detail"] = _bounded_detail(detail)
         mission.status = "completed" if success else "failed"
         mission.completed_at = datetime.now(UTC)
 

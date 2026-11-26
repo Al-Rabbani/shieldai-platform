@@ -91,6 +91,22 @@ PARAM_MAP = {
 }
 
 
+
+def exhausted_summary(max_iterations: int, tool_call_count: int, last_error: str | None) -> str:
+    """Why a reasoning run stopped, said plainly.
+
+    Measured 25 Nov 2026: two missions failed with the summary "Max iterations or error: None". Neither had
+    raised an exception - the model simply kept calling tools until the budget ran out - so the summary named
+    nothing an operator could act on, and read as though an error had occurred but had no message. The two
+    outcomes are different jobs: a budget that ran out is a planning or prompt problem, an exception is a fault.
+    """
+    if last_error:
+        return f"error after {max_iterations} iteration(s): {str(last_error)[:300]}"
+    return (
+        f"iteration budget exhausted: {max_iterations} iteration(s) and {tool_call_count} tool call(s) "
+        "without a final answer from the model. Nothing raised an error; the model kept calling tools."
+    )
+
 class AgenticLoop:
     """The core reasoning engine — agents that THINK, not just execute."""
     
@@ -285,7 +301,7 @@ analyze them and decide the next step. When done, provide a summary.
         total_ms = int((time.time() - start_time) * 1000)
         return AgentResult(
             agent_id=self.agent_id, goal=goal, success=False,
-            summary=f"Max iterations or error: {last_error}",
+            summary=exhausted_summary(self.MAX_ITERATIONS, len(tool_calls), last_error),
             tool_calls=tool_calls, iterations=self.MAX_ITERATIONS,
             duration_ms=total_ms, error=last_error
         )
