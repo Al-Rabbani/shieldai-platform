@@ -85,6 +85,10 @@ async def _nmap_scan(params: dict) -> dict:
                 "version": " ".join(parts[3:]) if len(parts) > 3 else "",
             })
     result["open_ports"] = open_ports
+    # The persistence contract is a `findings` list (scanner_persistence.normalise reads only that). Measured 26 Nov
+    # 2026: nmap_scan returned open_ports alone, so every nmap result was unpersistable and the sweep reported
+    # "nmap_scan has no findings extractor" while nmap had in fact found things.
+    result["findings"] = open_ports
     result["tool"] = "nmap"
     return result
 
@@ -246,6 +250,67 @@ async def _trivy_scan(params: dict) -> dict:
     return result
 
 
+#: Descriptions nikto uses for its own report metadata rather than for a weakness. Measured from the live register
+#: on 26 Nov 2026, where all fourteen nikto rows were one of these.
+NIKTO_REPORT_METADATA = (
+    "target ip:", "target hostname:", "target port:", "start time:", "end time:", "server:",
+)
+
+
+def _parse_nikto_xml(raw: str) -> list[dict]:
+    """Parse a nikto XML report into findings, and record nothing that is not a weakness.
+
+    MEASURED 26 Nov 2026, three defects in one report format:
+      * nikto writes <description>, <uri> and <namelink> as CHILD ELEMENTS, not attributes, so reading attributes gave
+        every item an empty description and all five findings per host collapsed into the single title "nikto 999100:".
+      * nikto also emits <item> elements carrying report metadata - Target IP, Target Hostname, Target Port, Start
+        Time, End Time - which are not findings at all. Fourteen such rows sat in the register as nikto findings.
+      * it reports "Uncommon header 'strict-transport-security' found" for every security header that IS present, so a
+        hardened host produced five info findings per host for having HSTS, CSP and XFO.
+    A header that exists is not a weakness, and a report header is not a finding.
+    """
+    import xml.etree.ElementTree as ET
+
+    start = raw.find("<")
+    if start < 0:
+        return []
+
+    def field(item, name: str) -> str:
+        node = item.find(name)
+        if node is not None and (node.text or "").strip():
+            return (node.text or "").strip()
+        return (item.get(name) or "").strip()
+
+    try:
+        root = ET.fromstring(raw[start:])
+    except Exception:  # noqa: BLE001 - an unparsed scan is not a clean scan; the caller records parse_error
+        return []
+
+    findings: list[dict] = []
+    for item in root.iter("item"):
+        description = field(item, "description")
+        uri = field(item, "uri")
+        if not description and not uri:
+            continue
+        if description.lower().startswith("uncommon header"):
+            continue
+        if description.lower().startswith(NIKTO_REPORT_METADATA):
+            # These carry a <description> and no <uri>, so the empty check above does not catch them: they are nikto
+            # describing its own run (Target IP, Target Hostname, Target Port, Start/End Time, Server banner). Fourteen
+            # such rows sat in the register as nikto findings.
+            continue
+        findings.append(
+            {
+                "id": item.get("id"),
+                "method": field(item, "method") or item.get("method"),
+                "uri": uri,
+                "description": description,
+                "namelink": field(item, "namelink"),
+            }
+        )
+    return findings
+
+
 async def _nikto_scan(params: dict) -> dict:
     """Run nikto scan. params: target, port."""
     target = params.get("target", "localhost")
@@ -254,29 +319,38 @@ async def _nikto_scan(params: dict) -> dict:
     # nikto has no json format (csv/htm/msf+/nbe/txt/xml only). Measured 25 Nov 2026: "-Format json" made
     # every nikto run fail its format selection and return no findings, so a web server check looked clean
     # when nothing had been parsed. XML is a real nikto format and is parsed into findings below.
-    cmd = [_find_tool("nikto"), "-h", target, "-p", port, "-Format", "xml", "-nointeractive"]
+    # MEASURED 26 Nov 2026: "-Format xml" WITHOUT "-output" makes nikto's XML reporter die with
+    #   ERROR: Unable to open '' for write  (nikto_report_xml.plugin line 60)
+    # and it still EXITS 0, so _run_tool saw success, stdout held no <item>, findings came back empty and a nikto run
+    # that had errored reported as a clean scan. That is why nikto's 21 register rows are all dated 1 August and none is
+    # open: the check has not really run since. The report goes to a file we own, and a missing or unparsable report is
+    # recorded as a parse error rather than as "no findings".
+    import tempfile
+
+    report = tempfile.NamedTemporaryFile(prefix="nikto-", suffix=".xml", delete=False)
+    report_path = report.name
+    report.close()
+    cmd = [
+        _find_tool("nikto"), "-h", target, "-p", str(port),
+        "-Format", "xml", "-output", report_path, "-nointeractive",
+    ]
     result = await _run_tool(cmd, timeout=600)
     result["tool"] = "nikto"
+    result["report_path"] = report_path
     findings: list[dict] = []
-    raw = result.get("stdout") or ""
-    start = raw.find("<")
-    if start >= 0:
-        try:
-            import xml.etree.ElementTree as ET
-
-            root = ET.fromstring(raw[start:])
-            for item in root.iter("item"):
-                findings.append(
-                    {
-                        "id": item.get("id"),
-                        "method": item.get("method"),
-                        "uri": item.get("uri"),
-                        "description": item.get("description"),
-                        "namelink": item.get("namelink"),
-                    }
-                )
-        except Exception as exc:  # noqa: BLE001 - an unparsed scan is not a clean scan
-            result["parse_error"] = str(exc)[:200]
+    raw = ""
+    try:
+        with open(report_path, encoding="utf-8", errors="replace") as handle:
+            raw = handle.read()
+    except OSError as exc:
+        result["parse_error"] = f"nikto wrote no readable report: {exc}"
+    if not raw.strip():
+        result.setdefault("parse_error", "nikto wrote an empty report - the scan did not complete")
+    findings = _parse_nikto_xml(raw)
+    if not findings and raw.strip():
+        # A report that exists but yields nothing is a real zero; a report that cannot be parsed is not. The
+        # distinction is kept by parse_error above, which the sweep reports instead of "no findings".
+        result.setdefault("parse_error", "nikto report produced no parsable findings")
     result["findings"] = findings
     return result
 
@@ -515,7 +589,23 @@ async def _check_url_headers(params: dict) -> dict:
             "referrer-policy": headers.get("referrer-policy", "MISSING"),
         }
         score = sum(1 for v in security_headers.values() if v != "MISSING")
-        return {"success": True, "tool": "security_headers", "headers": security_headers, "score": f"{score}/5", "status_code": resp.status_code}
+        missing = [name for name, value in security_headers.items() if value == "MISSING"]
+        return {
+            "success": True,
+            "tool": "security_headers",
+            "headers": security_headers,
+            "score": f"{score}/5",
+            "status_code": resp.status_code,
+            # Same contract as every other scanner handler: a findings list, so the result can be persisted at all.
+            "findings": [
+                {
+                    "header": name,
+                    "description": f"The response does not set {name} (score {score}/5).",
+                    "score": f"{score}/5",
+                }
+                for name in missing
+            ],
+        }
     except Exception as e:
         return {"success": False, "tool": "security_headers", "error": str(e)}
 

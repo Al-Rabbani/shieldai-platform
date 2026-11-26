@@ -56,6 +56,43 @@ def _nikto(item: dict, target: str) -> dict:
     }
 
 
+def _nmap(item: dict, target: str) -> dict:
+    """An open port is a fact about the perimeter. Recorded at info: an open port is not a vulnerability by itself,
+    and calling it one is how a scanner earns a reputation for noise."""
+    port = item.get("port") or item.get("portid") or "?"
+    service = item.get("service") or item.get("name") or "unknown"
+    version = item.get("version") or ""
+    return {
+        "title": f"open port {port}/{str(item.get('protocol') or 'tcp')} {service}".strip()[:250],
+        "severity": "info",
+        "target": target,
+        "description": f"{service} {version}".strip() or "service not identified",
+        "raw": {"port": port, "protocol": item.get("protocol"), "service": service, "version": version},
+    }
+
+
+#: The headers the platform itself requires. Measured 26 Nov 2026: security_headers_check had NO extractor, so every
+#: headers check reported "nothing was written" while the check had in fact run and returned a score.
+REQUIRED_HEADERS = (
+    "strict-transport-security",
+    "content-security-policy",
+    "x-frame-options",
+    "x-content-type-options",
+    "referrer-policy",
+)
+
+
+def _security_headers(item: dict, target: str) -> dict:
+    name = item.get("header") or "header"
+    return {
+        "title": f"missing security header: {name}"[:250],
+        "severity": "low",
+        "target": target,
+        "description": item.get("description") or f"The response does not set {name}.",
+        "raw": {"header": name, "score": item.get("score")},
+    }
+
+
 def _httpx(item: dict, target: str) -> dict:
     host = item.get("host") or item.get("url") or item.get("input") or target
     tech = item.get("tech") or item.get("technologies") or []
@@ -78,6 +115,12 @@ EXTRACTORS: dict[str, Callable[[dict, str], dict]] = {
     "nikto_scan": _nikto,
     "httpx_scan": _httpx,
     "httpx_probe": _httpx,
+    # Added 26 Nov 2026: both tools returned results the writer could not read, so an open port and a missing security
+    # header could be found and never recorded.
+    "nmap_scan": _nmap,
+    "port_inventory_scan": _nmap,
+    "security_headers_check": _security_headers,
+    "check_url_security_headers": _security_headers,
 }
 
 
