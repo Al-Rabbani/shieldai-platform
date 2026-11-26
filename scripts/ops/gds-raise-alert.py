@@ -51,6 +51,9 @@ def main() -> int:
     parser.add_argument("--severity", default="high", choices=["info", "low", "medium", "high", "critical"])
     parser.add_argument("--message", required=True)
     parser.add_argument("--dedupe-minutes", type=int, default=DEDUPE_MINUTES)
+    parser.add_argument("--dedupe-by-type", action="store_true",
+                        help="treat one unacknowledged alert of this type as the alert: refresh its message instead of "
+                             "raising a second row. For conditions whose message carries a live measurement.")
     parser.add_argument("--action-url", default=None,
                         help="in-app path that acts on this alert, e.g. /operations/approvals")
     args = parser.parse_args()
@@ -82,6 +85,24 @@ def main() -> int:
                 (args.type, args.message, args.dedupe_minutes),
             )
             existing = cur.fetchone()
+            if not existing and args.dedupe_by_type:
+                # MEASURED 26 Nov 2026: four hours produced five approval_timeliness rows and four mission_success
+                # rows, each with its own escalation ladder, because the dedupe keys on the exact message and the
+                # message carries the live rate. One continuous breach must stay one alert whose text is refreshed.
+                cur.execute(
+                    "SELECT id FROM notifications WHERE tenant_id = %s AND type = %s "
+                    "AND acknowledged_at IS NULL ORDER BY created_at DESC LIMIT 1",
+                    (tenant, args.type),
+                )
+                open_row = cur.fetchone()
+                if open_row:
+                    cur.execute(
+                        "UPDATE notifications SET message = %s, action_url = COALESCE(%s, action_url) WHERE id = %s",
+                        (args.message, args.action_url, open_row[0]),
+                    )
+                    conn.commit()
+                    print(f"refreshed notification {open_row[0]}")
+                    return 0
             if existing:
                 print(f"suppressed duplicate of notification {existing[0]}")
                 conn.rollback()

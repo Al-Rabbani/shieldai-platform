@@ -134,11 +134,13 @@ def main() -> int:
              "--type", alert["type"], "--severity", alert["severity"],
              "--message", alert["message"], "--dedupe-minutes", DEDUPE_MINUTES,
              # The page that shows the measurement, so the alert is one click from the evidence.
-             "--action-url", "/operations/slo"],
+             "--action-url", "/operations/slo", "--dedupe-by-type"],
             capture_output=True, text=True,
         )
         output = (result.stdout or "").strip()
-        if result.returncode == 0 and "suppressed duplicate" in output:
+        # A refresh is not a raise: the raiser updates the one open alert instead of adding another, and calling that
+        # "raised" would report a page that did not happen (the same mislabel as a suppression reported as a raise).
+        if result.returncode == 0 and ("suppressed duplicate" in output or "refreshed notification" in output):
             # The raiser returns 0 for a suppression, so reporting "raised" here would claim a page that did not
             # happen - measured 25 Nov 2026, two consecutive runs both printed "raised" while the second was deduped.
             print(f"slo_check: {alert['type']} already open, {output}")
