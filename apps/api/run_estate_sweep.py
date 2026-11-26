@@ -44,13 +44,28 @@ SWEEP: dict[str, tuple[str | None, bool]] = {
     "security_headers": ("security_headers_check", True),
     "owasp_pentest": (None, True),
     "api_pentest": (None, True),
+    # Added 26 Nov 2026 once these four could actually produce a recordable result. Until then they were on-demand only:
+    # ffuf and gobuster had no wordlist to read, gobuster refused to run on a catch-all host, httpx ignored -u and probed
+    # nothing, and none of the four parsed its own output into findings.
+    "subfinder": ("subfinder_scan", False),
+    "httpx": ("httpx_scan", True),
+    "ffuf": ("ffuf_scan", True),
+    "gobuster": ("gobuster_scan", True),
+}
+#: Not in the sweep, with the reason: wpscan needs an API token to report plugin/theme vulnerabilities, so without one
+#: it would run nightly and prove nothing. It stays callable but is not counted as coverage.
+EXCLUDED: dict[str, str] = {
+    "wpscan": "no WPScan API token configured, so it cannot report plugin or theme vulnerabilities",
 }
 #: Tools that make sense for a given target type. A web_application target is not port-scanned by nmap here.
 APPLIES: dict[str, set[str]] = {
-    "host": {"nuclei", "nikto", "nmap", "security_headers", "owasp_pentest", "api_pentest"},
-    "domain": {"nuclei", "nikto", "security_headers", "owasp_pentest", "api_pentest"},
-    "web_application": {"nuclei", "nikto", "security_headers", "owasp_pentest", "api_pentest"},
-    "ip": {"nuclei", "nmap", "security_headers"},
+    "host": {"nuclei", "nikto", "nmap", "security_headers", "owasp_pentest", "api_pentest",
+             "httpx", "ffuf", "gobuster"},
+    "domain": {"nuclei", "nikto", "security_headers", "owasp_pentest", "api_pentest",
+               "subfinder", "httpx", "ffuf", "gobuster"},
+    "web_application": {"nuclei", "nikto", "security_headers", "owasp_pentest", "api_pentest",
+                        "httpx", "ffuf", "gobuster"},
+    "ip": {"nuclei", "nmap", "security_headers", "httpx"},
     "cidr": {"nmap"},
 }
 BINARIES = {"nuclei": "nuclei", "nikto": "nikto", "nmap": "nmap"}
@@ -102,10 +117,19 @@ async def _run_one(db, tenant: str, scanner: str, target: str, target_type: str)
             found = output.get("findings") or []
             result["findings"] = len(found) if isinstance(found, list) else 0
             persisted = await persist_scan_output(tenant, tool, params["target"], output)
-            # Read the writer's own keys defensively: a key that does not exist silently reported every stored
-            # finding as zero, which is how "0 recorded" appeared beside ten rows that had in fact been written.
-            result["recorded"] = int(persisted.get("created") or persisted.get("new") or 0)
-            result["duplicates"] = int(persisted.get("duplicates") or persisted.get("deduped") or 0)
+            # The writer's REAL keys are findings_created / duplicates_skipped / findings_total. Guessing at them three
+            # times in one night made written rows display as "0 recorded", which is the same lie as a silent zero.
+            # Read the documented names first, then any older spelling, and never infer a zero from a missing key.
+            result["recorded"] = int(
+                persisted.get("findings_created")
+                if persisted.get("findings_created") is not None
+                else (persisted.get("created") or persisted.get("new") or 0)
+            )
+            result["duplicates"] = int(
+                persisted.get("duplicates_skipped")
+                if persisted.get("duplicates_skipped") is not None
+                else (persisted.get("duplicates") or persisted.get("deduped") or 0)
+            )
             result["persistence_note"] = persisted.get("note")
             if persisted.get("persisted") is False:
                 result["error"] = persisted.get("reason")

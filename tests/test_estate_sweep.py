@@ -98,3 +98,13 @@ def test_the_sweep_binds_the_tenant_before_it_reads_targets():
     bind_at = body.index("await _bind(db, TENANT)")
     read_at = body.index("await _targets(db)")
     assert bind_at < read_at
+
+
+def test_the_sweep_reads_the_keys_the_writer_actually_returns():
+    # Three times in one night the sweep reported "0 recorded" over rows that had been written, because it guessed at
+    # key names. The writer's documented keys are findings_created / duplicates_skipped / findings_total.
+    writer = pathlib.Path("apps/api/gds_api/scanner_persistence.py").read_text()
+    sweep = pathlib.Path("apps/api/run_estate_sweep.py").read_text()
+    for key in ("findings_created", "duplicates_skipped"):
+        assert key in writer, f"{key} is no longer a key the writer returns"
+        assert key in sweep, f"the sweep does not read {key}, so stored findings will display as zero"
