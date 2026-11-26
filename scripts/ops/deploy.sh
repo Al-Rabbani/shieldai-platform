@@ -261,6 +261,11 @@ install -m 750 -o root -g postgres "scripts/ops/gds-webhook-dispatch.py" "/usr/l
 install -m 750 -o root -g postgres "scripts/ops/gds-raise-alert.py" "/usr/local/bin/gds-raise-alert.py" \
   && echo "    installed gds-raise-alert.py (group postgres, runs as postgres)" || fail "could not install gds-raise-alert.py"
 
+# A restart kills whatever is mid-flight. Close those missions NOW, naming the restart, instead of leaving rows in
+# "running" that the reaper reads as a capability failure two hours later.
+echo "  closing in-flight missions..."
+python3 scripts/ops/close_inflight_missions.py || echo "    (continuing: bookkeeping must not block a deploy)"
+
 echo "  restarting services..."
 supervisorctl restart gds-os gds-worker gds-kernel >/dev/null 2>&1
 
