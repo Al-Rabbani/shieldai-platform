@@ -1,27 +1,40 @@
+# GDS OS edge configuration — SOURCE OF TRUTH.
+#
+# MEASURED 26 Nov 2026: the config nginx was actually serving lived only in /etc/nginx/sites-enabled/gds-os as a
+# regular file (5775 bytes, 25 Nov), while /etc/nginx/sites-available/gds-os - the copy deploy.sh compares against and
+# the only one in the repo - was still the 21 Nov version (4893 bytes). The hardening below (refusing /docs,
+# /openapi.json, /redoc so the route map is not published, and the www placeholder) existed on one machine and
+# nowhere else: normalising sites-enabled into a symlink to sites-available would have silently republished the whole
+# API schema. This file is now the versioned copy and deploy.sh installs it.
+
 # GDS OS — app.globaldigitalsecurity.io (main application)
 server {
     server_name app.globaldigitalsecurity.io;
 
+    # The builder app's React frontend, served beside the hand-written console until it is proven.
+    location /v2/ {
+        alias /var/www/app-v2/;
+        try_files $uri $uri/ /v2/index.html;
+    }
+
     # API routes go to FastAPI backend
-    # Server-sent events (gap C11). Buffering is the whole problem here: with it on, nginx holds
-    # frames until its buffer fills, so a working stream looks dead. These settings exist so the
-    # transport cannot silently defeat the feature, and the read timeout outlives a browser session.
-    location /api/stream/ {
-        proxy_pass http://127.0.0.1:8000/stream/;
-        proxy_http_version 1.1;
-        proxy_set_header Connection "";
+    # Credential submission gets its own much tighter bucket. Five attempts a minute per address is generous for a
+    # human and useless for a password spray. It must be declared before /api/ because nginx prefers an exact match.
+    location = /api/auth/login {
+        limit_req zone=gds_auth burst=5 nodelay;
+        limit_req_status 429;
+        proxy_pass http://127.0.0.1:8000/auth/login;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_buffering off;
-        proxy_cache off;
-        gzip off;
-        proxy_read_timeout 3600s;
-        proxy_send_timeout 3600s;
     }
 
     location /api/ {
+        # App-level rate limiting exists but it runs inside Python, so a flood is only rejected after nginx has
+        # accepted and the worker has parsed it. This refuses the flood at the edge instead.
+        limit_req zone=gds_api burst=40 nodelay;
+        limit_req_status 429;
         proxy_pass http://127.0.0.1:8000/;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
@@ -38,16 +51,12 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
     }
 
-    # OpenAPI docs
-    location /docs {
-        proxy_pass http://127.0.0.1:8000/docs;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-    }
-
-    location /openapi.json {
-        proxy_pass http://127.0.0.1:8000/openapi.json;
-        proxy_set_header Host $host;
+    # The API schema is not published. openapi.json enumerates every route, parameter and permission this
+    # platform exposes, which is a map for an attacker, and /docs and /redoc render it. Findings openapi x2,
+    # swagger-api x2 and redoc-api-docs, measured 25 Nov 2026. Kept as a 404 rather than a proxy so the
+    # endpoints are indistinguishable from any other unknown path.
+    location ~ ^/(docs|redoc|openapi\.json)$ {
+        return 404;
     }
 
     # Frontend SPA — try static files first, fallback to index
@@ -58,33 +67,44 @@ server {
     }
 
     listen 443 ssl; # managed by Certbot
-    ssl_certificate /etc/letsencrypt/live/app.globaldigitalsecurity.io/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/app.globaldigitalsecurity.io/privkey.pem;
+    add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload" always;
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://api.globaldigitalsecurity.io wss:; frame-ancestors 'self'" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    ssl_certificate /etc/letsencrypt/live/app.globaldigitalsecurity.io/fullchain.pem; # managed by Certbot
+    ssl_certificate_key /etc/letsencrypt/live/app.globaldigitalsecurity.io/privkey.pem; # managed by Certbot
     include /etc/letsencrypt/options-ssl-nginx.conf;
     ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+
 }
 
 # GDS OS — api.globaldigitalsecurity.io (API only)
 server {
     server_name api.globaldigitalsecurity.io;
 
-    # Server-sent events for direct API clients (same reasoning as the app host above).
-    location /stream/ {
-        proxy_pass http://127.0.0.1:8000;
-        proxy_http_version 1.1;
-        proxy_set_header Connection "";
+    # Same refusal as the app host: the catch-all below would otherwise publish the schema.
+    location ~ ^/(docs|redoc|openapi\.json)$ {
+        return 404;
+    }
+
+    # Credential submission, same tight bucket as the app host.
+    location = /auth/login {
+        limit_req zone=gds_auth burst=5 nodelay;
+        limit_req_status 429;
+        proxy_pass http://127.0.0.1:8000/auth/login;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_buffering off;
-        proxy_cache off;
-        gzip off;
-        proxy_read_timeout 3600s;
-        proxy_send_timeout 3600s;
     }
 
     location / {
+        # MEASURED 26 Nov 2026: the first attempt at this only guarded the app host's /api/, and every one of 60 rapid
+        # requests to THIS host came back 401 with not one 429 - the API host, which serves the entire surface, had no
+        # limit at all. A limit that covers one of two front doors is not a limit.
+        limit_req zone=gds_api burst=40 nodelay;
+        limit_req_status 429;
         proxy_pass http://127.0.0.1:8000;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
@@ -95,10 +115,16 @@ server {
     }
 
     listen 443 ssl;
-    ssl_certificate /etc/letsencrypt/live/app.globaldigitalsecurity.io/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/app.globaldigitalsecurity.io/privkey.pem;
+    add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload" always;
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Content-Security-Policy "default-src 'none'; frame-ancestors 'none'" always;
+    add_header Referrer-Policy "no-referrer" always;
+    ssl_certificate /etc/letsencrypt/live/app.globaldigitalsecurity.io/fullchain.pem; # managed by Certbot
+    ssl_certificate_key /etc/letsencrypt/live/app.globaldigitalsecurity.io/privkey.pem; # managed by Certbot
     include /etc/letsencrypt/options-ssl-nginx.conf;
     ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+
 }
 
 # GDS OS — www.globaldigitalsecurity.io (marketing placeholder)
@@ -106,15 +132,24 @@ server {
     server_name www.globaldigitalsecurity.io globaldigitalsecurity.io;
 
     location / {
-        return 200 "GDS OS — Global Digital Security. Full platform coming soon. Contact: president@globaldigitalstreams.com";
-        add_header Content-Type text/plain;
+        # A bare return inherits application/octet-stream, so a visitor is offered a download instead
+        # of reading the page. text/plain with an explicit charset is what this response actually is.
+        default_type "text/plain; charset=utf-8";
+        return 200 "GDSA Radar — The Agentic AI Security Operating System. Console: app.globaldigitalsecurity.io. Contact: president@globaldigitalstreams.com";
     }
 
     listen 443 ssl;
-    ssl_certificate /etc/letsencrypt/live/app.globaldigitalsecurity.io/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/app.globaldigitalsecurity.io/privkey.pem;
+    add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload" always;
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Content-Security-Policy "default-src 'none'" always;
+    add_header Referrer-Policy "no-referrer" always;
+    ssl_certificate /etc/letsencrypt/live/app.globaldigitalsecurity.io/fullchain.pem; # managed by Certbot
+    ssl_certificate_key /etc/letsencrypt/live/app.globaldigitalsecurity.io/privkey.pem; # managed by Certbot
     include /etc/letsencrypt/options-ssl-nginx.conf;
     ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+
+
 }
 
 # HTTP → HTTPS redirects
@@ -125,6 +160,8 @@ server {
     listen 80;
     server_name app.globaldigitalsecurity.io;
     return 404;
+
+
 }
 
 server {
@@ -134,13 +171,24 @@ server {
     listen 80;
     server_name api.globaldigitalsecurity.io;
     return 404;
+
+
 }
 
 server {
+    if ($host = globaldigitalsecurity.io) {
+        return 301 https://$host$request_uri;
+    } # managed by Certbot
+
+
     if ($host = www.globaldigitalsecurity.io) {
         return 301 https://$host$request_uri;
     }
     listen 80;
     server_name www.globaldigitalsecurity.io globaldigitalsecurity.io;
     return 404;
+
+
+
+
 }

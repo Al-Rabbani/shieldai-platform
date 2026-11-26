@@ -64,6 +64,16 @@ fi
 # Nginx site config is versioned for the same reason the scrape config is: a rebuilt host must not lose
 # the SSE locations, and a hand-edited server block is invisible to review. Test before reloading, and
 # restore the previous file if the test fails, so a bad config can never take the site down.
+# The rate-limit zones live in conf.d, not in the site file. If the site references a zone that is not installed,
+# nginx -t fails and the site rollback below would restore a config whose limits silently do not exist - so the zones
+# are installed first, and a missing zone is an error rather than a warning.
+if [ -f config/nginx/gds-rate-limit.conf ]; then
+  if ! cmp -s config/nginx/gds-rate-limit.conf /etc/nginx/conf.d/gds-rate-limit.conf; then
+    echo "  installing nginx rate-limit zones..."
+    install -m 644 config/nginx/gds-rate-limit.conf /etc/nginx/conf.d/gds-rate-limit.conf
+  fi
+fi
+
 if [ -f config/nginx/gds-os ]; then
   if ! cmp -s config/nginx/gds-os /etc/nginx/sites-available/gds-os; then
     echo "  installing nginx site config..."
