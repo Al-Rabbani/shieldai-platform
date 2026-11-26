@@ -110,28 +110,48 @@ def _httpx(item: dict, target: str) -> dict:
 
 # Every tool whose handler puts a `findings` list on its result. A guard test fails if a handler starts producing
 # findings for a tool that is missing here.
+#: MEASURED 26 Nov 2026: the first sweep with both content-discovery tools in it recorded SEVEN facts FOURTEEN times.
+#: ffuf titled a hit "discovered path https://host/api (301)" while gobuster titled the same hit "discovered path /api
+#: (301)", and the writer dedupes on tenant+scanner+title+target, so two tools looking at the same server could never
+#: agree. Discovery findings now share one canonical shape (path in the title, host as the target, path in raw) and the
+#: writer dedupes them ACROSS the discovery tools, because which tool found a path is not a different fact.
+DISCOVERY_TOOLS = ("ffuf_scan", "gobuster_scan")
+
+
+def _path_of(url_or_path: str, target: str) -> str:
+    base = (target or "").rstrip("/")
+    value = (url_or_path or "/").strip()
+    if base and value.startswith(base):
+        value = value[len(base):]
+    if not value:
+        value = "/"
+    if not value.startswith("/"):
+        value = "/" + value
+    return value
+
+
 def _ffuf(item: dict, target: str) -> dict:
-    url = item.get("url") or target
+    path = _path_of(item.get("url") or target, target)
     status = item.get("status")
     return {
-        "title": f"discovered path {url} ({status})"[:250],
+        "title": f"discovered path {path} ({status})"[:250],
         "severity": "info",
-        "target": url,
-        "description": f"ffuf found a {status} response ({item.get('length')} bytes).",
-        "raw": {"status": status, "length": item.get("length"), "words": item.get("words"),
+        "target": (target or "").rstrip("/"),
+        "description": f"ffuf found a {status} response ({item.get('length')} bytes) at {path}.",
+        "raw": {"path": path, "status": status, "length": item.get("length"), "words": item.get("words"),
                 "content_type": item.get("content_type")},
     }
 
 
 def _gobuster(item: dict, target: str) -> dict:
-    path = item.get("path") or "/"
+    path = _path_of(item.get("path") or "/", target)
     status = item.get("status")
     return {
         "title": f"discovered path {path} ({status})"[:250],
         "severity": "info",
-        "target": f"{target.rstrip('/')}{path}",
-        "description": f"gobuster found a {status} response ({item.get('size')} bytes).",
-        "raw": {"status": status, "size": item.get("size")},
+        "target": (target or "").rstrip("/"),
+        "description": f"gobuster found a {status} response ({item.get('size')} bytes) at {path}.",
+        "raw": {"path": path, "status": status, "size": item.get("size")},
     }
 
 
@@ -215,10 +235,32 @@ async def persist_scan_output(tenant_id: Any, tool_name: str, target: str, outpu
     from gds_api.tenant_binding import bind_tenant
 
     try:
+        cross_skipped = 0
         async with async_session_factory() as session:
             await bind_tenant(session, str(tenant_id))
+            if tool_name in DISCOVERY_TOOLS:
+                from sqlalchemy import text as _text
+
+                rows = await session.execute(
+                    _text(
+                        "SELECT title, target FROM security_findings WHERE tenant_id = :tid AND status = 'open' "
+                        "AND scanner IN ('ffuf', 'gobuster')"
+                    ),
+                    {"tid": str(tenant_id)},
+                )
+                known = {(r[0], r[1]) for r in (rows or [])}
+                before = len(normalised)
+                normalised = [f for f in normalised if (f["title"], f["target"]) not in known]
+                cross_skipped = before - len(normalised)
+                if not normalised:
+                    return {"persisted": True, "created": 0, "duplicates": 0,
+                            "cross_scanner_duplicates": cross_skipped,
+                            "note": f"every path was already recorded by another discovery tool ({cross_skipped})"}
             stored = await store_findings(session, str(tenant_id), tool_name.replace("_scan", "").replace("_probe", ""),
                                           target, normalised)
-        return {"persisted": True, **(stored if isinstance(stored, dict) else {"stored": stored})}
+        outcome = {"persisted": True, **(stored if isinstance(stored, dict) else {"stored": stored})}
+        if cross_skipped:
+            outcome["cross_scanner_duplicates"] = cross_skipped
+        return outcome
     except Exception as exc:  # noqa: BLE001 - reported, never raised into the tool result
         return {"persisted": False, "reason": f"{type(exc).__name__}: {exc}"[:300]}
