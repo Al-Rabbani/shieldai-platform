@@ -15,7 +15,16 @@ function timeAgo(dateStr) {
   return `${Math.round(hrs / 24)}d ago`;
 }
 
+/** A notification has no title column: the API carries a type and a message. The type, made readable, is the label -
+ * rendering notification.title showed an empty line above every message, measured 26 Nov 2026. */
+function labelFor(notification) {
+  if (notification.title) return notification.title;
+  const type = String(notification.type || "notification");
+  return type.replace(/[._:]+/g, " ").replace(/\s+/g, " ").trim();
+}
+
 export default function NotificationRow({ notification, onMarkRead }) {
+  const label = labelFor(notification);
   const isDrift = notification.source_entity === "ConfigurationDrift";
   const revertTo = isDrift ? `/configuration-drift?drift=${notification.source_id}` : null;
 
@@ -25,9 +34,9 @@ export default function NotificationRow({ notification, onMarkRead }) {
       <span className="text-base flex-shrink-0">{TYPE_ICON[notification.type] || "🔔"}</span>
       <div className="flex-1 min-w-0">
         {notification.action_url ? (
-          <Link to={notification.action_url} className="text-sm text-white font-medium hover:text-blue-400 transition break-words block">{notification.title}</Link>
+          <Link to={notification.action_url} className="text-sm text-white font-medium hover:text-blue-400 transition break-words block">{label}</Link>
         ) : (
-          <p className="text-sm text-white font-medium break-words">{notification.title}</p>
+          <p className="text-sm text-white font-medium break-words">{label}</p>
         )}
         {notification.message && (
           <p className="text-[10px] text-slate-400 break-words mt-0.5 font-mono">{notification.message}</p>

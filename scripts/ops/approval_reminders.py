@@ -45,6 +45,8 @@ from gds_api.tenant_binding import bind_tenant  # noqa: E402
 # The window an approval lives for, matching expire_stale_approvals.DEFAULT_MAX_AGE_HOURS so a reminder can never be
 # computed against a different deadline than the one that expires the row.
 DEFAULT_WINDOW_HOURS = APPROVAL_WINDOW_HOURS
+# Where a decider goes to act. The queue page exists since 26 Nov 2026.
+APPROVALS_PAGE = "/operations/approvals"
 DEFAULT_THRESHOLDS = (12, 20)
 NOTIFICATION_TYPE = "approval.awaiting_decision"
 DEDUPE_DAYS = 7
@@ -177,14 +179,16 @@ async def remind_tenant(
                 await session.execute(
                     text(
                         "INSERT INTO notifications (id, tenant_id, user_id, type, message, severity, requires_ack, "
-                        "escalation_level, created_at) VALUES (gen_random_uuid(), :t, :u, :ty, :m, 'high', TRUE, 0, "
-                        "now())"
+                        "escalation_level, created_at, action_url) VALUES (gen_random_uuid(), :t, :u, :ty, :m, 'high', "
+                        "TRUE, 0, now(), :a)"
                     ),
                     {
                         "t": str(tenant_id),
                         "u": str(user_id),
                         "ty": NOTIFICATION_TYPE,
                         "m": message,
+                        # The queue page is where a decider acts; a reminder without it sends them hunting.
+                        "a": APPROVALS_PAGE,
                     },
                 )
             await record_audit_event(

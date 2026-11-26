@@ -153,6 +153,8 @@ class Notification(Base):
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
     type: Mapped[str] = mapped_column(String(100))
     message: Mapped[str] = mapped_column(String(500))
+    # Where the reader goes to act on this. Null means the message stands alone.
+    action_url: Mapped[str | None] = mapped_column(String(300), default=None)
     read_at: Mapped[datetime | None] = mapped_column(default=None)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 

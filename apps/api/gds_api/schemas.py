@@ -123,6 +123,8 @@ class NotificationOut(BaseModel):
     id: uuid.UUID
     type: str
     message: str
+    # The page that acts on this notification, when one exists.
+    action_url: str | None = None
     read_at: datetime | None
     created_at: datetime
 

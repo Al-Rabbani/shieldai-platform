@@ -81,7 +81,9 @@ def main() -> int:
         result = subprocess.run(
             ["sudo", "-u", "postgres", "/opt/gds-os/apps/api/venv/bin/python", RAISER,
              "--type", alert["type"], "--severity", alert["severity"],
-             "--message", alert["message"], "--dedupe-minutes", DEDUPE_MINUTES],
+             "--message", alert["message"], "--dedupe-minutes", DEDUPE_MINUTES,
+             # The page that shows the measurement, so the alert is one click from the evidence.
+             "--action-url", "/operations/slo"],
             capture_output=True, text=True,
         )
         output = (result.stdout or "").strip()

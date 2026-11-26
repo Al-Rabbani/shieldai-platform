@@ -79,6 +79,7 @@ async def expire_tenant(tenant_id: uuid.UUID, max_age_hours: int, dry_run: bool)
                     tenant_id=tenant_id,
                     user_id=approval.requested_by_user_id,
                     type="approval.expired",
+                    action_url="/operations/approvals",
                     message=(
                         f"Approval request '{approval.action_description}' expired after "
                         f"{age_hours:.0f}h without a decision. The action did not run."

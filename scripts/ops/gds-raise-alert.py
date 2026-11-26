@@ -51,6 +51,8 @@ def main() -> int:
     parser.add_argument("--severity", default="high", choices=["info", "low", "medium", "high", "critical"])
     parser.add_argument("--message", required=True)
     parser.add_argument("--dedupe-minutes", type=int, default=DEDUPE_MINUTES)
+    parser.add_argument("--action-url", default=None,
+                        help="in-app path that acts on this alert, e.g. /operations/approvals")
     args = parser.parse_args()
 
     load_env()
@@ -87,9 +89,9 @@ def main() -> int:
 
             cur.execute(
                 "INSERT INTO notifications (id, tenant_id, user_id, type, message, severity, "
-                "requires_ack, escalation_level, created_at) "
-                "VALUES (gen_random_uuid(), %s, %s, %s, %s, %s, TRUE, 0, now()) RETURNING id",
-                (tenant, user_id, args.type, args.message, args.severity),
+                "requires_ack, escalation_level, created_at, action_url) "
+                "VALUES (gen_random_uuid(), %s, %s, %s, %s, %s, TRUE, 0, now(), %s) RETURNING id",
+                (tenant, user_id, args.type, args.message, args.severity, args.action_url),
             )
             new_id = cur.fetchone()[0]
         conn.commit()
